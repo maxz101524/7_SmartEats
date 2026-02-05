@@ -1,0 +1,43 @@
+================================================================================
+                           SmartEats - Weekly Notes
+================================================================================
+
+This file contains weekly progress updates, team notes, reminders, 
+clarifications, and challenges encountered during development.
+
+--------------------------------------------------------------------------------
+Week of Feb 3, 2026 - A2: Project Foundations + Views + Templates
+--------------------------------------------------------------------------------
+
+PROGRESS:
+- Set up split settings pattern (base.py, development.py, production.py)
+- Configured environment variables using django-environ
+- Created mealPlanning app with models: DiningHall, Meal, UserProfile
+- Applied database migrations
+- Added branching strategy documentation
+- Established docs folder structure
+
+TODO (This Week):
+- [ ] Implement 4 views (2 FBV + 2 CBV) for Section 2
+- [ ] Create base.html and feature templates for Section 3
+- [ ] Take screenshots of working views
+- [ ] Update notes.txt with view implementation details
+
+TEAM NOTES:
+- Remember to create .env file locally (not committed to git)
+- Required env vars listed in .env.example
+
+
+REMINDERS:
+- Always pull from main before creating new branches
+- Use meaningful commit messages
+- Update this notes.txt weekly
+
+
+CHALLENGES:
+- (Add any challenges encountered during development)
+
+
+--------------------------------------------------------------------------------
+(Add new weekly entries above this line)
+--------------------------------------------------------------------------------
