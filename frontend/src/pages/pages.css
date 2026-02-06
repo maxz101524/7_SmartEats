@@ -1,0 +1,136 @@
+/* ===== Page Layout ===== */
+.page {
+  width: 100%;
+}
+
+.page-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+  color: #1a1a2e;
+}
+
+.page-subtitle {
+  color: #6c757d;
+  font-size: 1.05rem;
+  margin: 0 0 2rem 0;
+}
+
+.page-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  font-size: 1.1rem;
+  color: #6c757d;
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background-color: #ffffff;
+  border: 2px dashed #dee2e6;
+  border-radius: 12px;
+}
+
+.empty-state h2 {
+  font-size: 1.4rem;
+  color: #495057;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-state p {
+  color: #6c757d;
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* ===== Card Grid ===== */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.25rem;
+}
+
+.card {
+  background-color: #ffffff;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 1.5rem;
+  transition: box-shadow 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.card-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin: 0 0 0.75rem 0;
+}
+
+.card-header .card-title {
+  margin-bottom: 0;
+}
+
+.card-badge {
+  background-color: #e9ecef;
+  color: #495057;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.card-detail {
+  color: #495057;
+  font-size: 0.95rem;
+  margin: 0.35rem 0;
+}
+
+.card-label {
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+/* ===== Macro Nutrient Grid (Meals) ===== */
+.macro-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e9ecef;
+}
+
+.macro-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.macro-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e94560;
+}
+
+.macro-label {
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

@@ -1,0 +1,88 @@
+/* ===== Layout ===== */
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: #1a1a2e;
+  background-color: #f8f9fa;
+}
+
+/* ===== Header / Nav ===== */
+.header {
+  background-color: #1a1a2e;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+
+.nav-brand {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e94560;
+  text-decoration: none;
+  letter-spacing: -0.5px;
+}
+
+.nav-brand:hover {
+  opacity: 0.9;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-link {
+  color: #ffffffcc;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.925rem;
+  font-weight: 500;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.nav-link.active {
+  background-color: #e94560;
+  color: #ffffff;
+}
+
+/* ===== Main Content ===== */
+.main-content {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* ===== Footer ===== */
+.footer {
+  background-color: #1a1a2e;
+  color: #ffffffaa;
+  text-align: center;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.85rem;
+  margin-top: auto;
+}
