@@ -1,0 +1,17 @@
+html
+{% extends "mealPlanning/base.html" %}
+
+{% block title %}{{ page_title|default:"List" }}{% endblock %}
+
+{% block content %}
+<h2>{{ page_title|default:"List" }}</h2>
+
+<ul>
+{% for item in items %}
+<li>{{ item }}</li>
+{% empty %}
+<li><strong>No items found.</strong> Please add an item to get 
+started.</li>
+{% endfor %}
+</ul>
+{% endblock %}
