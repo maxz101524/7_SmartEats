@@ -39,9 +39,9 @@ SmartEats/
         │   ├── Navbar.tsx           # Shared navigation bar
         │   └── ShowData.tsx         # Reusable data-list component
         └── pages/
-            ├── DiningHalls.tsx      # Consumes /api/halls/
-            ├── Dishes.tsx           # Consumes /api/dishes/
-            ├── Profiles.tsx         # Consumes /api/profiles/ and /api/meals/
+            ├── DiningHalls.tsx      #  /api/halls/
+            ├── Dishes.tsx           #  /api/dishes/
+            ├── Profiles.tsx         #  /api/profiles/ and /api/meals/
             └── NotFound.tsx         # 404 page
 ```
 
