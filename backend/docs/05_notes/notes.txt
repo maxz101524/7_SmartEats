@@ -5,12 +5,14 @@ Week 2 - A2: Project Foundations + Views + Templates
 --------------------------------------------------------------------------------
 
 PROGRESS:
+- Separate frontend (react) and backend (django)
 - Set up split settings pattern (base.py, development.py, production.py)
 - Configured environment variables using django-environ
 - Added branching strategy documentation
 - Implemented all 4 views (2 FBV + 2 CBV) as JSON API endpoints
 - Built React frontend with component-based templates and routing
-- Created reusable ShowData component for template reuse
+- Created reusable ShowData and component for template reuse
+
 
 VIEWS 
 
@@ -36,6 +38,26 @@ VIEWS
      model = Meal. Overrides render_to_response to return JSON instead of
      an HTML template.
 
+Views — Django-to-React Mapping
+-Since we use React as our frontend, our Django views serve as JSON API endpoints rather than 
+rendering HTML templates directly. The four required view types (2 FBV + 2 CBV) are all implemented 
+in `backend/mealPlanning/views.py` and liked to `backend/mealPlanning/urls.py` with named routes. 
+The React frontend then consumes these endpoints and handles the presentation.
+
+-Function-Based Views (FBVs): We implement two FBVs that correspond to the assignment's HttpResponse and render() patterns.
+`dining_hall_view` uses `HttpResponse(json.dumps(...))` to manually serialize and return data — this is equivalent to the 
+"HttpResponse" approach. `dish_list_view` uses `JsonResponse()`,
+which is Django's built-in shortcut that automatically handles serialization and content-type headers — analogous to using 
+`render()` as a convenience shortcut. On the frontend, `DiningHalls.tsx` and `Dishes.tsx` consume these endpoints respectively.
+
+-Class-Based Views (CBVs): We implement two CBVs matching the base and generic patterns. `UserProfileBaseView` inherits from
+`django.views.View` and manually implements `get()` to query and return data — this is the base CBV approach. `MealListView` 
+inherits from `django.views.generic.ListView` with `model = Meal` and overrides `render_to_response` to 
+return JSON — this demonstrates how generic views reduce boilerplate by handling the queryset automatically. 
+On the frontend, `Profiles.tsx` uses both of these endpoints.
+
+-URL Routing: All four Django URLs use `name=` for named routing. On the React side, `App.tsx` uses React Router's `<Route path=... />` for routing.
+
 VIEWS NOTES (HttpResponse vs render, Base CBV vs Generic CBV):
 - HttpResponse gives full control but requires manual serialization  while render() handles this automatically
    so it makes development faster
@@ -46,6 +68,6 @@ TEMPLATES (React):
 - Base.tsx acts as our base.html (shared Navbar, Outlet for content, Footer)
 - Page components (Dishes.tsx, DiningHalls.tsx, Profiles.tsx) extend the base
   layout via React Router nested routes (equivalent to {% extends "base.html" %})
-- .map() replaces {% for %}, conditional rendering replaces {% empty %}
+- .map() replaces {% for %}, Empty.tsx rendering replaces {% empty %}
 - ShowData.tsx is a reusable template component shared across pages
 
