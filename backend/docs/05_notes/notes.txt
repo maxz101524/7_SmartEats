@@ -1,26 +1,18 @@
-================================================================================
-                           SmartEats - Weekly Notes
-================================================================================
 
-This file contains weekly progress updates, team notes, reminders, 
-clarifications, and challenges encountered during development.
 
 --------------------------------------------------------------------------------
-Week of Feb 3, 2026 - A2: Project Foundations + Views + Templates
+Week 2 - A2: Project Foundations + Views + Templates
 --------------------------------------------------------------------------------
 
 PROGRESS:
 - Set up split settings pattern (base.py, development.py, production.py)
 - Configured environment variables using django-environ
-- Created mealPlanning app with models: DiningHall, Dish, UserProfile, Meal
-- Applied database migrations
 - Added branching strategy documentation
-- Established docs folder structure
 - Implemented all 4 views (2 FBV + 2 CBV) as JSON API endpoints
 - Built React frontend with component-based templates and routing
 - Created reusable ShowData component for template reuse
 
-VIEWS (Section 2) - Names, Types, and Purposes:
+VIEWS 
 
   1. dining_hall_view (FBV - HttpResponse)
      URL: /api/halls/ (name='dining_hall_list')
@@ -30,38 +22,30 @@ VIEWS (Section 2) - Names, Types, and Purposes:
 
   2. dish_list_view (FBV - JsonResponse shortcut)
      URL: /api/dishes/ (name='dish_list')
-     Purpose: Returns dishes with selected fields via JsonResponse (shortcut).
-     JsonResponse is analogous to Django's render() — it's a convenience
-     shortcut that handles serialization and content-type automatically.
+     -Returns dishes with selected fields via JsonResponse (shortcut).
+     JsonResponse is analogous to Django's render() 
 
   3. UserProfileBaseView (CBV - inherits from View)
      URL: /api/profiles/ (name='user_profiles')
-     Purpose: Returns all user profiles as JSON. Inherits from django.views.View
-     and implements the get() method manually. This gives full control over
-     the request handling while using OOP structure.
+     -Returns all user profiles as JSON. Inherits from django.views.View
+     and implements the get() method manually. 
 
   4. MealListView (CBV - inherits from ListView)
      URL: /api/meals/ (name='meal_history')
-     Purpose: Returns all meals as JSON. Uses Django's generic ListView with
+     - Returns all meals as JSON. Uses Django's generic ListView with
      model = Meal. Overrides render_to_response to return JSON instead of
-     an HTML template. Demonstrates how generic views reduce boilerplate.
+     an HTML template.
 
-VIEWS EXPERIENCE NOTES (HttpResponse vs render, Base CBV vs Generic CBV):
-- HttpResponse gives full control but requires manual serialization (json.dumps,
-  setting content_type). JsonResponse/render() handles this automatically —
-  useful when you just need to return data quickly without boilerplate.
-- Base CBV (View) is flexible — you write the full get/post logic yourself,
-  which is helpful for custom endpoints. Generic CBV (ListView) is great when
-  your view maps directly to a model queryset, since it handles the query
-  automatically and you only override what you need.
+VIEWS NOTES (HttpResponse vs render, Base CBV vs Generic CBV):
+- HttpResponse gives full control but requires manual serialization  while render() handles this automatically
+   so it makes development faster
+- Base CBV (View) is flexible because we can write our logic by ourselves, while Generic CBV (ListView) is useful when
+  our view maps directly to a model queryset, since it handles the query automatically
 
-TEMPLATES (Section 3) - React Equivalents:
+TEMPLATES (React):
 - Base.tsx acts as our base.html (shared Navbar, Outlet for content, Footer)
 - Page components (Dishes.tsx, DiningHalls.tsx, Profiles.tsx) extend the base
   layout via React Router nested routes (equivalent to {% extends "base.html" %})
 - .map() replaces {% for %}, conditional rendering replaces {% empty %}
 - ShowData.tsx is a reusable template component shared across pages
 
---------------------------------------------------------------------------------
-(Add new weekly entries above this line)
---------------------------------------------------------------------------------
