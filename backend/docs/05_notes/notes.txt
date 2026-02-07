@@ -12,31 +12,55 @@ Week of Feb 3, 2026 - A2: Project Foundations + Views + Templates
 PROGRESS:
 - Set up split settings pattern (base.py, development.py, production.py)
 - Configured environment variables using django-environ
-- Created mealPlanning app with models: DiningHall, Meal, UserProfile
+- Created mealPlanning app with models: DiningHall, Dish, UserProfile, Meal
 - Applied database migrations
 - Added branching strategy documentation
 - Established docs folder structure
+- Implemented all 4 views (2 FBV + 2 CBV) as JSON API endpoints
+- Built React frontend with component-based templates and routing
+- Created reusable ShowData component for template reuse
 
-TODO (This Week):
-- [ ] Implement 4 views (2 FBV + 2 CBV) for Section 2
-- [ ] Create base.html and feature templates for Section 3
-- [ ] Take screenshots of working views
-- [ ] Update notes.txt with view implementation details
+VIEWS (Section 2) - Names, Types, and Purposes:
 
-TEAM NOTES:
-- Remember to create .env file locally (not committed to git)
-- Required env vars listed in .env.example
+  1. dining_hall_view (FBV - HttpResponse)
+     URL: /api/halls/ (name='dining_hall_list')
+     Purpose: Returns all dining halls as JSON using HttpResponse(json.dumps(...))
+     This is a manual approach — we serialize the queryset ourselves and wrap
+     it in an HttpResponse, demonstrating low-level control over the response.
 
+  2. dish_list_view (FBV - JsonResponse shortcut)
+     URL: /api/dishes/ (name='dish_list')
+     Purpose: Returns dishes with selected fields via JsonResponse (shortcut).
+     JsonResponse is analogous to Django's render() — it's a convenience
+     shortcut that handles serialization and content-type automatically.
 
-REMINDERS:
-- Always pull from main before creating new branches
-- Use meaningful commit messages
-- Update this notes.txt weekly
+  3. UserProfileBaseView (CBV - inherits from View)
+     URL: /api/profiles/ (name='user_profiles')
+     Purpose: Returns all user profiles as JSON. Inherits from django.views.View
+     and implements the get() method manually. This gives full control over
+     the request handling while using OOP structure.
 
+  4. MealListView (CBV - inherits from ListView)
+     URL: /api/meals/ (name='meal_history')
+     Purpose: Returns all meals as JSON. Uses Django's generic ListView with
+     model = Meal. Overrides render_to_response to return JSON instead of
+     an HTML template. Demonstrates how generic views reduce boilerplate.
 
-CHALLENGES:
-- (Add any challenges encountered during development)
+VIEWS EXPERIENCE NOTES (HttpResponse vs render, Base CBV vs Generic CBV):
+- HttpResponse gives full control but requires manual serialization (json.dumps,
+  setting content_type). JsonResponse/render() handles this automatically —
+  useful when you just need to return data quickly without boilerplate.
+- Base CBV (View) is flexible — you write the full get/post logic yourself,
+  which is helpful for custom endpoints. Generic CBV (ListView) is great when
+  your view maps directly to a model queryset, since it handles the query
+  automatically and you only override what you need.
 
+TEMPLATES (Section 3) - React Equivalents:
+- Base.tsx acts as our base.html (shared Navbar, Outlet for content, Footer)
+- Page components (Dishes.tsx, DiningHalls.tsx, Profiles.tsx) extend the base
+  layout via React Router nested routes (equivalent to {% extends "base.html" %})
+- .map() replaces {% for %}, conditional rendering replaces {% empty %}
+- ShowData.tsx is a reusable template component shared across pages
 
 --------------------------------------------------------------------------------
 (Add new weekly entries above this line)
