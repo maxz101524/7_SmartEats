@@ -1,6 +1,7 @@
 # SmartEats
 
 A meal planning and nutrition tracking application for university dining halls, built with a **Django REST backend** and a **React + TypeScript frontend**.
+## Docs can be found in backend/docs
 
 ---
 
