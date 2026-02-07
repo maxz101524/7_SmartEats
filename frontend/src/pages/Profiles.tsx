@@ -53,6 +53,13 @@ function Profiles() {
     <>
       <h1 className="text-center font-bold text-3xl text-blue-400">Profiles</h1>
 
+      {profileData.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-400">
+            No profiles found
+          </h2>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {profileData.map((profile) => (
           <div
@@ -98,6 +105,7 @@ function Profiles() {
           </div>
         ))}
       </div>
+      )}
     </>
   );
 }
