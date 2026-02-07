@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
+import Empty from "./Empty";
 
 interface DataListProps<T> {
   api: string;
@@ -26,7 +27,7 @@ function ShowData<T>({ api, title, renderCard, getKey }: DataListProps<T>) {
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
         <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
         <p className="text-gray-500 font-medium animate-pulse">
-          Loading {title.toLowerCase()}...
+          Loading {title}...
         </p>
       </div>
     );
@@ -39,12 +40,7 @@ function ShowData<T>({ api, title, renderCard, getKey }: DataListProps<T>) {
       </h1>
 
       {data.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-400">
-            No {title.toLowerCase()} found
-          </h2>
-          <p className="text-gray-500">Check back later for updates!</p>
-        </div>
+        <Empty name={title} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {data.map((item) => (

@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 
 import axios from "axios";
 
+import Empty from "../components/Empty";
+
 interface UserProfile {
   netID: string;
   name: string;
@@ -54,57 +56,52 @@ function Profiles() {
       <h1 className="text-center font-bold text-3xl text-blue-400">Profiles</h1>
 
       {profileData.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-400">
-            No profiles found
-          </h2>
-        </div>
+        <Empty name="Profiles" />
       ) : (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {profileData.map((profile) => (
-          <div
-            key={profile.netID}
-            className="bg-white shadow-lg rounded-2xl p-5 border hover:shadow-xl transition"
-          >
-            <h3 className="text-lg font-bold text-blue-600">
-              NetID: {profile.netID}
-            </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {profileData.map((profile) => (
+            <div
+              key={profile.netID}
+              className="bg-white shadow-lg rounded-2xl p-5 border hover:shadow-xl transition"
+            >
+              <h3 className="text-lg font-bold text-blue-600">
+                NetID: {profile.netID}
+              </h3>
 
-            <h3 className="text-xl font-semibold">
-              {profile.name} {profile.lastName}
-            </h3>
+              <h3 className="text-xl font-semibold">
+                {profile.name} {profile.lastName}
+              </h3>
 
-            <div className="mt-3 space-y-1 text-sm text-gray-700">
-              <p>Sex: {profile.sex}</p>
-              <p>Age: {profile.age}</p>
-              <p>Height: {profile.height_cm} cm</p>
-              <p>Weight: {profile.weight_kg} kg</p>
-              <p>Goal: {profile.goal}</p>
+              <div className="mt-3 space-y-1 text-sm text-gray-700">
+                <p>Sex: {profile.sex}</p>
+                <p>Age: {profile.age}</p>
+                <p>Height: {profile.height_cm} cm</p>
+                <p>Weight: {profile.weight_kg} kg</p>
+                <p>Goal: {profile.goal}</p>
+              </div>
+
+              <div className="mt-4 border-t pt-3">
+                <h4 className="font-semibold text-gray-800 mb-2">Meals</h4>
+
+                {mealData
+                  .filter((meal) => meal.user_id == profile.netID)
+                  .map((meal) => (
+                    <div
+                      key={meal.meal_id}
+                      className="bg-gray-50 rounded-lg p-3 mb-3 text-sm"
+                    >
+                      <p className="font-medium">Meal ID: {meal.meal_id}</p>
+                      <p>Calories: {meal.total_calories}</p>
+                      <p>Protein: {meal.total_protein}</p>
+                      <p>Carbs: {meal.total_carbohydrates}</p>
+                      <p>Fat: {meal.total_fat}</p>
+                      <p className="text-gray-500 text-xs">Date: {meal.date}</p>
+                    </div>
+                  ))}
+              </div>
             </div>
-
-            {/* Meals Section */}
-            <div className="mt-4 border-t pt-3">
-              <h4 className="font-semibold text-gray-800 mb-2">Meals</h4>
-
-              {mealData
-                .filter((meal) => meal.user_id == profile.netID)
-                .map((meal) => (
-                  <div
-                    key={meal.meal_id}
-                    className="bg-gray-50 rounded-lg p-3 mb-3 text-sm"
-                  >
-                    <p className="font-medium">Meal ID: {meal.meal_id}</p>
-                    <p>Calories: {meal.total_calories}</p>
-                    <p>Protein: {meal.total_protein}</p>
-                    <p>Carbs: {meal.total_carbohydrates}</p>
-                    <p>Fat: {meal.total_fat}</p>
-                    <p className="text-gray-500 text-xs">Date: {meal.date}</p>
-                  </div>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
       )}
     </>
   );
