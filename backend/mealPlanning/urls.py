@@ -12,4 +12,9 @@ urlpatterns = [
     
   
     path('meals/', views.MealListView.as_view(), name='meal_history'),
+
+    path('aimeals/', views.AIMealView.as_view(), name='meal_plan'),
+
+    path('chart/', views.MealSummaryView.as_view(), name='meal-nutrition-chart'),
+
 ]
