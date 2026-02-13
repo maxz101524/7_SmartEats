@@ -26,7 +26,8 @@ MealSummaryView provides a historical summary for each user.
 
 It supports: Filtering meals by date range, Returning total consumed meal count, Aggregating total nutritional intake, and Generating a nutrition percentage pie chart
 
-<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/4bfbaead-864d-472a-8412-d465fa5a64f9" />
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/0de15c51-4e38-4c06-bae8-b9133dbdbdf6" />
+
 
 ## Data Model Design Updates
 
