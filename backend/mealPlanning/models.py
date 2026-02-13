@@ -137,7 +137,8 @@ class Meal(models.Model):
     total_carbohydrates = models.PositiveIntegerField(default=0)
     total_fat = models.PositiveIntegerField(default=0)
 
-    contain_dish = models.ManyToManyField(Dish, blank=True)
+    # dish table refreshes bi-weekly, while meal table is for history data
+    # contain_dish = models.ManyToManyField(Dish, blank=True)
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='meals')
     date = models.DateField(auto_now_add=True) 
