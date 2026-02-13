@@ -3,9 +3,9 @@
 
 This branch introduces two new views:
 
-  AIMealView
+1.AIMealView
   
-  MealSummaryView
+2.MealSummaryView
 
 It also includes updates to the data model to better support AI integration and historical tracking.
 
