@@ -9,19 +9,12 @@ This branch introduces two new views:
 
 It also includes updates to the data model to better support AI integration and historical tracking.
 
-1️⃣ AIMealView
+# AIMealView
 
-AIMealView powers the Meal Recommendation Page.
+AIMealView is for the Meal Recommendation Page. It provides AI-generated meal combinations for users, including: Meal name, Contained dishes and Nutritional information (calories, protein, carbohydrates, fat)
 
-It provides AI-generated meal combinations for users, including:
+<img width="2940" height="644" alt="image" src="https://github.com/user-attachments/assets/5c8ad9cb-4595-4601-bd9a-1fd719add7e5" />
 
-Meal name
-
-Contained dishes
-
-Nutritional information (calories, protein, carbohydrates, fat)
-
-🔹 Current Implementation
 
 At this stage, AI-generated meals are simulated using hard-coded temporary models:
 
