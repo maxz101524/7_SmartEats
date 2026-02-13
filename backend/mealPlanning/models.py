@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 class DiningHall(models.Model):
 
@@ -67,10 +68,8 @@ class UserProfile(models.Model):
     and provide progress tracking toward health goals. 
 
     """
-    email = models.CharField(max_length=50, primary_key=True)
-    password = models.CharField(max_length=50)
-    firstname = models.CharField(max_length=100)
-    lastname = models.CharField(max_length=100)
+    # Extends Django's User model to store personalized health data.
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', null=True, blank=True)
 
 
     sex = models.CharField(
@@ -105,18 +104,10 @@ class UserProfile(models.Model):
         help_text="User fitness goal, e.g., fat loss or muscle gain"
     )
 
-    
-    
-  
-    
-
-    class Meta:
-
-        ordering = ["email", "firstname" , "lastname"]
 
 
     def __str__(self):
-        return f"{self.firstname} {self.lastname}: ({self.email})"
+        return f"{self.user.username}"
     
 
 
@@ -134,7 +125,12 @@ class Meal(models.Model):
     """
 
     meal_id = models.AutoField(primary_key=True)
-    
+    MEAL_CATEGORIES = [
+        ('Breakfast', 'Breakfast'),
+        ('Lunch', 'Lunch'),
+        ('Dinner', 'Dinner'),
+    ]
+    category = models.CharField(max_length=20, choices=MEAL_CATEGORIES, blank=True, null=True)
 
     total_calories = models.PositiveIntegerField(default=0)
     total_protein = models.PositiveIntegerField(default=0)
@@ -143,7 +139,7 @@ class Meal(models.Model):
 
     contain_dish = models.ManyToManyField(Dish, blank=True)
 
-    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name="meals")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='meals')
     date = models.DateField(auto_now_add=True) 
 
     class Meta:
@@ -166,7 +162,6 @@ class TempMeal(models.Model):
     meal_id = models.AutoField(primary_key=True)
     meal_name = models.CharField(max_length=100)
 
-    is_public = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["meal_id"]

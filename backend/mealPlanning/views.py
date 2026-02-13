@@ -5,11 +5,14 @@ from  django.http import HttpResponse, JsonResponse
 from django.views import View
 from django.views.generic import ListView
 from .models import DiningHall, Dish, UserProfile, Meal, TempMeal, TempMealItem
-from django.db.models import Q, Prefetch
-from django.db.models import Sum, Count
+from django.db.models import Q, Prefetch, Sum, Count
 from io import BytesIO
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import base64
+from datetime import datetime
+
 
 # Create your views here.
 
@@ -48,57 +51,46 @@ class MealListView(ListView):
 class AIMealView(View):
     """
     Features:
-    - Multi-dish requirement search (Return meals containing ALL specified dishes).
-    - GET: For simple queries (< 3 dishes) to allow sharing.
-    - POST: For complex queries (>= 3 dishes) to prevent URL overflow/bloat.
-    - Relationship Spanning: Filter meals based on related Dish names.
-    - Nutrition Calculation: Summation of macros per meal.
+    - Return meals containing ALL specified dishes.
+    - Filter meals based on related Dish names.
+    - Return the total nutrition content for each meal.
     """
 
-    def _get_meals_by_dishes(self, dish_names_list, show_hidden=False):
+    def _get_meals_by_dishes(self, dish_names_list, mode="GET"):
         """
-        Core logic: Finds meals that contain EVERY dish in the dish_names_list.
+        Core logic: Finds meals that contain EVERY dish in dish_names_list.
+        mode: "GET" -> fuzzy search (__icontains)
+              "POST" -> exact search (__exact)
         """
         if not dish_names_list:
             return []
 
-        # 1. Clean the input list
+        # Clean input
         dish_names = [name.strip() for name in dish_names_list if name.strip()]
-        num_dishes = len(dish_names)
+        if not dish_names:
+            return []
 
-        # 2. Relationship Spanning & Filtering
-        # We find meals that have items matching the names, then ensure the count
-        # of matches equals the count of searched dishes (The 'AND' logic).
-        meals_qs = TempMeal.objects.filter(
-            items__dish__dish_name__in=dish_names
-        ).annotate(
-            matches=Count('items__dish__dish_name', distinct=True)
-        ).filter(matches=num_dishes)
+        # Relationship spanning & filtering
+        query = Q()
+        lookup_type = "icontains" if mode == "GET" else "exact"
 
-        # 3. Privacy Filter (Assignment requirement: hide data)
-        if not show_hidden:
-            meals_qs = meals_qs.filter(is_public=True)
+        for dish in dish_names:
+            query &= Q(**{f"items__dish__dish_name__{lookup_type}": dish})
 
-        # 4. Data Transformation & Nutrition Calculation
+        meals_qs = TempMeal.objects.filter(query).distinct()
+
+        # Nutrition calculation
         results = []
-        for meal in meals_qs:
-            # Span to TempMealItem and related Dish for calculation
-            meal_items = meal.items.all().select_related('dish')
+        for meal in meals_qs.prefetch_related("items__dish"):
+            total_calories = sum(item.dish.calories * item.weight_in_grams / 100 for item in meal.items.all())
+            total_protein = sum(item.dish.protein * item.weight_in_grams / 100 for item in meal.items.all())
+            total_carbs = sum(item.dish.carbohydrates * item.weight_in_grams / 100 for item in meal.items.all())
+            total_fat = sum(item.dish.fat * item.weight_in_grams / 100 for item in meal.items.all())
 
-            total_calories = total_protein = total_carbs = total_fat = 0
-            dish_list = []
-
-            for item in meal_items:
-                factor = item.weight_in_grams / 100.0
-                total_calories += item.dish.calories * factor
-                total_protein += item.dish.protein * factor
-                total_carbs += item.dish.carbohydrates * factor
-                total_fat += item.dish.fat * factor
-
-                dish_list.append({
-                    "name": item.dish.dish_name,
-                    "weight": item.weight_in_grams
-                })
+            dish_list = [
+                {"name": item.dish.dish_name, "weight": item.weight_in_grams}
+                for item in meal.items.all()
+            ]
 
             results.append({
                 "meal_id": meal.meal_id,
@@ -111,16 +103,14 @@ class AIMealView(View):
                 },
                 "dishes_contained": dish_list
             })
+
         return results
 
     def get(self, request, *args, **kwargs):
-        # GET for simple sharing (1-2 dishes)
         raw_dishes = request.GET.get("dishes", "")
         dish_list = raw_dishes.split(",") if raw_dishes else []
 
-        # Logic check: If user tries to send too many via GET, we could redirect or handle here
-        # For assignment purposes, we process it but mark it as 'Simple Search'
-        data = self._get_meals_by_dishes(dish_list, show_hidden=False)
+        data = self._get_meals_by_dishes(dish_list, mode="GET")
 
         return JsonResponse({
             "mode": "GET_Simple_Search",
@@ -129,14 +119,10 @@ class AIMealView(View):
         })
 
     def post(self, request, *args, **kwargs):
-        # POST for complex/snapshot queries (3+ dishes)
-        # Prevents long URLs like ?dishes=Chicken,Broccoli,Rice,Egg,Spinach,Tomato...
         raw_dishes = request.POST.get("dishes", "")
-        show_hidden = request.POST.get("show_hidden", "false").lower() == "true"
-
         dish_list = raw_dishes.split(",") if raw_dishes else []
 
-        data = self._get_meals_by_dishes(dish_list, show_hidden=show_hidden)
+        data = self._get_meals_by_dishes(dish_list, mode="POST")
 
         return JsonResponse({
             "mode": "POST_Snapshot_Search",
@@ -147,73 +133,63 @@ class AIMealView(View):
 
 
 class MealSummaryView(View):
-        """
-        Returns user's historical meal summary.
-        Method: GET
-        Features:
-        - Filter meals by start and end date
-        - Return total number of meals
-        - Aggregate total nutrition: calories, protein, carbs, fat
-        - Generate a pie chart showing nutrition proportion
-        """
+    """
+    Returns user's historical meal summary.
+    Method: GET
+    Features:
+    - Filter meals by start and end date
+    - Return total number of meals
+    - Aggregate total nutrition: calories, protein, carbs, fat
+    - Generate a pie chart showing nutrition proportion
+    """
 
-        def get(self, request, *args, **kwargs):
-            # 1. Get query parameters
-            start_date = request.GET.get("start")
-            end_date = request.GET.get("end")
+    def get(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentication required"}, status=401)
 
-            if not start_date or not end_date:
-                return JsonResponse({"error": "Please provide 'start' and 'end' date parameters"}, status=400)
+        start = request.GET.get("start")
+        end = request.GET.get("end")
 
-            # 2. Filter meals for the current user in the given date range
-            user_meals = Meal.objects.filter(user=request.user, date__range=[start_date, end_date])
+        if not start or not end:
+            return JsonResponse({"error": "Please provide start and end dates"}, status=400)
 
-            # 3. Calculate total number of meals
-            total_meals = user_meals.count()  # One total (count)
+        # Validate date format
+        try:
+            start_dt = datetime.strptime(start, "%Y-%m-%d")
+            end_dt = datetime.strptime(end, "%Y-%m-%d")
+        except ValueError:
+            return JsonResponse({"error": "Date format must be YYYY-MM-DD"}, status=400)
 
-            # 4. Aggregate total nutrition (One grouped summary)
-            totals = user_meals.aggregate(
-                total_calories=Sum('total_calories'),
-                total_protein=Sum('total_protein'),
-                total_carbs=Sum('total_carbohydrates'),
-                total_fat=Sum('total_fat')
-            )
+        # Filter meals
+        user_meals = Meal.objects.filter(user=request.user, date__range=[start_dt, end_dt])
 
-            # Ensure zero if no meals
-            total_calories = totals['total_calories'] or 0
-            total_protein = totals['total_protein'] or 0
-            total_carbs = totals['total_carbs'] or 0
-            total_fat = totals['total_fat'] or 0
+        # Aggregations
+        total_count = user_meals.count()
+        category_stats = user_meals.values('category').annotate(num=Count('meal_id'))
+        totals = user_meals.aggregate(
+            total_calories=Sum('total_calories') or 0,
+            total_protein=Sum('total_protein') or 0,
+            total_carbs=Sum('total_carbohydrates') or 0,
+            total_fat=Sum('total_fat') or 0
+        )
 
-            # 5. Generate pie chart for protein/carbs/fat proportion (Visualization)
-            labels = ['Protein', 'Carbs', 'Fat']
-            values = [total_protein, total_carbs, total_fat]
+        # Pie chart
+        labels = ['Protein', 'Carbs', 'Fat']
+        values = [totals['total_protein'], totals['total_carbs'], totals['total_fat']]
 
-            fig, ax = plt.subplots()
-            if sum(values) == 0:
-                # Avoid matplotlib warning if all zeros
-                ax.text(0.5, 0.5, 'No data', ha='center', va='center')
-            else:
-                ax.pie(values, labels=labels, autopct='%1.1f%%')
-            ax.set_title(f'Nutrition from {start_date} to {end_date}')
+        fig, ax = plt.subplots(figsize=(6,6))
+        if sum(values) > 0:
+            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=140)
+            ax.axis('equal')
+            ax.legend(title="Macro Distribution", loc="best")
+        else:
+            ax.text(0.5, 0.5, 'No historical data found', ha='center', va='center')
 
-            # Convert pie chart to base64
-            buffer = BytesIO()
-            fig.savefig(buffer, format='png', bbox_inches='tight')
-            plt.close(fig)
-            buffer.seek(0)
-            image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        ax.set_title(f"Nutritional Summary for {request.user.username}")
 
-            # 6. Return JSON with stats + pie chart
-            response_data = {
-                "total_meals": total_meals,
-                "total_nutrition": {
-                    "calories": total_calories,
-                    "protein": total_protein,
-                    "carbs": total_carbs,
-                    "fat": total_fat
-                },
-                "nutrition_pie_chart_base64": image_base64
-            }
+        buffer = BytesIO()
+        fig.savefig(buffer, format='png', bbox_inches='tight')
+        plt.close(fig)
+        buffer.seek(0)
 
-            return JsonResponse(response_data)
+        return HttpResponse(buffer.getvalue(), content_type="image/png")
