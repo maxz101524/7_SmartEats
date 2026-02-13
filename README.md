@@ -9,7 +9,7 @@ This branch introduces two new views:
 
 It also includes updates to the data model to better support AI integration and historical tracking.
 
-# AIMealView
+## AIMealView
 
 AIMealView is for the Meal Recommendation Page. It provides AI-generated meal combinations for users, including: Meal name, Contained dishes and Nutritional information (calories, protein, carbohydrates, fat)
 
@@ -20,7 +20,7 @@ At this stage, AI-generated meals are simulated using hard-coded temporary model
 
 After we incorporated AI model, a dedicated ai_models.py module will store AI-related temperory models
 
-# MealSummaryView
+## MealSummaryView
 
 MealSummaryView provides a historical summary for each user.
 
@@ -28,6 +28,6 @@ It supports: Filtering meals by date range, Returning total consumed meal count,
 
 <img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/4bfbaead-864d-472a-8412-d465fa5a64f9" />
 
-# Data Model Design Updates
+## Data Model Design Updates
 
 We extend Django’s built-in User model via a UserProfile model to store personalized health-related data to avoid redefining built-in fields (e.g., email)
