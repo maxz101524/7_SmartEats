@@ -1,4 +1,4 @@
-# AI Meal & Summary Features
+# Section 2 & 4
 ## Overview
 
 This branch introduces two new views:
