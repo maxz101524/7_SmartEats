@@ -7,9 +7,12 @@ urlpatterns = [
     
 
     path('dishes/', views.dish_list_view, name='dish_list'),
+    path('dishes/<int:dish_id>', views.dish_detail_view, name='dish_detail'),
+
 
     path('profiles/', views.UserProfileBaseView.as_view(), name='user_profiles'),
-    
-  
+   
+
     path('meals/', views.MealListView.as_view(), name='meal_history'),
+    path('dishes-manage/', views.DishManagementView.as_view(), name='dish_manage'),
 ]

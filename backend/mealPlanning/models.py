@@ -1,5 +1,5 @@
 from django.db import models
-
+from django.urls import reverse
 class DiningHall(models.Model):
 
     """
@@ -23,6 +23,9 @@ class DiningHall(models.Model):
     def __str__(self):
         return self.name
 
+    def get_absolute_url(self):
+        return reverse('dining_hall_detail', kwargs={'dining_hall_id': self.Dining_Hall_ID})
+
     
 class Dish(models.Model):
     dish_id = models.AutoField(primary_key=True)
@@ -37,6 +40,9 @@ class Dish(models.Model):
     protein = models.PositiveIntegerField(default=0)
     carbohydrates = models.PositiveIntegerField(default=0)
     fat = models.PositiveIntegerField(default=0)
+
+    def get_absolute_url(self):
+        return reverse('dish_detail', kwargs={'dish_id': self.dish_id})
 
    
 
@@ -112,6 +118,9 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.name} {self.lastName}: ({self.netID})"
+
+    def get_absolute_url(self):
+        return reverse('user_profile_detail', kwargs={'netID': self.netID})
     
 
 
@@ -145,6 +154,9 @@ class Meal(models.Model):
 
 
         ordering = ["meal_id"] 
+
+    def get_absolute_url(self):
+        return reverse('meal_detail', kwargs={'meal_id': self.meal_id})
 
     def __str__(self):
          return f"{self.meal_id}"
