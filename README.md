@@ -1,11 +1,11 @@
-#AI Meal & Summary Features
-📌 Overview
+# AI Meal & Summary Features
+## Overview
 
 This branch introduces two new views:
 
-AIMealView
-
-MealSummaryView
+  AIMealView
+  
+  MealSummaryView
 
 It also includes updates to the data model to better support AI integration and historical tracking.
 
