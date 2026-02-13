@@ -1,0 +1,19 @@
+<h1>Section 4: Data Visualization</h1>
+
+<h2>1) Dishes per Dining Hall</h2>
+<figure>
+  <img
+    src="{% url 'dishes_per_hall_png' %}"
+    alt="Bar chart showing the number of dishes for each dining hall"
+  />
+  <figcaption>Dishes per Dining Hall (ORM aggregation + server-generated PNG)</figcaption>
+</figure>
+
+<h2>2) Dish Count by Category for Each Dining Hall</h2>
+<figure>
+<img
+src="{% url 'hall_category_breakdown_png' %}"
+alt="Stacked bar chart showing dish counts by category for each dining hall"
+/>
+<figcaption>Each dining hall’s dish count broken down by categories (stacked bar chart)</figcaption>
+</figure>
