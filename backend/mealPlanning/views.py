@@ -133,17 +133,10 @@ class AIMealView(View):
 
 
 class MealSummaryView(View):
-    """
-    Returns user's historical meal summary.
-    Method: GET
-    Features:
-    - Filter meals by start and end date
-    - Return total number of meals
-    - Aggregate total nutrition: calories, protein, carbs, fat
-    - Generate a pie chart showing nutrition proportion
-    """
 
     def get(self, request, *args, **kwargs):
+
+        # -------- Authentication Check --------
         if not request.user.is_authenticated:
             return JsonResponse({"error": "Authentication required"}, status=401)
 
@@ -153,42 +146,100 @@ class MealSummaryView(View):
         if not start or not end:
             return JsonResponse({"error": "Please provide start and end dates"}, status=400)
 
-        # Validate date format
         try:
             start_dt = datetime.strptime(start, "%Y-%m-%d")
             end_dt = datetime.strptime(end, "%Y-%m-%d")
         except ValueError:
             return JsonResponse({"error": "Date format must be YYYY-MM-DD"}, status=400)
 
-        # Filter meals
-        user_meals = Meal.objects.filter(user=request.user, date__range=[start_dt, end_dt])
-
-        # Aggregations
-        total_count = user_meals.count()
-        category_stats = user_meals.values('category').annotate(num=Count('meal_id'))
-        totals = user_meals.aggregate(
-            total_calories=Sum('total_calories') or 0,
-            total_protein=Sum('total_protein') or 0,
-            total_carbs=Sum('total_carbohydrates') or 0,
-            total_fat=Sum('total_fat') or 0
+        # -------- Filter Meals --------
+        user_meals = Meal.objects.filter(
+            user=request.user,
+            date__range=[start_dt, end_dt]
         )
 
-        # Pie chart
-        labels = ['Protein', 'Carbs', 'Fat']
-        values = [totals['total_protein'], totals['total_carbs'], totals['total_fat']]
+        # One total (count)
+        total_count = user_meals.count()
 
-        fig, ax = plt.subplots(figsize=(6,6))
-        if sum(values) > 0:
-            ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=140)
-            ax.axis('equal')
-            ax.legend(title="Macro Distribution", loc="best")
+        # -------- Category Stats --------
+        # One grouped summary (annotate + count)
+        category_stats = user_meals.values("category") \
+                                   .annotate(num=Count("pk")) \
+                                   .order_by()
+
+        category_labels = [
+            item["category"] if item["category"] else "Uncategorized"
+            for item in category_stats
+        ]
+        category_values = [item["num"] for item in category_stats]
+
+        # -------- Nutrition Aggregation --------
+        totals = user_meals.aggregate(
+            total_calories=Coalesce(Sum("total_calories"), 0),
+            total_protein=Coalesce(Sum("total_protein"), 0),
+            total_carbs=Coalesce(Sum("total_carbohydrates"), 0),
+            total_fat=Coalesce(Sum("total_fat"), 0),
+        )
+
+        macro_labels = ["Protein", "Carbs", "Fat"]
+        macro_values = [
+            totals["total_protein"],
+            totals["total_carbs"],
+            totals["total_fat"],
+        ]
+
+        # -------- Create Figure --------
+        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+        # ===== Left: Macronutrient Pie =====
+        if sum(macro_values) > 0:
+            axs[0].pie(
+                macro_values,
+                labels=macro_labels,
+                autopct="%1.1f%%",
+                startangle=90
+            )
+            axs[0].axis("equal")
         else:
-            ax.text(0.5, 0.5, 'No historical data found', ha='center', va='center')
+            axs[0].text(0.5, 0.5, "No Macro Data", ha="center")
 
-        ax.set_title(f"Nutritional Summary for {request.user.username}")
+        axs[0].set_title("Macronutrient Distribution")
 
+        # ===== Right: Category Pie =====
+        if sum(category_values) > 0:
+            axs[1].pie(
+                category_values,
+                labels=category_labels,
+                autopct="%1.1f%%",
+                startangle=90
+            )
+            axs[1].axis("equal")
+        else:
+            axs[1].text(0.5, 0.5, "No Category Data", ha="center")
+
+        axs[1].set_title("Meal Category Distribution")
+
+        # -------- Clean Title Layout --------
+        fig.suptitle(
+            f"{request.user.username}'s Meal Summary",
+            fontsize=18,
+            y=1.02
+        )
+
+        fig.text(
+            0.5,
+            0.95,
+            f"Total Meals: {total_count} ({start} to {end})",
+            ha="center",
+            fontsize=12
+        )
+
+        # Prevent overlap
+        fig.tight_layout(rect=[0, 0, 1, 0.88])
+
+        # -------- Return Image --------
         buffer = BytesIO()
-        fig.savefig(buffer, format='png', bbox_inches='tight')
+        fig.savefig(buffer, format="png", bbox_inches="tight")
         plt.close(fig)
         buffer.seek(0)
 
