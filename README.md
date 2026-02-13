@@ -1,4 +1,4 @@
-✨ Branch Update: AI Meal & Summary Features
+#AI Meal & Summary Features
 📌 Overview
 
 This branch introduces two new views:
