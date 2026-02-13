@@ -1,7 +1,3 @@
-好，我帮你改成更适合 GitHub Markdown 的格式（用 #, ##, ###, 加粗、编号列表等），并且把第 4 点并入 Data Model Design 部分。
-
-你可以直接复制到 GitHub README 或 PR 描述里：
-
 ✨ Branch Update: AI Meal & Summary Features
 📌 Overview
 
