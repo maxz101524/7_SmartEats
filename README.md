@@ -1,103 +1,132 @@
-# SmartEats
+好，我帮你改成更适合 GitHub Markdown 的格式（用 #, ##, ###, 加粗、编号列表等），并且把第 4 点并入 Data Model Design 部分。
 
-A meal planning and nutrition tracking application for university dining halls, built with a **Django REST backend** and a **React + TypeScript frontend**.
-## Docs can be found in backend/docs
+你可以直接复制到 GitHub README 或 PR 描述里：
 
----
+✨ Branch Update: AI Meal & Summary Features
+📌 Overview
 
-## Project Structure
+This branch introduces two new views:
 
-```
-SmartEats/
-├── backend/                         # Django REST API
-│   ├── SmartEats_config/
-│   │   ├── settings/
-│   │   │   ├── base.py              # Shared settings (SECRET_KEY, INSTALLED_APPS, etc.)
-│   │   │   ├── development.py       # DEBUG = True, local ALLOWED_HOSTS
-│   │   │   └── production.py        # DEBUG = False
-│   │   ├── secrets_environment.py   # Loads .env via django-environ
-│   │   └── urls.py                  # Root URL config
-│   ├── mealPlanning/
-│   │   ├── models.py                # DiningHall, Dish, UserProfile, Meal
-│   │   ├── views.py                 # 2 FBVs + 2 CBVs (JSON API endpoints)
-│   │   └── urls.py                  # Named URL patterns for all 4 views
-│   ├── docs/
-│   │   ├── 01_project_documents/
-│   │   ├── 02_wireframes/
-│   │   ├── 03_data_model/
-│   │   ├── 04_branching_strategy/
-│   │   └── 05_notes/notes.txt
-│   │   └── 06_screenshots/
-│   ├── .env                         # Secret keys (git-ignored)
-│   └── .env.example                 # Template for required env vars
-│
-└── frontend/                        # React + TypeScript + Vite
-    └── src/
-        ├── App.tsx                  # Router config (equivalent to urls.py)
-        ├── Base.tsx                 # Layout wrapper (equivalent to base.html)
-        ├── components/
-        │   ├── Navbar.tsx           # Shared navigation bar
-        │   └── ShowData.tsx         # Reusable data-list component
-        └── pages/
-            ├── DiningHalls.tsx      #  /api/halls/
-            ├── Dishes.tsx           #  /api/dishes/
-            ├── Profiles.tsx         #  /api/profiles/ and /api/meals/
-            └── NotFound.tsx         # 404 page
-```
+AIMealView
 
----
+MealSummaryView
 
-## How to Run
+It also includes updates to the data model to better support AI integration and historical tracking.
 
-### Prerequisites
+1️⃣ AIMealView
 
-- Python 3.12+, Node.js 18+
-- `pip install django django-environ django-cors-headers djangorestframework`
+AIMealView powers the Meal Recommendation Page.
 
-First, open 2 separate terminals, one for Backend and one for Frontend.
+It provides AI-generated meal combinations for users, including:
 
-### 1. Backend (Django)
+Meal name
 
-```bash
-cd backend
-python manage.py runserver --settings=SmartEats_config.settings.development
-```
+Contained dishes
 
-### 2. Frontend (React)
+Nutritional information (calories, protein, carbohydrates, fat)
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+🔹 Current Implementation
 
----
+At this stage, AI-generated meals are simulated using hard-coded temporary models:
 
-## Views — Django-to-React Mapping
+TempMeal
 
-Since we use React as our frontend, our Django views serve as **JSON API endpoints** rather than rendering HTML templates directly. The four required view types (2 FBV + 2 CBV) are all implemented in `backend/mealPlanning/views.py` and wired up in `backend/mealPlanning/urls.py` with named routes. The React frontend then consumes these endpoints and handles the presentation.
+TempMealItem
 
-**Function-Based Views (FBVs):** We implement two FBVs that correspond to the assignment's HttpResponse and render() patterns. `dining_hall_view` uses `HttpResponse(json.dumps(...))` to manually serialize and return data — this mirrors the "manual HttpResponse" approach. `dish_list_view` uses `JsonResponse()`, which is Django's built-in shortcut that automatically handles serialization and content-type headers — analogous to using `render()` as a convenience shortcut. On the frontend, `DiningHalls.tsx` and `Dishes.tsx` consume these endpoints respectively.
+These simulate:
 
-**Class-Based Views (CBVs):** We implement two CBVs matching the base and generic patterns. `UserProfileBaseView` inherits from `django.views.View` and manually implements `get()` to query and return data — this is the base CBV approach. `MealListView` inherits from `django.views.generic.ListView` with `model = Meal` and overrides `render_to_response` to return JSON — this demonstrates how generic views reduce boilerplate by handling the queryset automatically. On the frontend, `Profiles.tsx` consumes both of these endpoints.
+AI-generated dish combinations
 
-**URL Routing:** All four Django URLs use `name=` for named routing. On the React side, `App.tsx` uses React Router's `<Route path=... />` for equivalent declarative routing.
+The quantity of each dish included (since dishes are served buffet-style)
 
-| View                    | Type                | Django URL                                    | React Page          |
-| ----------------------- | ------------------- | --------------------------------------------- | ------------------- |
-| `dining_hall_view`    | FBV — HttpResponse | `/api/halls/` (`name='dining_hall_list'`) | `DiningHalls.tsx` |
-| `dish_list_view`      | FBV — JsonResponse | `/api/dishes/` (`name='dish_list'`)       | `Dishes.tsx`      |
-| `UserProfileBaseView` | CBV — View         | `/api/profiles/` (`name='user_profiles'`) | `Profiles.tsx`    |
-| `MealListView`        | CBV — ListView     | `/api/meals/` (`name='meal_history'`)     | `Profiles.tsx`    |
+🔹 Future Development
 
----
+In future iterations:
 
-## Templates — Django-to-React Mapping
+AI-generated combinations will be dynamically created
 
-Instead of Django's template engine, we use React's **component composition.**
+A dedicated ai_models.py module will store AI-related models
 
-**Base Template:** `Base.tsx` serves as our `base.html`. It defines the shared page layout — a `<Navbar />` at the top, a `<footer>` at the bottom, and React Router's `<Outlet />` in the middle where child page content renders. This is equivalent to Django's `{% block content %}`. All page components automatically inherit this layout by being nested routes under `<Route path="/" element={<Base />}>`, which is the React equivalent of `{% extends "base.html" %}`.
+Temporary tables will be regenerated each time AI logic is triggered
 
-**Feature Templates & Loops:** Each page component (`Dishes.tsx`, `DiningHalls.tsx`, `Profiles.tsx`) acts as a feature template. They fetch data from the backend API and iterate over it using `.map()` — the React equivalent of `{% for item in items %}`. For the empty state (equivalent to `{% empty %}`), we conditionally render a "No data found" message when the list is empty.
+2️⃣ MealSummaryView
 
-**Template Reuse:** `ShowData.tsx` is a generic, reusable component shared by both `Dishes.tsx` and `DiningHalls.tsx`. It accepts an API endpoint, a title, and a render function for each item — decoupling the data-fetching and list-rendering logic from page-specific content. This mirrors how a single Django template can be reused across multiple views.
+MealSummaryView provides a historical summary for each user.
+
+It supports:
+
+Filtering meals by date range
+
+Returning total consumed meal count
+
+Aggregating total nutritional intake
+
+Generating a nutrition percentage pie chart
+
+This enables users to:
+
+Track historical intake
+
+Understand macronutrient distribution
+
+Monitor dietary balance over time
+
+3️⃣ Data Model Design Updates
+
+The data model has been refined to reflect system behavior and data lifecycle:
+
+🔹 Dish Table (Fast-Changing Table)
+
+Frequently updated
+
+Refreshed bi-weekly via web scraping
+
+Represents the current dining hall offerings
+
+🔹 Meal Table (Slow-Changing Table)
+
+Stores users’ historical consumption records
+
+Represents past meals
+
+Should never be overwritten
+
+This separation ensures:
+
+Stability of historical records
+
+Flexibility for dynamic menu updates
+
+Clear distinction between system-generated data and user history
+
+🔹 AI-Generated Tables (Temporary)
+
+AI will generate temporary tables containing combinations of dishes.
+
+These tables:
+
+Are transient
+
+Refresh every time AI logic is triggered
+
+Will later be managed via a dedicated ai_models.py
+
+Currently simulated using:
+
+TempMeal
+
+TempMealItem
+
+🔹 User Profile Extension
+
+We extend Django’s built-in User model via a UserProfile model to store personalized health-related data.
+
+This approach:
+
+Avoids redefining built-in fields (e.g., email)
+
+Prevents redundant code
+
+Keeps authentication clean and maintainable
+
+Supports future personalization features
