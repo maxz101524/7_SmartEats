@@ -16,6 +16,7 @@ interface UserProfile {
   weight_kg?: string | number | null;
 
   goal?: string;
+  get_absolute_url: string;
 }
 
 interface Meal {
@@ -79,6 +80,15 @@ function Profiles() {
                 <p>Weight: {profile.weight_kg} kg</p>
                 <p>Goal: {profile.goal}</p>
               </div>
+
+              {/* <a
+                href={`http://localhost:8000${profile.get_absolute_url}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                View Profile Details
+              </a> */}
 
               <div className="mt-4 border-t pt-3">
                 <h4 className="font-semibold text-gray-800 mb-2">Meals</h4>

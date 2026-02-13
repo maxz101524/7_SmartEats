@@ -5,6 +5,7 @@ import Dishes from "./pages/Dishes";
 import DiningHalls from "./pages/DiningHalls";
 import NotFound from "./pages/NotFound";
 import Profiles from "./pages/Profiles";
+import DishDetail from "./pages/DishDetail";
 
 function App() {
   return (
@@ -16,6 +17,8 @@ function App() {
             <Route path="dishes" element={<Dishes />}></Route>
             <Route path="halls" element={<DiningHalls />}></Route>
             <Route path="profile" element={<Profiles />}></Route>
+
+            <Route path="dishes/:id" element={<DishDetail />}></Route>
 
             <Route path="*" element={<NotFound />}></Route>
           </Route>
