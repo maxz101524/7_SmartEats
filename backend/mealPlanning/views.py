@@ -14,6 +14,10 @@ import matplotlib.pyplot as plt
 import base64
 from datetime import datetime
 
+from django.utils import timezone
+import io
+from datetime import timedelta
+
 
 from .models import DiningHall, Dish, UserProfile, Meal
 from django.forms.models import model_to_dict
@@ -107,7 +111,7 @@ class UserProfileBaseView(View):
         profiles = []
         for profile in UserProfile.objects.all():
             data = model_to_dict(profile, exclude=['meals'])
-            # data['get_absolute_url'] = profile.get_absolute_url()
+            
             profiles.append(data)
 
         return JsonResponse(profiles, safe=False)
@@ -348,3 +352,56 @@ class DishSummaryImageView(View):
         plt.close(fig)
         buffer.seek(0)
         return HttpResponse(buffer.getvalue(), content_type="image/png")
+    
+def dishes_per_hall_png(request):
+    qs = (
+        Dish.objects
+        .values("dining_hall__name")
+        .annotate(n=Count("dish_id"))
+        .order_by("-n")
+    )
+    labels = [row["dining_hall__name"] for row in qs]
+    values = [row["n"] for row in qs]
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(labels, values)
+    ax.set_title("Dishes per Dining Hall")
+    ax.set_xlabel("Dining Hall")
+    ax.set_ylabel("Dish count")
+    plt.xticks(rotation=30, ha="right")
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    plt.close(fig)
+    buf.seek(0)
+    return HttpResponse(buf.getvalue(), content_type="image/png")
+
+
+def meals_per_day_png(request):
+    today = timezone.localdate()
+    start = today - timedelta(days=13)
+
+    qs = (
+        Meal.objects
+        .filter(date__gte=start, date__lte=today)
+        .values("date")
+        .annotate(n=Count("meal_id"))
+        .order_by("date")
+    )
+    labels = [row["date"].isoformat() for row in qs]
+    values = [row["n"] for row in qs]
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(labels, values, marker="o")
+    ax.set_title("Meals Logged per Day (Last 14 Days)")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Meal count")
+    plt.xticks(rotation=45, ha="right")
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    plt.close(fig)
+    buf.seek(0)
+    return HttpResponse(buf.getvalue(), content_type="image/png")

@@ -22,4 +22,8 @@ urlpatterns = [
 
     path('dish-summary-img/<int:dish_id>/', views.DishSummaryImageView.as_view(), name='dish-chart'),
 
+     path("charts/dishes_per_hall.png", views.dishes_per_hall_png, name="dishes_per_hall_png"),
+    path("charts/meals_per_day.png", views.meals_per_day_png, name="meals_per_day_png"),
+
+
 ]
