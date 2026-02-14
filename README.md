@@ -153,6 +153,4 @@ All Django views serve JSON so the React frontend consumes them as APIs.
 
 
 
-## Data Model Design
 
-We extend Django's built-in User model via a `UserProfile` model to store personalized health data without redefining built-in fields (e.g., email).
