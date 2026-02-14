@@ -90,7 +90,7 @@ npm run dev
 
 ## Section 1: URL Linking & Navigation
 
-The app has a working home page at `/`, a navigation bar with 5 links using React Router `<Link>` (no hard-coded paths), and detail pages via primary keys (e.g., `/dishes/6`). `get_absolute_url()` is implemented on `Dish` and `UserProfile` models using `reverse()`, and the API serializes it as `detail_url` so the frontend never hard-codes paths.
+The app has a working home page at `/`, a navigation bar with 5 links using React Router `<Link>` , and detail pages (DishDetail.tsx) via primary keys (e.g., `/dishes/6`). `get_absolute_url()` is implemented on `Dish` and `UserProfile` models using `reverse()`, and the API serializes it as `detail_url` so the frontend never hard-codes paths.
 
 **Screenshots:** `backend/docs/06_screenshots/week3`
 
@@ -104,9 +104,9 @@ The app has a working home page at `/`, a navigation bar with 5 links using Reac
 
 ## Section 3: Static Files & UI Styling
 
-A custom CSS file at `frontend/src/static/css/custom.css` provides a dark theme and the Inter font. Rather than overriding Tailwind classes, it remaps Tailwind v4's CSS color variables (`--color-white`, `--color-gray-*`, etc.) so every existing utility class automatically picks up the dark palette. The Inter font is loaded via `<link>` in `index.html` and set through `--font-sans`. A SmartEats logo (`src/static/images/smarteats-logo.png`) is displayed in the Navbar header.
+A custom CSS file at `frontend/src/static/css/custom.css` provides a dark theme and the Inter font. Rather than overriding Tailwind classes, it remaps Tailwind v4's CSS color variables (`--color-white`, `--color-gray-*`, etc.) so every existing utility class automatically picks up the dark palette. The font is also applied in `index.html` `. A SmartEats logo (`src/static/images/smarteats-logo.png`) is displayed in the Navbar header.
 
-Vite automatically handles cache busting by appending content hashes to built asset filenames (e.g. `custom-BxK3q7.css`), so browsers always fetch the latest version after a code change.
+
 
 ## Section 4: Data Visualization (Matplotlib)
 
@@ -119,6 +119,7 @@ Three chart views, all using ORM aggregation → Matplotlib → `BytesIO` → `H
 | `/api/chart/`                     | `MealSummaryView` (CBV)      | Dual pie chart | User meal macros + category distribution |
 
 All views use `BytesIO()` to write the PNG to an in-memory buffer and `plt.close(fig)` to free RAM. Charts include titles, axis labels, and legends/autopct. `DishDetail.tsx` embeds the chart with `<img src=".../api/dish-summary-img/{id}/" alt="Dish Nutrition Chart" />`.
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/0de15c51-4e38-4c06-bae8-b9133dbdbdf6" />
 
 ## Section 5: Forms & User Input
 
@@ -146,7 +147,7 @@ All Django views serve JSON so the React frontend consumes them as APIs.
 
 **HttpResponse vs JsonResponse:** `dining_hall_view` uses `HttpResponse(json.dumps(...), content_type="application/json")` (manual); `dish_list_view` uses `JsonResponse(data, safe=False)` (auto-serializes + sets MIME type). `JsonResponse` is a subclass of `HttpResponse` that handles encoding and content-type automatically.
 
-**Screenshots:** `backend/docs/08_screenshots_week5/`
+
 
 ## Data Model Design
 
