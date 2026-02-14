@@ -16,7 +16,7 @@ interface UserProfile {
   weight_kg?: string | number | null;
 
   goal?: string;
-  get_absolute_url: string;
+  detail_url: string; // from model's get_absolute_url()
 }
 
 interface Meal {
@@ -81,8 +81,9 @@ function Profiles() {
                 <p>Goal: {profile.goal}</p>
               </div>
 
+              {/* Uses model-driven URL from get_absolute_url() instead of manually building the path */}
               {/* <a
-                href={`http://localhost:8000${profile.get_absolute_url}`}
+                href={`http://localhost:8000${profile.detail_url}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"

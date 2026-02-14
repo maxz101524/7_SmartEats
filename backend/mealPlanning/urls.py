@@ -11,12 +11,15 @@ urlpatterns = [
 
 
     path('profiles/', views.UserProfileBaseView.as_view(), name='user_profiles'),
+    path('profiles/<str:netID>/', views.user_profile_detail_view, name='user_profile_detail'),
    
 
     path('meals/', views.MealListView.as_view(), name='meal_history'),
     path('dishes-manage/', views.DishManagementView.as_view(), name='dish_manage'),
 
     path('aimeals/', views.AIMealView.as_view(), name='meal_plan'),
+
+    path('dish-stats/', views.dish_stats_view, name='dish_stats'),
 
     path('chart/', views.MealSummaryView.as_view(), name='meal-nutrition-chart'),
 

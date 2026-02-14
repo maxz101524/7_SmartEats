@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-// Matches your Django result structure
 interface MealResult {
   meal_id: number;
   meal_name: string;
@@ -18,6 +17,8 @@ export default function AIMeals() {
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
   const [results, setResults] = useState<MealResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchMode, setSearchMode] = useState<"GET" | "POST">("GET");
+  const [responseMode, setResponseMode] = useState("");
 
   // Add dish to list
   const addDish = (e: React.FormEvent) => {
@@ -28,18 +29,33 @@ export default function AIMeals() {
     }
   };
 
-  // The Fetch Logic calling your 'aimeals/' path
+  // Search using either GET (fuzzy, query params visible in URL) or POST (exact match, data hidden from URL)
   const handleSearch = async () => {
     if (selectedDishes.length === 0) return;
 
     setLoading(true);
     try {
       const query = selectedDishes.join(",");
-      const response = await fetch(
-        `http://localhost:8000/api/aimeals/?dishes=${query}`,
-      );
+      let response;
+
+      if (searchMode === "GET") {
+        // GET: fuzzy search — query params visible in URL, results shareable via link
+        response = await fetch(
+          `http://localhost:8000/api/aimeals/?dishes=${query}`,
+        );
+      } else {
+        // POST: exact match — search data hidden from URL, useful when you don't want to expose query
+        const formData = new FormData();
+        formData.append("dishes", query);
+        response = await fetch("http://localhost:8000/api/aimeals/", {
+          method: "POST",
+          body: formData,
+        });
+      }
+
       const data = await response.json();
       setResults(data.results);
+      setResponseMode(data.mode);
     } catch (error) {
       console.error("Search failed", error);
     } finally {
@@ -88,6 +104,36 @@ export default function AIMeals() {
           ))}
         </div>
 
+        {/* Search Mode Toggle: GET (fuzzy, shareable URL) vs POST (exact match, hidden data) */}
+        <div className="flex items-center gap-4 mb-4">
+          <span className="text-sm font-medium text-gray-600">Search Mode:</span>
+          <button
+            onClick={() => setSearchMode("GET")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+              searchMode === "GET"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            Quick Search (GET)
+          </button>
+          <button
+            onClick={() => setSearchMode("POST")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+              searchMode === "POST"
+                ? "bg-green-600 text-white"
+                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            Exact Match (POST)
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          {searchMode === "GET"
+            ? "GET: Fuzzy search via URL query params — results are shareable via link."
+            : "POST: Exact name match — search data is hidden from the URL."}
+        </p>
+
         <button
           onClick={handleSearch}
           disabled={selectedDishes.length === 0 || loading}
@@ -100,6 +146,12 @@ export default function AIMeals() {
       </div>
 
       {/* Results Section */}
+      {responseMode && results.length > 0 && (
+        <p className="text-sm text-gray-500 mb-2">
+          Response from: <span className="font-semibold text-indigo-600">{responseMode}</span>
+          {" "}— {results.length} result(s)
+        </p>
+      )}
       <div className="space-y-4">
         {results.map((meal) => (
           <div

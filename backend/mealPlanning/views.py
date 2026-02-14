@@ -21,7 +21,7 @@ from datetime import timedelta
 
 from .models import DiningHall, Dish, UserProfile, Meal
 from django.forms.models import model_to_dict
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
 # Create your views here.
 
@@ -85,23 +85,31 @@ def dish_list_view(request):
     
     search_query = request.GET.get('search', None)
 
-    dishes = Dish.objects.all()
+    dishes = Dish.objects.select_related('dining_hall').all()
 
     
     if search_query:
         dishes = dishes.filter(dish_name__icontains=search_query)
 
-    data = list(dishes.values(
-        'dish_id', 'dish_name', 'calories', 'category', 'dining_hall__name'
-    ))
+    data = []
+    for dish in dishes:
+        data.append({
+            'dish_id': dish.dish_id,
+            'dish_name': dish.dish_name,
+            'calories': dish.calories,
+            'category': dish.category,
+            'dining_hall__name': dish.dining_hall.name,
+            'detail_url': dish.get_absolute_url(),  # model-driven URL
+        })
     
     return JsonResponse(data, safe=False)
 
 def dish_detail_view(request, dish_id):
     
-    dish = Dish.objects.get(pk=dish_id)
+    dish = get_object_or_404(Dish, pk=dish_id)
     data = model_to_dict(dish)
     data['dining_hall__name'] = dish.dining_hall.name
+    data['detail_url'] = dish.get_absolute_url()  # model-driven URL
     return JsonResponse(data)
 
 
@@ -111,10 +119,18 @@ class UserProfileBaseView(View):
         profiles = []
         for profile in UserProfile.objects.all():
             data = model_to_dict(profile, exclude=['meals'])
-            
+            data['detail_url'] = profile.get_absolute_url()  # model-driven URL
             profiles.append(data)
 
         return JsonResponse(profiles, safe=False)
+
+
+def user_profile_detail_view(request, netID):
+    """Detail view for a single user profile, linked via get_absolute_url()."""
+    profile = get_object_or_404(UserProfile, pk=netID)
+    data = model_to_dict(profile, exclude=['meals'])
+    data['detail_url'] = profile.get_absolute_url()
+    return JsonResponse(data)
     
 
 class MealListView(ListView):
@@ -127,12 +143,15 @@ class MealListView(ListView):
         return JsonResponse(data,safe=False )
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class AIMealView(View):
     """
     Features:
     - Return meals containing ALL specified dishes.
     - Filter meals based on related Dish names.
     - Return the total nutrition content for each meal.
+    - GET: fuzzy search (icontains) — results shareable via URL query params.
+    - POST: exact match — hides search data from URL for precise lookups.
     """
 
     def _get_meals_by_dishes(self, dish_names_list, mode="GET"):
@@ -209,6 +228,37 @@ class AIMealView(View):
             "results": data
         })
 
+
+
+def dish_stats_view(request):
+    """
+    Public aggregation endpoint — returns dish statistics as JSON.
+    Demonstrates: Count (total), annotate + Count (grouped summary).
+    """
+    # One total (count)
+    total_dishes = Dish.objects.count()
+    total_halls = DiningHall.objects.count()
+
+    # Grouped summary: dishes per category (annotate + count)
+    dishes_by_category = list(
+        Dish.objects.values('category')
+        .annotate(count=Count('dish_id'))
+        .order_by('-count')
+    )
+
+    # Grouped summary: dishes per dining hall (annotate + count)
+    dishes_by_hall = list(
+        Dish.objects.values('dining_hall__name')
+        .annotate(count=Count('dish_id'))
+        .order_by('-count')
+    )
+
+    return JsonResponse({
+        'total_dishes': total_dishes,
+        'total_halls': total_halls,
+        'dishes_by_category': dishes_by_category,
+        'dishes_by_hall': dishes_by_hall,
+    })
 
 
 class MealSummaryView(View):

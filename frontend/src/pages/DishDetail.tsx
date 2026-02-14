@@ -1,16 +1,24 @@
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import type { Dish } from "./Dishes";
 import axios from "axios";
 
 function DishDetail() {
   const { id } = useParams();
+  const location = useLocation();
   const [dish, setDish] = useState<Dish | null>(null);
+
+  // Use model-driven URL from get_absolute_url() passed via navigation state,
+  // falling back to manually built URL if accessed directly
+  const detailUrl = location.state?.detailUrl
+    ? `http://localhost:8000${location.state.detailUrl}`
+    : `http://localhost:8000/api/dishes/${id}`;
+
   useEffect(() => {
     axios
-      .get(`http://localhost:8000/api/dishes/${id}`)
+      .get(detailUrl)
       .then((res) => setDish(res.data));
-  }, [id]);
+  }, [detailUrl]);
 
   if (!dish) {
     return <p>Loading...</p>;
