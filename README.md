@@ -119,6 +119,10 @@ Three chart views, all using ORM aggregation → Matplotlib → `BytesIO` → `H
 | `/api/chart/`                     | `MealSummaryView` (CBV)      | Dual pie chart | User meal macros + category distribution |
 
 All views use `BytesIO()` to write the PNG to an in-memory buffer and `plt.close(fig)` to free RAM. Charts include titles, axis labels, and legends/autopct. `DishDetail.tsx` embeds the chart with `<img src=".../api/dish-summary-img/{id}/" alt="Dish Nutrition Chart" />`.
+<img width="672" height="712" alt="image" src="https://github.com/user-attachments/assets/fae577b8-1dd9-497d-8ec7-27b47fa3b42e" />
+
+<img width="1901" height="994" alt="Screenshot 2026-02-13 222334" src="https://github.com/user-attachments/assets/fa7e5116-dd93-4631-90c0-cfbc8ec20642" />
+
 <img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/0de15c51-4e38-4c06-bae8-b9133dbdbdf6" />
 
 ## Section 5: Forms & User Input
