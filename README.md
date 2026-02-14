@@ -1,4 +1,8 @@
 # SmartEats
+A meal planning and nutrition tracking application for university dining halls, built with a **Django REST backend** and a **React + TypeScript frontend**.
+## Docs can be found in backend/docs
+
+---
 
 ## Project Structure
 
@@ -57,6 +61,32 @@ SmartEats/
 │
 └── README.md
 ```
+
+## How to Run
+
+### Prerequisites
+
+- Python 3.12+, Node.js 18+
+- `pip install django django-environ django-cors-headers djangorestframework`
+
+First, open 2 separate terminals, one for Backend and one for Frontend.
+
+### 1. Backend (Django)
+
+```bash
+cd backend
+python manage.py runserver --settings=SmartEats_config.settings.development
+```
+
+### 2. Frontend (React)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
 
 ## Section 1: URL Linking & Navigation
 
