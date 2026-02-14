@@ -8,6 +8,7 @@ function Navbar() {
     { to: "/halls", label: "Dining Halls" },
     { to: "/dishes", label: "Dishes" },
     { to: "/profile", label: "Profile" },
+    { to: "/aimeals", label: "AIMeal" },
   ];
 
   return (

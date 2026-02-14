@@ -20,18 +20,25 @@ function DishDetail() {
     <div className="max-w-2xl mx-auto p-8">
       <h1 className="text-3xl font-bold">{dish.dish_name}</h1>
       <p className="text-xl text-blue-600">{dish.category}</p>
+      <div className="my-6 flex justify-center bg-white p-4 rounded-xl shadow-inner border">
+        <img
+          src={`http://localhost:8000/api/dish-summary-img/${id}/`}
+          alt="Dish Nutrition Chart"
+          className="max-w-full h-auto"
+        />
+      </div>
       <div className="mt-4 p-4 border rounded-lg">
         <p>
           <strong>Calories:</strong> {dish.calories} kcal
         </p>
         <p>
-          <strong>Protein:</strong> {dish.protein} kcal
+          <strong>Protein:</strong> {dish.protein} g
         </p>
         <p>
-          <strong>Carbohydrates:</strong> {dish.carbohydrates} kcal
+          <strong>Carbohydrates:</strong> {dish.carbohydrates} g
         </p>
         <p>
-          <strong>Fat:</strong> {dish.fat} kcal
+          <strong>Fat:</strong> {dish.fat} g
         </p>
         <p>
           <strong>Location:</strong> {dish.dining_hall__name}
