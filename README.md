@@ -1,5 +1,4 @@
 # SmartEats
-
 A meal planning and nutrition tracking application for university dining halls, built with a **Django REST backend** and a **React + TypeScript frontend**.
 ## Docs can be found in backend/docs
 
@@ -9,43 +8,59 @@ A meal planning and nutrition tracking application for university dining halls, 
 
 ```
 SmartEats/
-├── backend/                         # Django REST API
+├── backend/                          # Django REST API
 │   ├── SmartEats_config/
 │   │   ├── settings/
-│   │   │   ├── base.py              # Shared settings (SECRET_KEY, INSTALLED_APPS, etc.)
-│   │   │   ├── development.py       # DEBUG = True, local ALLOWED_HOSTS
-│   │   │   └── production.py        # DEBUG = False
-│   │   ├── secrets_environment.py   # Loads .env via django-environ
-│   │   └── urls.py                  # Root URL config
+│   │   │   ├── base.py               # Shared settings (SECRET_KEY, INSTALLED_APPS, etc.)
+│   │   │   ├── development.py        # DEBUG = True, local ALLOWED_HOSTS
+│   │   │   └── production.py         # DEBUG = False
+│   │   ├── secrets_environment.py    # Loads .env via django-environ
+│   │   └── urls.py                   # Root URL config
 │   ├── mealPlanning/
-│   │   ├── models.py                # DiningHall, Dish, UserProfile, Meal
-│   │   ├── views.py                 # 2 FBVs + 2 CBVs (JSON API endpoints)
-│   │   └── urls.py                  # Named URL patterns for all 4 views
+│   │   ├── models.py                 # DiningHall, Dish, UserProfile, Meal
+│   │   ├── views.py                  # FBVs + CBVs (JSON API endpoints + Matplotlib charts)
+│   │   └── urls.py                   # Named URL patterns for all views
 │   ├── docs/
 │   │   ├── 01_project_documents/
 │   │   ├── 02_wireframes/
 │   │   ├── 03_data_model/
 │   │   ├── 04_branching_strategy/
-│   │   └── 05_notes/notes.txt
+│   │   ├── 05_notes/notes.txt        # Design decisions & section notes
 │   │   └── 06_screenshots/
-│   ├── .env                         # Secret keys (git-ignored)
-│   └── .env.example                 # Template for required env vars
+│   ├── .env                          # Secret keys (git-ignored)
+│   └── .env.example                  # Template for required env vars
 │
-└── frontend/                        # React + TypeScript + Vite
-    └── src/
-        ├── App.tsx                  # Router config (equivalent to urls.py)
-        ├── Base.tsx                 # Layout wrapper (equivalent to base.html)
-        ├── components/
-        │   ├── Navbar.tsx           # Shared navigation bar
-        │   └── ShowData.tsx         # Reusable data-list component
-        └── pages/
-            ├── DiningHalls.tsx      #  /api/halls/
-            ├── Dishes.tsx           #  /api/dishes/
-            ├── Profiles.tsx         #  /api/profiles/ and /api/meals/
-            └── NotFound.tsx         # 404 page
+├── frontend/                         # React + TypeScript + Vite
+│   ├── index.html                    # Entry HTML (Google Fonts <link>, page title)
+│   ├── vite.config.ts                # Vite + React + Tailwind v4 plugin
+│   ├── src/
+│   │   ├── main.tsx                  # App entry — imports index.css + custom.css
+│   │   ├── App.tsx                   # Router config (equivalent to urls.py)
+│   │   ├── Base.tsx                  # Layout wrapper (equivalent to base.html)
+│   │   ├── index.css                 # Tailwind v4 import (@import "tailwindcss")
+│   │   ├── App.css                   # Minimal app-level styles
+│   │   ├── components/
+│   │   │   ├── Navbar.tsx            # Sticky nav bar with logo + links
+│   │   │   ├── ShowData.tsx          # Reusable data list (replaces {% for %}/{% empty %})
+│   │   │   ├── AddDish.tsx           # POST form — create dish with CSRF
+│   │   │   └── Empty.tsx             # Empty-state placeholder
+│   │   ├── pages/
+│   │   │   ├── Dishes.tsx            # Menu explorer with GET search + stats
+│   │   │   ├── DishDetail.tsx        # Single dish detail + Matplotlib chart
+│   │   │   ├── DiningHalls.tsx       # Dining hall listing
+│   │   │   ├── Profiles.tsx          # User profiles + meal history
+│   │   │   ├── AIMeals.tsx           # AI meal matcher (GET fuzzy / POST exact)
+│   │   │   └── NotFound.tsx          # 404 page
+│   │   └── static/
+│   │       ├── css/
+│   │       │   └── custom.css        # Dark theme — remaps Tailwind v4 color vars + Inter font
+│   │       └── images/
+│   │           └── smarteats-logo.png # Brand logo (displayed in Navbar)
+│   └── public/
+│       └── vite.svg
+│
+└── README.md
 ```
-
----
 
 ## How to Run
 
@@ -73,31 +88,69 @@ npm run dev
 
 ---
 
-## Views — Django-to-React Mapping
+## Section 1: URL Linking & Navigation
 
-Since we use React as our frontend, our Django views serve as **JSON API endpoints** rather than rendering HTML templates directly. The four required view types (2 FBV + 2 CBV) are all implemented in `backend/mealPlanning/views.py` and wired up in `backend/mealPlanning/urls.py` with named routes. The React frontend then consumes these endpoints and handles the presentation.
+The app has a working home page at `/`, a navigation bar with 5 links using React Router `<Link>` , and detail pages (DishDetail.tsx) via primary keys (e.g., `/dishes/6`). `get_absolute_url()` is implemented on `Dish` and `UserProfile` models using `reverse()`, and the API serializes it as `detail_url` so the frontend never hard-codes paths.
 
-**Function-Based Views (FBVs):** We implement two FBVs that correspond to the assignment's HttpResponse and render() patterns. `dining_hall_view` uses `HttpResponse(json.dumps(...))` to manually serialize and return data — this mirrors the "manual HttpResponse" approach. `dish_list_view` uses `JsonResponse()`, which is Django's built-in shortcut that automatically handles serialization and content-type headers — analogous to using `render()` as a convenience shortcut. On the frontend, `DiningHalls.tsx` and `Dishes.tsx` consume these endpoints respectively.
+**Screenshots:** `backend/docs/06_screenshots/week3`
 
-**Class-Based Views (CBVs):** We implement two CBVs matching the base and generic patterns. `UserProfileBaseView` inherits from `django.views.View` and manually implements `get()` to query and return data — this is the base CBV approach. `MealListView` inherits from `django.views.generic.ListView` with `model = Meal` and overrides `render_to_response` to return JSON — this demonstrates how generic views reduce boilerplate by handling the queryset automatically. On the frontend, `Profiles.tsx` consumes both of these endpoints.
+## Section 2: ORM Queries & Data Presentation
 
-**URL Routing:** All four Django URLs use `name=` for named routing. On the React side, `App.tsx` uses React Router's `<Route path=... />` for equivalent declarative routing.
+- **Basic queries:** `dish_list_view` displays all dishes via `Dish.objects.select_related('dining_hall').all()`
+- **GET search:** `/api/dishes/?search=chicken` — filters with `dish_name__icontains`
+- **POST search:** `AIMealView.post()` — exact-match dish lookup, hides query data from the URL
+- **Relationship spanning:** `AIMealView` queries across `TempMeal → TempMealItem → Dish` using `items__dish__dish_name__icontains`
+- **Aggregations:** `dish_stats_view` returns total dish/hall counts (`Count`) and grouped summaries by category and dining hall (`annotate + Count`)
 
-| View                    | Type                | Django URL                                    | React Page          |
-| ----------------------- | ------------------- | --------------------------------------------- | ------------------- |
-| `dining_hall_view`    | FBV — HttpResponse | `/api/halls/` (`name='dining_hall_list'`) | `DiningHalls.tsx` |
-| `dish_list_view`      | FBV — JsonResponse | `/api/dishes/` (`name='dish_list'`)       | `Dishes.tsx`      |
-| `UserProfileBaseView` | CBV — View         | `/api/profiles/` (`name='user_profiles'`) | `Profiles.tsx`    |
-| `MealListView`        | CBV — ListView     | `/api/meals/` (`name='meal_history'`)     | `Profiles.tsx`    |
+## Section 3: Static Files & UI Styling
 
----
+A custom CSS file at `frontend/src/static/css/custom.css` provides a dark theme and the Inter font. Rather than overriding Tailwind classes, it remaps Tailwind v4's CSS color variables (`--color-white`, `--color-gray-*`, etc.) so every existing utility class automatically picks up the dark palette. The font is also applied in `index.html` `. A SmartEats logo (`src/static/images/smarteats-logo.png`) is displayed in the Navbar header.
 
-## Templates — Django-to-React Mapping
 
-Instead of Django's template engine, we use React's **component composition.**
 
-**Base Template:** `Base.tsx` serves as our `base.html`. It defines the shared page layout — a `<Navbar />` at the top, a `<footer>` at the bottom, and React Router's `<Outlet />` in the middle where child page content renders. This is equivalent to Django's `{% block content %}`. All page components automatically inherit this layout by being nested routes under `<Route path="/" element={<Base />}>`, which is the React equivalent of `{% extends "base.html" %}`.
+## Section 4: Data Visualization (Matplotlib)
 
-**Feature Templates & Loops:** Each page component (`Dishes.tsx`, `DiningHalls.tsx`, `Profiles.tsx`) acts as a feature template. They fetch data from the backend API and iterate over it using `.map()` — the React equivalent of `{% for item in items %}`. For the empty state (equivalent to `{% empty %}`), we conditionally render a "No data found" message when the list is empty.
+Three chart views, all using ORM aggregation → Matplotlib → `BytesIO` → `HttpResponse(content_type="image/png")`:
 
-**Template Reuse:** `ShowData.tsx` is a generic, reusable component shared by both `Dishes.tsx` and `DiningHalls.tsx`. It accepts an API endpoint, a title, and a render function for each item — decoupling the data-fetching and list-rendering logic from page-specific content. This mirrors how a single Django template can be reused across multiple views.
+| Endpoint                            | View                           | Chart Type     | Data Source                              |
+| ----------------------------------- | ------------------------------ | -------------- | ---------------------------------------- |
+| `/api/dish-summary-img/<id>/`     | `DishSummaryImageView` (CBV) | Pie chart      | Single dish macro breakdown              |
+| `/api/charts/dishes_per_hall.png` | `dishes_per_hall_png` (FBV)  | Bar chart      | `annotate(Count)` dishes per hall      |
+| `/api/chart/`                     | `MealSummaryView` (CBV)      | Dual pie chart | User meal macros + category distribution |
+
+All views use `BytesIO()` to write the PNG to an in-memory buffer and `plt.close(fig)` to free RAM. Charts include titles, axis labels, and legends/autopct. `DishDetail.tsx` embeds the chart with `<img src=".../api/dish-summary-img/{id}/" alt="Dish Nutrition Chart" />`.
+<img width="672" height="712" alt="image" src="https://github.com/user-attachments/assets/fae577b8-1dd9-497d-8ec7-27b47fa3b42e" />
+
+<img width="1901" height="994" alt="Screenshot 2026-02-13 222334" src="https://github.com/user-attachments/assets/fa7e5116-dd93-4631-90c0-cfbc8ec20642" />
+
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/0de15c51-4e38-4c06-bae8-b9133dbdbdf6" />
+
+## Section 5: Forms & User Input
+
+- **GET form:** `Dishes.tsx` search bar → `GET /api/dishes/?search=...` — query params visible in URL, results shareable via link
+- **POST form:** `AddDish.tsx` creation form → `POST /api/dishes-manage/` — submits dish name, category, nutrition, and dining hall
+- **CSRF:** `DishManagementView.get()` uses `@ensure_csrf_cookie` to set the token cookie; `AddDish.tsx` reads it via `getCookie("csrftoken")` and sends it as the `X-CSRFToken` header on POST
+- **CBV handling GET + POST:** `DishManagementView` inherits from `View` — `get()` lists dishes, `post()` creates a new dish with validation
+
+## Section 6: Creating APIs
+
+All Django views serve JSON so the React frontend consumes them as APIs.
+
+| Endpoint                | View Type      | Response Type    | Description                              |
+| ----------------------- | -------------- | ---------------- | ---------------------------------------- |
+| `/api/halls/`         | FBV            | `HttpResponse` | Dining halls — manual `json.dumps()`  |
+| `/api/dishes/`        | FBV            | `JsonResponse` | Dishes (supports `?search=` filtering) |
+| `/api/dishes/<id>`    | FBV            | `JsonResponse` | Dish detail by PK                        |
+| `/api/dish-stats/`    | FBV            | `JsonResponse` | Aggregation stats                        |
+| `/api/profiles/`      | CBV (View)     | `JsonResponse` | User profiles                            |
+| `/api/meals/`         | CBV (ListView) | `JsonResponse` | Meal history                             |
+| `/api/dishes-manage/` | CBV (View)     | `JsonResponse` | GET list / POST create dish              |
+| `/api/aimeals/`       | CBV (View)     | `JsonResponse` | AI meal search (GET fuzzy, POST exact)   |
+
+**Filtering via query parameters:** `dish_list_view` reads `request.GET.get('search')` and filters with `Dish.objects.filter(dish_name__icontains=query)` — e.g. `/api/dishes/?search=chicken` returns only matching dishes. `AIMealView.get()` reads `request.GET.get('dishes')`, splits by comma, and chains `Q()` filters across related models (`items__dish__dish_name__icontains`) — e.g. `/api/aimeals/?dishes=Rice,Chicken` returns meals containing all specified dishes.
+
+**HttpResponse vs JsonResponse:** `dining_hall_view` uses `HttpResponse(json.dumps(...), content_type="application/json")` (manual); `dish_list_view` uses `JsonResponse(data, safe=False)` (auto-serializes + sets MIME type). `JsonResponse` is a subclass of `HttpResponse` that handles encoding and content-type automatically.
+
+
+
+

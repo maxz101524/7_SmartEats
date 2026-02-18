@@ -1,0 +1,126 @@
+/*
+ * SmartEats – Custom Styles  (Dark Theme)
+ * Complements Tailwind; remaps Tailwind v4 color variables for a dark palette.
+ * Inter font loaded via <link> in index.html.
+ */
+
+/* ── Design tokens & Tailwind v4 variable overrides ──────────── */
+:root {
+  /* Font */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* SmartEats brand */
+  --se-illini-navy: #13294b;
+  --se-illini-orange: #e84a27;
+
+  /* ── Dark-theme: remap Tailwind gray scale ───────────────────
+     bg-white  → dark surface,  text-gray-900 → near-white, etc. */
+  --color-white: #1a1d2e;
+  --color-gray-50: #1e2235;
+  --color-gray-100: #252a3d;
+  --color-gray-200: #2f3549;
+  --color-gray-300: #3e4560;
+  --color-gray-400: #8a91a8;
+  --color-gray-500: #a3aabe;
+  --color-gray-600: #c0c6d6;
+  --color-gray-700: #d4d9e6;
+  --color-gray-800: #e8ebf2;
+  --color-gray-900: #f1f3f8;
+  --color-gray-950: #f8f9fc;
+
+  /* ── Dark-theme: remap blue scale ────────────────────────── */
+  --color-blue-50: #1c2744;
+  --color-blue-100: #1e3056;
+  --color-blue-200: #253d6e;
+  --color-blue-300: #3a6abf;
+  --color-blue-400: #6ba0f7;
+  --color-blue-500: #5b8def;
+  --color-blue-600: #4a7de8;
+  --color-blue-700: #6ba0f7;
+
+  /* ── Dark-theme: remap green scale ───────────────────────── */
+  --color-green-50: #19291e;
+  --color-green-100: #1a2e20;
+  --color-green-300: #2b6e3f;
+  --color-green-600: #4ade80;
+  --color-green-700: #6ee7a0;
+
+  /* ── Dark-theme: remap red scale ─────────────────────────── */
+  --color-red-50: #2d1a1e;
+  --color-red-100: #331d22;
+  --color-red-300: #9b3a3a;
+  --color-red-700: #f87171;
+
+  /* ── Dark-theme: remap yellow scale ──────────────────────── */
+  --color-yellow-50: #2b2819;
+  --color-yellow-100: #302c1a;
+  --color-yellow-300: #a38a2e;
+  --color-yellow-700: #fbbf24;
+
+  /* ── Dark-theme: remap orange scale ──────────────────────── */
+  --color-orange-50: #2d2219;
+  --color-orange-600: #f0784a;
+
+  /* ── Dark-theme: remap indigo scale ──────────────────────── */
+  --color-indigo-600: #7c8cf5;
+  --color-indigo-700: #6b7dee;
+}
+
+/* ── Base typography ─────────────────────────────────────────── */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  color-scheme: dark;
+}
+
+/* ── Flat dark page background ───────────────────────────────── */
+body {
+  background-color: #111327;
+  color: #e8ebf2;
+}
+
+/* ── Root container ──────────────────────────────────────────── */
+#root {
+  min-height: 100vh;
+}
+
+/* ── Focus-visible ring (accessibility) ──────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--se-illini-orange);
+  outline-offset: 2px;
+}
+
+/* ── Selection highlight ─────────────────────────────────────── */
+::selection {
+  background: rgba(232, 74, 39, 0.3);
+  color: #fff;
+}
+
+/* ── Inputs: ensure dark bg + light text ─────────────────────── */
+input,
+textarea,
+select {
+  background-color: #1e2235;
+  color: #e8ebf2;
+  border-color: #3e4560;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #6b7488;
+}
+
+/* ── Scrollbar (webkit browsers) ─────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1d2e;
+}
+::-webkit-scrollbar-thumb {
+  background: #3e4560;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555c75;
+}
