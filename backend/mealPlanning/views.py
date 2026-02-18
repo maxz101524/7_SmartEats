@@ -493,7 +493,10 @@ def nutrition_lookup_view(request):
     except http_requests.exceptions.RequestException as exc:
         return JsonResponse({"error": f"External API error: {exc}"}, status=502)
 
-    wger_results = wger_response.json().get("results", [])
+    try:
+        wger_results = wger_response.json().get("results", [])
+    except ValueError:
+        return JsonResponse({"error": "External API returned an unexpected non-JSON response"}, status=502)
 
     external_items = [
         {
