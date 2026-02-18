@@ -28,5 +28,5 @@ urlpatterns = [
      path("charts/dishes_per_hall.png", views.dishes_per_hall_png, name="dishes_per_hall_png"),
     path("charts/meals_per_day.png", views.meals_per_day_png, name="meals_per_day_png"),
 
-
+    path("nutrition-lookup/", views.nutrition_lookup_view, name="nutrition_lookup"),
 ]

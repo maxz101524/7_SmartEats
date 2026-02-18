@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404, render
 
 import json
+import requests as http_requests
 from  django.http import HttpResponse, JsonResponse
 from django.views import View
 from django.views.generic import ListView
@@ -455,3 +456,138 @@ def meals_per_day_png(request):
     plt.close(fig)
     buf.seek(0)
     return HttpResponse(buf.getvalue(), content_type="image/png")
+
+
+WGER_INGREDIENT_URL = "https://wger.de/api/v2/ingredient/"
+
+
+def nutrition_lookup_view(request):
+    """
+    External API integration (Wger) triangulated with internal SmartEats data.
+
+    Required: ?q=<food_name>
+    Optional: ?netID=<user_netID> for personalized daily-goal analysis
+    """
+    query = request.GET.get('q', '').strip()
+    if not query:
+        return JsonResponse(
+            {"error": "Query parameter 'q' is required. Example: ?q=chicken+breast"},
+            status=400,
+        )
+
+    # --- External API call (Wger ingredient database) ---
+    try:
+        wger_response = http_requests.get(
+            WGER_INGREDIENT_URL,
+            params={
+                "name": query,
+                "language": 2,
+                "format": "json",
+                "limit": 5,
+            },
+            timeout=5,
+        )
+        wger_response.raise_for_status()
+    except http_requests.exceptions.Timeout:
+        return JsonResponse({"error": "External API request timed out"}, status=504)
+    except http_requests.exceptions.RequestException as exc:
+        return JsonResponse({"error": f"External API error: {exc}"}, status=502)
+
+    wger_results = wger_response.json().get("results", [])
+
+    external_items = [
+        {
+            "name": item["name"],
+            "brand": item.get("brand", ""),
+            "source": item.get("source_name", ""),
+            "per_100g": {
+                "energy_kcal": item["energy"],
+                "protein": float(item["protein"] or 0),
+                "carbohydrates": float(item["carbohydrates"] or 0),
+                "fat": float(item["fat"] or 0),
+                "fiber": float(item.get("fiber") or 0),
+                "sodium": float(item.get("sodium") or 0),
+            },
+        }
+        for item in wger_results
+    ]
+
+    # --- Internal data: matching SmartEats dishes ---
+    internal_dishes = list(
+        Dish.objects.filter(dish_name__icontains=query)
+        .select_related("dining_hall")
+        .values(
+            "dish_id", "dish_name", "calories",
+            "protein", "carbohydrates", "fat",
+            "dining_hall__name",
+        )
+    )
+
+    # --- Optional personalised goal analysis ---
+    net_id = request.GET.get("netID", "").strip()
+    user_analysis = None
+
+    if net_id:
+        try:
+            profile = UserProfile.objects.get(pk=net_id)
+
+            # Mifflin-St Jeor BMR
+            daily_target = None
+            if profile.weight_kg and profile.height_cm and profile.age and profile.sex:
+                w = float(profile.weight_kg)
+                h = float(profile.height_cm)
+                a = profile.age
+                bmr = (10 * w + 6.25 * h - 5 * a + 5) if profile.sex == "male" \
+                    else (10 * w + 6.25 * h - 5 * a - 161)
+                tdee = bmr * 1.55
+
+                if profile.goal == "fat_loss":
+                    target_cal = round(tdee - 500)
+                    daily_target = {
+                        "calories": target_cal,
+                        "protein": round(w * 2.0),
+                        "carbohydrates": round(target_cal * 0.40 / 4),
+                        "fat": round(target_cal * 0.25 / 9),
+                    }
+                elif profile.goal == "muscle_gain":
+                    target_cal = round(tdee + 300)
+                    daily_target = {
+                        "calories": target_cal,
+                        "protein": round(w * 2.2),
+                        "carbohydrates": round(target_cal * 0.45 / 4),
+                        "fat": round(target_cal * 0.25 / 9),
+                    }
+
+            today = timezone.localdate()
+            intake = Meal.objects.filter(user=profile, date=today).aggregate(
+                calories=Coalesce(Sum("total_calories"), 0),
+                protein=Coalesce(Sum("total_protein"), 0),
+                carbohydrates=Coalesce(Sum("total_carbohydrates"), 0),
+                fat=Coalesce(Sum("total_fat"), 0),
+            )
+
+            remaining = None
+            if daily_target:
+                remaining = {
+                    k: daily_target[k] - intake[k] for k in daily_target
+                }
+
+            user_analysis = {
+                "netID": net_id,
+                "goal": profile.goal,
+                "daily_target": daily_target,
+                "todays_intake": intake,
+                "remaining": remaining,
+            }
+        except UserProfile.DoesNotExist:
+            user_analysis = {"error": f"User '{net_id}' not found"}
+
+    return JsonResponse({
+        "query": query,
+        "external_source": "wger.de",
+        "external_results_count": len(external_items),
+        "external_results": external_items,
+        "internal_matches_count": len(internal_dishes),
+        "internal_matches": internal_dishes,
+        "user_analysis": user_analysis,
+    })
