@@ -3,7 +3,6 @@ from django.db.models import Count
 from .models import Dish, Meal
 
 def api_dishes_by_category(request):
-    # GET only (optional guard)
     if request.method != "GET":
         return JsonResponse({"error": "GET only"}, status=405)
 
@@ -25,6 +24,5 @@ def api_meals_per_day(request):
         .annotate(count=Count("meal_id"))
         .order_by("date")
     )
-    # Convert date objects to ISO strings for Vega-Lite
     data = [{"date": r["date"].isoformat(), "count": r["count"]} for r in qs]
     return JsonResponse(data, safe=False)
