@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404, render
 
 import json
+import requests as http_requests
 from  django.http import HttpResponse, JsonResponse
 from django.views import View
 from django.views.generic import ListView
@@ -23,6 +24,11 @@ from .models import DiningHall, Dish, UserProfile, Meal
 from django.forms.models import model_to_dict
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
+
+
+from django.utils.timezone import now
+import csv
+from django.contrib.auth.decorators import login_required
 # Create your views here.
 
 
@@ -455,3 +461,304 @@ def meals_per_day_png(request):
     plt.close(fig)
     buf.seek(0)
     return HttpResponse(buf.getvalue(), content_type="image/png")
+
+
+WGER_INGREDIENT_URL = "https://wger.de/api/v2/ingredient/"
+
+
+def nutrition_lookup_view(request):
+    """
+    External API integration (Wger) triangulated with internal SmartEats data.
+
+    Required: ?q=<food_name>
+    Optional: ?netID=<user_netID> for personalized daily-goal analysis
+    """
+    query = request.GET.get('q', '').strip()
+    if not query:
+        return JsonResponse(
+            {"error": "Query parameter 'q' is required. Example: ?q=chicken+breast"},
+            status=400,
+        )
+
+    # --- External API call (Wger ingredient database) ---
+    try:
+        wger_response = http_requests.get(
+            WGER_INGREDIENT_URL,
+            params={
+                "name": query,
+                "language": 2,
+                "format": "json",
+                "limit": 5,
+            },
+            timeout=5,
+        )
+        wger_response.raise_for_status()
+    except http_requests.exceptions.Timeout:
+        return JsonResponse({"error": "External API request timed out"}, status=504)
+    except http_requests.exceptions.RequestException as exc:
+        return JsonResponse({"error": f"External API error: {exc}"}, status=502)
+
+    try:
+        wger_results = wger_response.json().get("results", [])
+    except ValueError:
+        return JsonResponse({"error": "External API returned an unexpected non-JSON response"}, status=502)
+
+    external_items = [
+        {
+            "name": item["name"],
+            "brand": item.get("brand", ""),
+            "source": item.get("source_name", ""),
+            "per_100g": {
+                "energy_kcal": item["energy"],
+                "protein": float(item["protein"] or 0),
+                "carbohydrates": float(item["carbohydrates"] or 0),
+                "fat": float(item["fat"] or 0),
+                "fiber": float(item.get("fiber") or 0),
+                "sodium": float(item.get("sodium") or 0),
+            },
+        }
+        for item in wger_results
+    ]
+
+    # --- Internal data: matching SmartEats dishes ---
+    internal_dishes = list(
+        Dish.objects.filter(dish_name__icontains=query)
+        .select_related("dining_hall")
+        .values(
+            "dish_id", "dish_name", "calories",
+            "protein", "carbohydrates", "fat",
+            "dining_hall__name",
+        )
+    )
+
+    # --- Optional personalised goal analysis ---
+    net_id = request.GET.get("netID", "").strip()
+    user_analysis = None
+
+    if net_id:
+        try:
+            profile = UserProfile.objects.get(pk=net_id)
+
+            # Mifflin-St Jeor BMR
+            daily_target = None
+            if profile.weight_kg and profile.height_cm and profile.age and profile.sex:
+                w = float(profile.weight_kg)
+                h = float(profile.height_cm)
+                a = profile.age
+                bmr = (10 * w + 6.25 * h - 5 * a + 5) if profile.sex == "male" \
+                    else (10 * w + 6.25 * h - 5 * a - 161)
+                tdee = bmr * 1.55
+
+                if profile.goal == "fat_loss":
+                    target_cal = round(tdee - 500)
+                    daily_target = {
+                        "calories": target_cal,
+                        "protein": round(w * 2.0),
+                        "carbohydrates": round(target_cal * 0.40 / 4),
+                        "fat": round(target_cal * 0.25 / 9),
+                    }
+                elif profile.goal == "muscle_gain":
+                    target_cal = round(tdee + 300)
+                    daily_target = {
+                        "calories": target_cal,
+                        "protein": round(w * 2.2),
+                        "carbohydrates": round(target_cal * 0.45 / 4),
+                        "fat": round(target_cal * 0.25 / 9),
+                    }
+
+            today = timezone.localdate()
+            intake = Meal.objects.filter(user=profile, date=today).aggregate(
+                calories=Coalesce(Sum("total_calories"), 0),
+                protein=Coalesce(Sum("total_protein"), 0),
+                carbohydrates=Coalesce(Sum("total_carbohydrates"), 0),
+                fat=Coalesce(Sum("total_fat"), 0),
+            )
+
+            remaining = None
+            if daily_target:
+                remaining = {
+                    k: daily_target[k] - intake[k] for k in daily_target
+                }
+
+            user_analysis = {
+                "netID": net_id,
+                "goal": profile.goal,
+                "daily_target": daily_target,
+                "todays_intake": intake,
+                "remaining": remaining,
+            }
+        except UserProfile.DoesNotExist:
+            user_analysis = {"error": f"User '{net_id}' not found"}
+
+    return JsonResponse({
+        "query": query,
+        "external_source": "wger.de",
+        "external_results_count": len(external_items),
+        "external_results": external_items,
+        "internal_matches_count": len(internal_dishes),
+        "internal_matches": internal_dishes,
+        "user_analysis": user_analysis,
+    })
+
+
+
+# @login_required
+def export_meals(request):
+    """
+    Export historical Meal records for CURRENT logged-in user as CSV or JSON.
+    """
+
+    export_format = request.GET.get("format", "csv").lower()
+
+    # # Filter by current logged-in user
+    # meals = Meal.objects.filter(user=request.user.userprofile)
+
+    # temporary testing only
+    # Will be replaced with the currently logged-in user once authentication is implemented
+    # After that, this view will return only the data belonging to the authenticated user
+    fake_user = UserProfile.objects.first()
+    meals = Meal.objects.filter(user=fake_user).order_by("-date", "meal_id")
+
+    timestamp = now().strftime("%Y-%m-%d_%H-%M")
+
+    # ---------------- JSON export ----------------
+    if export_format == "json":
+        meal_list = []
+
+        for meal in meals:
+            meal_list.append({
+                "meal_id": meal.meal_id,
+                "total_calories": meal.total_calories,
+                "total_protein": meal.total_protein,
+                "total_carbohydrates": meal.total_carbohydrates,
+                "total_fat": meal.total_fat,
+                "date": meal.date.isoformat(),
+            })
+
+        data = {
+            "generated_at": now().isoformat(),
+            "record_count": meals.count(),
+            "meals": meal_list
+        }
+
+        response = JsonResponse(data, json_dumps_params={"indent": 2})
+        response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.json"'
+        return response
+
+    # ---------------- CSV export ----------------
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "Meal ID",
+        "Total Calories",
+        "Total Protein (g)",
+        "Total Carbohydrates (g)",
+        "Total Fat (g)",
+        "Date"
+    ])
+
+    for meal in meals:
+        writer.writerow([
+            meal.meal_id,
+            meal.total_calories,
+            meal.total_protein,
+            meal.total_carbohydrates,
+            meal.total_fat,
+            meal.date
+        ])
+
+    return response
+
+
+
+class MealReportsView(View):
+    """
+    Reports page showing:
+    - Macronutrient summary
+    - Category summary
+    - Totals line
+    - CSV + JSON download buttons
+
+    TEMPORARY TESTING: uses first user in database until authentication is implemented
+    """
+
+    def get(self, request):
+        # -------- TEMPORARY TEST USER --------
+        current_user = UserProfile.objects.first()  # replace with request.user.userprofile later
+
+        # -------- Filter Meals --------
+        start = request.GET.get("start")
+        end = request.GET.get("end")
+
+        meals = Meal.objects.filter(user=current_user)
+        if start and end:
+            try:
+                start_dt = datetime.strptime(start, "%Y-%m-%d")
+                end_dt = datetime.strptime(end, "%Y-%m-%d")
+                meals = meals.filter(date__range=[start_dt, end_dt])
+            except ValueError:
+                pass  # ignore date filtering if invalid
+
+        total_count = meals.count()
+
+        # -------- Category Summary --------
+        category_stats = meals.values("category").annotate(num=Count("pk")).order_by()
+        category_labels = [item["category"] or "Uncategorized" for item in category_stats]
+        category_values = [item["num"] for item in category_stats]
+
+        # -------- Macronutrient Summary --------
+        totals = meals.aggregate(
+            total_calories=Coalesce(Sum("total_calories"), 0),
+            total_protein=Coalesce(Sum("total_protein"), 0),
+            total_carbs=Coalesce(Sum("total_carbohydrates"), 0),
+            total_fat=Coalesce(Sum("total_fat"), 0),
+        )
+        macro_labels = ["Protein", "Carbs", "Fat"]
+        macro_values = [totals["total_protein"], totals["total_carbs"], totals["total_fat"]]
+
+        # -------- Generate Charts as Base64 --------
+        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+        if sum(macro_values) > 0:
+            axs[0].pie(macro_values, labels=macro_labels, autopct="%1.1f%%", startangle=90)
+            axs[0].axis("equal")
+        else:
+            axs[0].text(0.5, 0.5, "No Macro Data", ha="center")
+        axs[0].set_title("Macronutrient Distribution")
+
+        if sum(category_values) > 0:
+            axs[1].pie(category_values, labels=category_labels, autopct="%1.1f%%", startangle=90)
+            axs[1].axis("equal")
+        else:
+            axs[1].text(0.5, 0.5, "No Category Data", ha="center")
+        axs[1].set_title("Meal Category Distribution")
+
+        fig.suptitle(f"{current_user.netID}'s Meal Summary", fontsize=18, y=1.02)
+        fig.text(0.5, 0.95, f"Total Meals: {total_count}", ha="center", fontsize=12)
+        fig.tight_layout(rect=[0, 0, 1, 0.88])
+
+        buffer = BytesIO()
+        fig.savefig(buffer, format="png", bbox_inches="tight")
+        plt.close(fig)
+        buffer.seek(0)
+        chart_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+        return JsonResponse({
+            "user_info": {
+                "netID": current_user.netID,
+                "name": current_user.name,
+            },
+            "statistics": {
+                "total_count": total_count,
+                "macros": {
+                    "labels": macro_labels,
+                    "values": macro_values,
+                },
+                "categories": {
+                    "labels": category_labels,
+                    "values": category_values,
+                }
+            },
+            "chart_base64": f"data:image/png;base64,{chart_base64}"
+        })

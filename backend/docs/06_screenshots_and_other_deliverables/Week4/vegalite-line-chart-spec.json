@@ -1,0 +1,25 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "title": "Meals Logged Per Day",
+  "width": "container",
+  "height": 350,
+  "data": {
+    "url": "http://localhost:8000/api/meals-per-day/"
+  },
+  "mark": {
+    "type": "line",
+    "point": true
+  },
+  "encoding": {
+    "x": {
+      "field": "date",
+      "type": "temporal",
+      "title": "Date"
+    },
+    "y": {
+      "field": "count",
+      "type": "quantitative",
+      "title": "Meals"
+    }
+  }
+}

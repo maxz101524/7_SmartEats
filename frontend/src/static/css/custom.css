@@ -15,10 +15,10 @@
 
   /* ── Dark-theme: remap Tailwind gray scale ───────────────────
      bg-white  → dark surface,  text-gray-900 → near-white, etc. */
-  --color-white: #1a1d2e;
-  --color-gray-50: #1e2235;
-  --color-gray-100: #252a3d;
-  --color-gray-200: #2f3549;
+  --color-white: #161929;
+  --color-gray-50: #1a1e30;
+  --color-gray-100: #21263a;
+  --color-gray-200: #2b3148;
   --color-gray-300: #3e4560;
   --color-gray-400: #8a91a8;
   --color-gray-500: #a3aabe;
@@ -76,7 +76,7 @@ html {
 
 /* ── Flat dark page background ───────────────────────────────── */
 body {
-  background-color: #111327;
+  background-color: #0d1021;
   color: #e8ebf2;
 }
 
@@ -110,17 +110,22 @@ textarea::placeholder {
   color: #6b7488;
 }
 
+/* ── Card borders: subtle warm tint ──────────────────────────── */
+.border {
+  border-color: #252a40 !important;
+}
+
 /* ── Scrollbar (webkit browsers) ─────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #1a1d2e;
+  background: #0d1021;
 }
 ::-webkit-scrollbar-thumb {
-  background: #3e4560;
+  background: #2b3148;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #555c75;
+  background: #3e4560;
 }

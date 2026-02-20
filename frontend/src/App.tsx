@@ -7,6 +7,8 @@ import NotFound from "./pages/NotFound";
 import Profiles from "./pages/Profiles";
 import DishDetail from "./pages/DishDetail";
 import AIMeals from "./pages/AIMeals";
+import Charts from "./pages/Charts";
+import Reports from "./pages/Reports";
 
 function App() {
   return (
@@ -18,11 +20,10 @@ function App() {
             <Route path="dishes" element={<Dishes />}></Route>
             <Route path="halls" element={<DiningHalls />}></Route>
             <Route path="profile" element={<Profiles />}></Route>
-
-            <Route path="aimeals" element={<AIMeals></AIMeals>}></Route>
-
+            <Route path="aimeals" element={<AIMeals />}></Route>
+            <Route path="charts" element={<Charts />}></Route>
+            <Route path="reports" element={<Reports />}></Route>
             <Route path="dishes/:id" element={<DishDetail />}></Route>
-
             <Route path="*" element={<NotFound />}></Route>
           </Route>
         </Routes>
