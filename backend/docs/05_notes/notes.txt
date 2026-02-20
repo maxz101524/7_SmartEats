@@ -7,10 +7,7 @@ SECTION 1: URL Linking & Navigation
 -------------------------------------
 get_absolute_url():
 - Implemented on Dish and UserProfile models using Django's reverse().
-- The model owns its canonical URL — if we rename a URL pattern we only
-  update urls.py and the model; every component reading detail_url
-  automatically gets the correct path.
-- Dish.get_absolute_url() drives the "View Details" button: the API
+- Dish.get_absolute_url() is useful at the "View Details" button: the API
   serializes it as detail_url, React Router state carries it forward,
   and DishDetail.tsx uses it for the fetch.
 
@@ -31,30 +28,18 @@ SECTION 3: Static Files & UI Styling
 --------------------------------------
 Static file organization choice:
 - We place static assets inside the frontend source tree under
-  frontend/src/static/ (css/ and images/ subdirectories). Vite treats these
-  as importable modules, so `import './static/css/custom.css'` in main.tsx
-  bundles the stylesheet into the build output automatically. This keeps
-  static files co-located with the components that use them.
+  frontend/src/static/ (css/ and images/ subdirectories). And import in main.tsx
 
-CSS approach (dark theme without overriding Tailwind):
-- custom.css remaps Tailwind v4's CSS custom properties (--color-white,
+CSS approach :
+- custom.css remaps Tailwind custom properties (--color-white,
   --color-gray-50 through --color-gray-950, --color-blue-*, --color-green-*,
-  etc.) to dark-palette equivalents. Every existing Tailwind utility class
-  (bg-white, text-gray-900, border-gray-200, ...) automatically resolves
-  to the dark values — no class changes needed in components.
+  etc.) to dark-palette equivalents. 
 - The Inter font is loaded via <link> in index.html and set through the
   --font-sans variable that Tailwind v4 reads for its default sans-serif
-  stack. This avoids @import ordering issues with PostCSS.
+  stack. 
 - The SmartEats logo is stored at src/static/images/smarteats-logo.png and
-  imported in Navbar.tsx as a module so Vite can hash and optimize it.
+  imported in Navbar.tsx as a module
 
-Cache busting explanation:
-- Vite's production build (npm run build) appends a content hash to every
-  emitted asset filename (e.g. custom-BxK3q7.css, smarteats-logo-a4f2e1.png).
-  When file contents change, the hash changes, the filename changes, and
-  browsers are forced to fetch the new version instead of serving a stale
-  cached copy. During development, Vite's HMR (Hot Module Replacement)
-  bypasses the cache entirely by injecting updates over a WebSocket.
 
 
 SECTION 4: Data Visualization (Matplotlib)
@@ -67,10 +52,8 @@ SECTION 4: Data Visualization (Matplotlib)
   DishDetail.tsx with alt text.
 - dishes_per_hall_png: bar chart — uses annotate(Count) to count dishes
   per dining hall. Served at /api/charts/dishes_per_hall.png.
-- meals_per_day_png: line chart — counts meals per day for the last 14 days.
-  Served at /api/charts/meals_per_day.png.
 - MealSummaryView: dual pie chart (macronutrient % + meal category %).
-  Requires authentication and date-range query params (?start=&end=).
+ 
 
 
 SECTION 5: Forms & User Input
@@ -90,8 +73,8 @@ SECTION 5: Forms & User Input
 SECTION 6: Creating APIs
 --------------------------
 API planning:
-- Every Django view returns JSON so React can consume it. We designed one
-  endpoint per domain model (Dish, DiningHall, UserProfile, Meal).
+Since our project uses React, an API would be the primary way to connect the backend and frontend to send data; therefore, 
+every piece of data that we want to display in the frontend needs to be passed via an API.
 
 Data served:
 - /api/halls/        — dining hall names + locations
@@ -103,11 +86,10 @@ Data served:
 - /api/aimeals/      — AI meal search (GET fuzzy / POST exact)
 - /api/dishes-manage/ — GET list / POST create dish
 
-HttpResponse vs JsonResponse (MIME type differences):
+HttpResponse vs JsonResponse :
 - dining_hall_view: HttpResponse(json.dumps(data), content_type=
-  "application/json") — manual serialization, explicit content_type.
-- dish_list_view: JsonResponse(data, safe=False) — auto json.dumps(),
-  auto Content-Type: application/json.
+  "application/json")
+- dish_list_view: JsonResponse(data, safe=False)
 - If HttpResponse omits content_type, Django defaults to text/html and
   the browser renders raw text. JsonResponse prevents this mistake.
 

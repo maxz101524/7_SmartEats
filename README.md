@@ -1,4 +1,8 @@
 # SmartEats
+A meal planning and nutrition tracking application for university dining halls, built with a **Django REST backend** and a **React + TypeScript frontend**.
+## Docs can be found in backend/docs
+
+---
 
 React frontend + Django REST API for UIUC dining discovery and meal tracking. Built for INFO 490; deployment (A4): Render (backend) + Vercel (frontend).
 
@@ -64,6 +68,35 @@ SmartEats/
 ---
 
 ## A4 scope (APIs, Vega-Lite, Exports, Deployment)
+## How to Run
+
+### Prerequisites
+
+- Python 3.12+, Node.js 18+
+- `pip install django django-environ django-cors-headers djangorestframework`
+
+First, open 2 separate terminals, one for Backend and one for Frontend.
+
+### 1. Backend (Django)
+
+```bash
+cd backend
+python manage.py runserver --settings=SmartEats_config.settings.development
+```
+
+### 2. Frontend (React)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
+
+## Section 1: URL Linking & Navigation
+
+The app has a working home page at `/`, a navigation bar with 5 links using React Router `<Link>` , and detail pages (DishDetail.tsx) via primary keys (e.g., `/dishes/6`). `get_absolute_url()` is implemented on `Dish` and `UserProfile` models using `reverse()`, and the API serializes it as `detail_url` so the frontend never hard-codes paths.
 
 ### Internal API for charts
 
@@ -78,6 +111,9 @@ Used by the frontend Charts page and by Vega-Lite specs (e.g. in [Vega Editor](h
 - **Specs & screenshots:** `backend/docs/06_screenshots_and_other_deliverables/Week4/` (e.g. `vegalite-bar-chart-spec.json`, `vegalite-line-chart-spec.json`).
 
 ### External API
+A custom CSS file at `frontend/src/static/css/custom.css` provides a dark theme and the Inter font. Rather than overriding Tailwind classes, it remaps Tailwind v4's CSS color variables (`--color-white`, `--color-gray-*`, etc.) so every existing utility class automatically picks up the dark palette. The font is also applied in `index.html` `. A SmartEats logo (`src/static/images/smarteats-logo.png`) is displayed in the Navbar header.
+
+
 
 - **GET** `/api/nutrition-lookup/?q=<query>` — calls Wger ingredient API (`requests.get`, `params=`, `timeout=5`, `raise_for_status()`), combines with internal dish matches, returns JSON. Optional `?netID=` for user goal analysis.
 
@@ -88,6 +124,12 @@ Used by the frontend Charts page and by Vega-Lite specs (e.g. in [Vega Editor](h
 - **Reports page** (`/reports`): totals, grouped summaries (macros, categories), chart image, and Download CSV / Download JSON buttons linking to the export endpoints.
 
 ### Deployment
+All views use `BytesIO()` to write the PNG to an in-memory buffer and `plt.close(fig)` to free RAM. Charts include titles, axis labels, and legends/autopct. `DishDetail.tsx` embeds the chart with `<img src=".../api/dish-summary-img/{id}/" alt="Dish Nutrition Chart" />`.
+<img width="672" height="712" alt="image" src="https://github.com/user-attachments/assets/fae577b8-1dd9-497d-8ec7-27b47fa3b42e" />
+
+<img width="1901" height="994" alt="Screenshot 2026-02-13 222334" src="https://github.com/user-attachments/assets/fa7e5116-dd93-4631-90c0-cfbc8ec20642" />
+
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/0de15c51-4e38-4c06-bae8-b9133dbdbdf6" />
 
 - **Backend (Render):** Root directory `backend`, build `./build.sh`, start `gunicorn SmartEats_config.wsgi:application`. Env: `SECRET_KEY`, `DJANGO_SETTINGS_MODULE=SmartEats_config.settings.production`, `FRONTEND_URL` (origin only, no trailing slash), optional `PYTHON_VERSION`.
 - **Frontend (Vercel):** Root directory `frontend`, build `npm run build`, output `dist`. Env: `VITE_API_BASE_URL`, `VITE_BACKEND_BASE_URL` pointing at the Render backend URL.
@@ -120,3 +162,6 @@ Used by the frontend Charts page and by Vega-Lite specs (e.g. in [Vega Editor](h
 ---
 
 Archived section docs (pre–A4): `backend/docs/archive/README_sections_prior_to_week4.md`.
+
+
+
