@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-
 import axios from "axios";
-
 import Empty from "../components/Empty";
+import { API_BASE } from "../config";
 
 interface UserProfile {
   netID: string;
@@ -40,14 +39,14 @@ function Profiles() {
 
   useEffect(() => {
     axios
-      .get("http://localhost:8000/api/profiles/")
+      .get(`${API_BASE}/profiles/`)
       .then((result) => setProfileData(result.data))
       .catch((err) => console.log(err));
   }, []);
 
   useEffect(() => {
     axios
-      .get("http://localhost:8000/api/meals/")
+      .get(`${API_BASE}/meals/`)
       .then((result) => setMealData(result.data))
       .catch((err) => console.log(err));
   }, []);
@@ -83,7 +82,7 @@ function Profiles() {
 
               {/* Uses model-driven URL from get_absolute_url() instead of manually building the path */}
               {/* <a
-                href={`http://localhost:8000${profile.detail_url}`}
+                href={`${BACKEND_BASE}${profile.detail_url}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"

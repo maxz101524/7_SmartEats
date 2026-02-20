@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import embed from "vega-embed";
-
-const API_BASE = "http://localhost:8000/api";
+import { API_BASE } from "../config";
 
 const barSpec = {
   $schema: "https://vega.github.io/schema/vega-lite/v5.json",

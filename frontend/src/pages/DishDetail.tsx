@@ -2,6 +2,7 @@ import { useParams, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import type { Dish } from "./Dishes";
 import axios from "axios";
+import { BACKEND_BASE } from "../config";
 
 function DishDetail() {
   const { id } = useParams();
@@ -11,8 +12,8 @@ function DishDetail() {
   // Use model-driven URL from get_absolute_url() passed via navigation state,
   // falling back to manually built URL if accessed directly
   const detailUrl = location.state?.detailUrl
-    ? `http://localhost:8000${location.state.detailUrl}`
-    : `http://localhost:8000/api/dishes/${id}`;
+    ? `${BACKEND_BASE}${location.state.detailUrl}`
+    : `${BACKEND_BASE}/api/dishes/${id}`;
 
   useEffect(() => {
     axios
@@ -30,7 +31,7 @@ function DishDetail() {
       <p className="text-xl text-blue-600">{dish.category}</p>
       <div className="my-6 flex justify-center bg-white p-4 rounded-xl shadow-inner border">
         <img
-          src={`http://localhost:8000/api/dish-summary-img/${id}/`}
+          src={`${BACKEND_BASE}/api/dish-summary-img/${id}/`}
           alt="Dish Nutrition Chart"
           className="max-w-full h-auto"
         />

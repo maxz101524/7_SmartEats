@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "../config";
 
 interface MealResult {
   meal_id: number;
@@ -41,13 +42,13 @@ export default function AIMeals() {
       if (searchMode === "GET") {
         // GET: fuzzy search — query params visible in URL, results shareable via link
         response = await fetch(
-          `http://localhost:8000/api/aimeals/?dishes=${query}`,
+          `${API_BASE}/aimeals/?dishes=${query}`,
         );
       } else {
         // POST: exact match — search data hidden from URL, useful when you don't want to expose query
         const formData = new FormData();
         formData.append("dishes", query);
-        response = await fetch("http://localhost:8000/api/aimeals/", {
+        response = await fetch(`${API_BASE}/aimeals/`, {
           method: "POST",
           body: formData,
         });

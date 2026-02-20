@@ -3,6 +3,7 @@ import ShowData from "../components/ShowData";
 import { useNavigate } from "react-router-dom";
 import AddDish from "../components/AddDish";
 import axios from "axios";
+import { API_BASE } from "../config";
 export interface Dish {
   dish_id: number;
   dish_name: string;
@@ -25,13 +26,13 @@ interface DishStats {
 function Dishes() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [api, setApi] = useState("http://localhost:8000/api/dishes/");
+  const [api, setApi] = useState(`${API_BASE}/dishes/`);
   const [stats, setStats] = useState<DishStats | null>(null);
 
   // Fetch aggregation stats (count + grouped summaries)
   useEffect(() => {
     axios
-      .get("http://localhost:8000/api/dish-stats/")
+      .get(`${API_BASE}/dish-stats/`)
       .then((res) => setStats(res.data))
       .catch((err) => console.error("Failed to load stats:", err));
   }, []);
@@ -39,8 +40,8 @@ function Dishes() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const url = query
-      ? `http://localhost:8000/api/dishes/?search=${query}`
-      : `http://localhost:8000/api/dishes/`;
+      ? `${API_BASE}/dishes/?search=${query}`
+      : `${API_BASE}/dishes/`;
 
     setApi(url);
   };

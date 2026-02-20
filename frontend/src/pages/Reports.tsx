@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-
-const API_BASE = "http://localhost:8000/api";
+import { API_BASE } from "../config";
 
 interface ReportData {
   user_info: { netID: string; name: string };
