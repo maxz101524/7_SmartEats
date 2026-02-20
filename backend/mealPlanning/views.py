@@ -617,7 +617,7 @@ def export_meals(request):
     # Will be replaced with the currently logged-in user once authentication is implemented
     # After that, this view will return only the data belonging to the authenticated user
     fake_user = UserProfile.objects.first()
-    meals = Meal.objects.filter(user=fake_user)
+    meals = Meal.objects.filter(user=fake_user).order_by("-date", "meal_id")
 
     timestamp = now().strftime("%Y-%m-%d_%H-%M")
 
