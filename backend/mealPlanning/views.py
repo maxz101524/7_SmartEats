@@ -24,6 +24,11 @@ from .models import DiningHall, Dish, UserProfile, Meal
 from django.forms.models import model_to_dict
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
+
+
+from django.utils.timezone import now
+import csv
+from django.contrib.auth.decorators import login_required
 # Create your views here.
 
 
@@ -594,3 +599,166 @@ def nutrition_lookup_view(request):
         "internal_matches": internal_dishes,
         "user_analysis": user_analysis,
     })
+
+
+
+# @login_required
+def export_meals(request):
+    """
+    Export historical Meal records for CURRENT logged-in user as CSV or JSON.
+    """
+
+    export_format = request.GET.get("format", "csv").lower()
+
+    # # Filter by current logged-in user
+    # meals = Meal.objects.filter(user=request.user.userprofile)
+
+    # temporary testing only
+    # Will be replaced with the currently logged-in user once authentication is implemented
+    # After that, this view will return only the data belonging to the authenticated user
+    fake_user = UserProfile.objects.first()
+    meals = Meal.objects.filter(user=fake_user)
+
+    timestamp = now().strftime("%Y-%m-%d_%H-%M")
+
+    # ---------------- JSON export ----------------
+    if export_format == "json":
+        meal_list = []
+
+        for meal in meals:
+            meal_list.append({
+                "meal_id": meal.meal_id,
+                "total_calories": meal.total_calories,
+                "total_protein": meal.total_protein,
+                "total_carbohydrates": meal.total_carbohydrates,
+                "total_fat": meal.total_fat,
+                "date": meal.date.isoformat(),
+            })
+
+        data = {
+            "generated_at": now().isoformat(),
+            "record_count": meals.count(),
+            "meals": meal_list
+        }
+
+        response = JsonResponse(data, json_dumps_params={"indent": 2})
+        response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.json"'
+        return response
+
+    # ---------------- CSV export ----------------
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "Meal ID",
+        "Total Calories",
+        "Total Protein (g)",
+        "Total Carbohydrates (g)",
+        "Total Fat (g)",
+        "Date"
+    ])
+
+    for meal in meals:
+        writer.writerow([
+            meal.meal_id,
+            meal.total_calories,
+            meal.total_protein,
+            meal.total_carbohydrates,
+            meal.total_fat,
+            meal.date
+        ])
+
+    return response
+
+
+
+class MealReportsView(View):
+    """
+    Reports page showing:
+    - Macronutrient summary
+    - Category summary
+    - Totals line
+    - CSV + JSON download buttons
+
+    TEMPORARY TESTING: uses first user in database until authentication is implemented
+    """
+
+    def get(self, request):
+        # -------- TEMPORARY TEST USER --------
+        current_user = UserProfile.objects.first()  # replace with request.user.userprofile later
+
+        # -------- Filter Meals --------
+        start = request.GET.get("start")
+        end = request.GET.get("end")
+
+        meals = Meal.objects.filter(user=current_user)
+        if start and end:
+            try:
+                start_dt = datetime.strptime(start, "%Y-%m-%d")
+                end_dt = datetime.strptime(end, "%Y-%m-%d")
+                meals = meals.filter(date__range=[start_dt, end_dt])
+            except ValueError:
+                pass  # ignore date filtering if invalid
+
+        total_count = meals.count()
+
+        # -------- Category Summary --------
+        category_stats = meals.values("category").annotate(num=Count("pk")).order_by()
+        category_labels = [item["category"] or "Uncategorized" for item in category_stats]
+        category_values = [item["num"] for item in category_stats]
+
+        # -------- Macronutrient Summary --------
+        totals = meals.aggregate(
+            total_calories=Coalesce(Sum("total_calories"), 0),
+            total_protein=Coalesce(Sum("total_protein"), 0),
+            total_carbs=Coalesce(Sum("total_carbohydrates"), 0),
+            total_fat=Coalesce(Sum("total_fat"), 0),
+        )
+        macro_labels = ["Protein", "Carbs", "Fat"]
+        macro_values = [totals["total_protein"], totals["total_carbs"], totals["total_fat"]]
+
+        # -------- Generate Charts as Base64 --------
+        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+        if sum(macro_values) > 0:
+            axs[0].pie(macro_values, labels=macro_labels, autopct="%1.1f%%", startangle=90)
+            axs[0].axis("equal")
+        else:
+            axs[0].text(0.5, 0.5, "No Macro Data", ha="center")
+        axs[0].set_title("Macronutrient Distribution")
+
+        if sum(category_values) > 0:
+            axs[1].pie(category_values, labels=category_labels, autopct="%1.1f%%", startangle=90)
+            axs[1].axis("equal")
+        else:
+            axs[1].text(0.5, 0.5, "No Category Data", ha="center")
+        axs[1].set_title("Meal Category Distribution")
+
+        fig.suptitle(f"{current_user.netID}'s Meal Summary", fontsize=18, y=1.02)
+        fig.text(0.5, 0.95, f"Total Meals: {total_count}", ha="center", fontsize=12)
+        fig.tight_layout(rect=[0, 0, 1, 0.88])
+
+        buffer = BytesIO()
+        fig.savefig(buffer, format="png", bbox_inches="tight")
+        plt.close(fig)
+        buffer.seek(0)
+        chart_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+        return JsonResponse({
+            "user_info": {
+                "netID": current_user.netID,
+                "name": current_user.name,
+            },
+            "statistics": {
+                "total_count": total_count,
+                "macros": {
+                    "labels": macro_labels,
+                    "values": macro_values,
+                },
+                "categories": {
+                    "labels": category_labels,
+                    "values": category_values,
+                }
+            },
+            "chart_base64": f"data:image/png;base64,{chart_base64}"
+        })
