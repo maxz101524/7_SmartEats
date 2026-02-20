@@ -1,123 +1,122 @@
 # SmartEats
 
-## Project Structure
+React frontend + Django REST API for UIUC dining discovery and meal tracking. Built for INFO 490; deployment (A4): Render (backend) + Vercel (frontend).
+
+---
+
+## Project structure
 
 ```
 SmartEats/
-├── backend/                          # Django REST API
+├── backend/                          # Django API (deployed on Render)
 │   ├── SmartEats_config/
 │   │   ├── settings/
-│   │   │   ├── base.py               # Shared settings (SECRET_KEY, INSTALLED_APPS, etc.)
-│   │   │   ├── development.py        # DEBUG = True, local ALLOWED_HOSTS
-│   │   │   └── production.py         # DEBUG = False
-│   │   ├── secrets_environment.py    # Loads .env via django-environ
-│   │   └── urls.py                   # Root URL config
+│   │   │   ├── base.py               # Shared settings, CORS
+│   │   │   ├── development.py       # DEBUG = True
+│   │   │   ├── production.py        # DEBUG = False, WhiteNoise, FRONTEND_URL
+│   │   │   └── __init__.py
+│   │   ├── wsgi.py                   # WSGI entry (production)
+│   │   ├── asgi.py
+│   │   ├── urls.py                   # /admin/, /api/...
+│   │   └── secrets_environment.py   # Loads .env via django-environ
 │   ├── mealPlanning/
-│   │   ├── models.py                 # DiningHall, Dish, UserProfile, Meal
-│   │   ├── views.py                  # FBVs + CBVs (JSON API endpoints + Matplotlib charts)
-│   │   └── urls.py                   # Named URL patterns for all views
+│   │   ├── models.py                 # DiningHall, Dish, UserProfile, Meal, TempMeal, TempMealItem
+│   │   ├── views.py                  # JSON APIs, Matplotlib charts, export, reports, external API
+│   │   ├── api_views.py             # Chart-ready JSON: dishes-by-category, meals-per-day
+│   │   ├── urls.py                   # All /api/ routes
+│   │   ├── admin.py, apps.py, tests.py
+│   │   └── migrations/
 │   ├── docs/
-│   │   ├── 01_project_documents/
-│   │   ├── 02_wireframes/
-│   │   ├── 03_data_model/
-│   │   ├── 04_branching_strategy/
-│   │   ├── 05_notes/notes.txt        # Design decisions & section notes
-│   │   └── 06_screenshots/
-│   ├── .env                          # Secret keys (git-ignored)
-│   └── .env.example                  # Template for required env vars
+│   │   ├── 01_project_documents/    # Idea_description.pdf, etc.
+│   │   ├── 04_branching_strategy/    # branching_strategy.md
+│   │   ├── 05_notes/                 # notes.txt
+│   │   ├── 06_screenshots_and_other_deliverables/
+│   │   │   └── Week4/               # Vega-Lite specs (vegalite-*-chart-spec.json), screenshots
+│   │   └── archive/                 # README_sections_prior_to_week4.md
+│   ├── build.sh                      # Render build: pip, migrate, collectstatic, create superuser
+│   ├── manage.py
+│   ├── requirements.txt             # Django, gunicorn, whitenoise, requests, matplotlib, etc.
+│   ├── .env.example                 # Template for SECRET_KEY etc. (.env is git-ignored)
+│   ├── db.sqlite3                   # SQLite DB (committed for A4)
+│   └── README.md                    # Backend-specific notes (if any)
 │
-├── frontend/                         # React + TypeScript + Vite
-│   ├── index.html                    # Entry HTML (Google Fonts <link>, page title)
-│   ├── vite.config.ts                # Vite + React + Tailwind v4 plugin
+├── frontend/                         # React + TypeScript + Vite (deployed on Vercel)
 │   ├── src/
-│   │   ├── main.tsx                  # App entry — imports index.css + custom.css
-│   │   ├── App.tsx                   # Router config (equivalent to urls.py)
-│   │   ├── Base.tsx                  # Layout wrapper (equivalent to base.html)
-│   │   ├── index.css                 # Tailwind v4 import (@import "tailwindcss")
-│   │   ├── App.css                   # Minimal app-level styles
-│   │   ├── components/
-│   │   │   ├── Navbar.tsx            # Sticky nav bar with logo + links
-│   │   │   ├── ShowData.tsx          # Reusable data list (replaces {% for %}/{% empty %})
-│   │   │   ├── AddDish.tsx           # POST form — create dish with CSRF
-│   │   │   └── Empty.tsx             # Empty-state placeholder
-│   │   ├── pages/
-│   │   │   ├── Dishes.tsx            # Menu explorer with GET search + stats
-│   │   │   ├── DishDetail.tsx        # Single dish detail + Matplotlib chart
-│   │   │   ├── DiningHalls.tsx       # Dining hall listing
-│   │   │   ├── Profiles.tsx          # User profiles + meal history
-│   │   │   ├── AIMeals.tsx           # AI meal matcher (GET fuzzy / POST exact)
-│   │   │   └── NotFound.tsx          # 404 page
+│   │   ├── config.ts                # API_BASE / BACKEND_BASE from VITE_* env vars
+│   │   ├── main.tsx                  # Entry; imports index.css, custom.css, App
+│   │   ├── App.tsx                   # Router: /, /dishes, /halls, /profile, /aimeals, /charts, /reports
+│   │   ├── Base.tsx                  # Layout + Navbar
+│   │   ├── index.css, App.css
+│   │   ├── components/               # Navbar, ShowData, AddDish, Empty
+│   │   ├── pages/                    # Dishes, DishDetail, DiningHalls, Profiles, AIMeals, Charts, Reports, NotFound
 │   │   └── static/
-│   │       ├── css/
-│   │       │   └── custom.css        # Dark theme — remaps Tailwind v4 color vars + Inter font
-│   │       └── images/
-│   │           └── smarteats-logo.png # Brand logo (displayed in Navbar)
-│   └── public/
-│       └── vite.svg
+│   │       ├── css/custom.css       # Dark theme (Tailwind v4 variable overrides)
+│   │       └── images/              # e.g. smarteats-logo.png
+│   ├── public/                      # Static assets (e.g. vite.svg)
+│   ├── index.html
+│   ├── package.json                 # react, vega, vega-lite, vega-embed, axios, tailwind
+│   └── vite.config.ts
 │
+├── .gitignore
 └── README.md
 ```
 
-## Section 1: URL Linking & Navigation
+---
 
-The app has a working home page at `/`, a navigation bar with 5 links using React Router `<Link>` (no hard-coded paths), and detail pages via primary keys (e.g., `/dishes/6`). `get_absolute_url()` is implemented on `Dish` and `UserProfile` models using `reverse()`, and the API serializes it as `detail_url` so the frontend never hard-codes paths.
+## A4 scope (APIs, Vega-Lite, Exports, Deployment)
 
-**Screenshots:** `backend/docs/06_screenshots/week3`
+### Internal API for charts
 
-## Section 2: ORM Queries & Data Presentation
+- **GET** `/api/dishes-by-category/` — JSON list `[{ "category", "count" }]` (from `api_views.py`).
+- **GET** `/api/meals-per-day/` — JSON list `[{ "date", "count" }]` (from `api_views.py`).
 
-- **Basic queries:** `dish_list_view` displays all dishes via `Dish.objects.select_related('dining_hall').all()`
-- **GET search:** `/api/dishes/?search=chicken` — filters with `dish_name__icontains`
-- **POST search:** `AIMealView.post()` — exact-match dish lookup, hides query data from the URL
-- **Relationship spanning:** `AIMealView` queries across `TempMeal → TempMealItem → Dish` using `items__dish__dish_name__icontains`
-- **Aggregations:** `dish_stats_view` returns total dish/hall counts (`Count`) and grouped summaries by category and dining hall (`annotate + Count`)
+Used by the frontend Charts page and by Vega-Lite specs (e.g. in [Vega Editor](https://vega.github.io/editor/) with `data.url` set to the deployed API).
 
-## Section 3: Static Files & UI Styling
+### Vega-Lite charts
 
-A custom CSS file at `frontend/src/static/css/custom.css` provides a dark theme and the Inter font. Rather than overriding Tailwind classes, it remaps Tailwind v4's CSS color variables (`--color-white`, `--color-gray-*`, etc.) so every existing utility class automatically picks up the dark palette. The Inter font is loaded via `<link>` in `index.html` and set through `--font-sans`. A SmartEats logo (`src/static/images/smarteats-logo.png`) is displayed in the Navbar header.
+- **Charts page** (`/charts`): two embedded Vega-Lite charts (bar: dishes by category; line: meals per day), data from the internal API via `config.ts` (env-based URL).
+- **Specs & screenshots:** `backend/docs/06_screenshots_and_other_deliverables/Week4/` (e.g. `vegalite-bar-chart-spec.json`, `vegalite-line-chart-spec.json`).
 
-Vite automatically handles cache busting by appending content hashes to built asset filenames (e.g. `custom-BxK3q7.css`), so browsers always fetch the latest version after a code change.
+### External API
 
-## Section 4: Data Visualization (Matplotlib)
+- **GET** `/api/nutrition-lookup/?q=<query>` — calls Wger ingredient API (`requests.get`, `params=`, `timeout=5`, `raise_for_status()`), combines with internal dish matches, returns JSON. Optional `?netID=` for user goal analysis.
 
-Three chart views, all using ORM aggregation → Matplotlib → `BytesIO` → `HttpResponse(content_type="image/png")`:
+### CSV & JSON export + Reports
 
-| Endpoint                            | View                           | Chart Type     | Data Source                              |
-| ----------------------------------- | ------------------------------ | -------------- | ---------------------------------------- |
-| `/api/dish-summary-img/<id>/`     | `DishSummaryImageView` (CBV) | Pie chart      | Single dish macro breakdown              |
-| `/api/charts/dishes_per_hall.png` | `dishes_per_hall_png` (FBV)  | Bar chart      | `annotate(Count)` dishes per hall      |
-| `/api/chart/`                     | `MealSummaryView` (CBV)      | Dual pie chart | User meal macros + category distribution |
+- **GET** `/api/export-meals/?format=csv` — CSV download (headers + rows, timestamped filename).
+- **GET** `/api/export-meals/?format=json` — JSON download with `generated_at`, `record_count`, `meals` (pretty-printed).
+- **Reports page** (`/reports`): totals, grouped summaries (macros, categories), chart image, and Download CSV / Download JSON buttons linking to the export endpoints.
 
-All views use `BytesIO()` to write the PNG to an in-memory buffer and `plt.close(fig)` to free RAM. Charts include titles, axis labels, and legends/autopct. `DishDetail.tsx` embeds the chart with `<img src=".../api/dish-summary-img/{id}/" alt="Dish Nutrition Chart" />`.
+### Deployment
 
-## Section 5: Forms & User Input
+- **Backend (Render):** Root directory `backend`, build `./build.sh`, start `gunicorn SmartEats_config.wsgi:application`. Env: `SECRET_KEY`, `DJANGO_SETTINGS_MODULE=SmartEats_config.settings.production`, `FRONTEND_URL` (origin only, no trailing slash), optional `PYTHON_VERSION`.
+- **Frontend (Vercel):** Root directory `frontend`, build `npm run build`, output `dist`. Env: `VITE_API_BASE_URL`, `VITE_BACKEND_BASE_URL` pointing at the Render backend URL.
+- **CORS:** Backend allows `FRONTEND_URL`, `https://vega.github.io`, and localhost; see `production.py`.
 
-- **GET form:** `Dishes.tsx` search bar → `GET /api/dishes/?search=...` — query params visible in URL, results shareable via link
-- **POST form:** `AddDish.tsx` creation form → `POST /api/dishes-manage/` — submits dish name, category, nutrition, and dining hall
-- **CSRF:** `DishManagementView.get()` uses `@ensure_csrf_cookie` to set the token cookie; `AddDish.tsx` reads it via `getCookie("csrftoken")` and sends it as the `X-CSRFToken` header on POST
-- **CBV handling GET + POST:** `DishManagementView` inherits from `View` — `get()` lists dishes, `post()` creates a new dish with validation
+**Live (example):** Frontend https://smarteats7.vercel.app/ — Backend https://smarteats-backend.onrender.com (APIs under `/api/`).
 
-## Section 6: Creating APIs
+---
 
-All Django views serve JSON so the React frontend consumes them as APIs.
+## Running locally
 
-| Endpoint                | View Type      | Response Type    | Description                              |
-| ----------------------- | -------------- | ---------------- | ---------------------------------------- |
-| `/api/halls/`         | FBV            | `HttpResponse` | Dining halls — manual `json.dumps()`  |
-| `/api/dishes/`        | FBV            | `JsonResponse` | Dishes (supports `?search=` filtering) |
-| `/api/dishes/<id>`    | FBV            | `JsonResponse` | Dish detail by PK                        |
-| `/api/dish-stats/`    | FBV            | `JsonResponse` | Aggregation stats                        |
-| `/api/profiles/`      | CBV (View)     | `JsonResponse` | User profiles                            |
-| `/api/meals/`         | CBV (ListView) | `JsonResponse` | Meal history                             |
-| `/api/dishes-manage/` | CBV (View)     | `JsonResponse` | GET list / POST create dish              |
-| `/api/aimeals/`       | CBV (View)     | `JsonResponse` | AI meal search (GET fuzzy, POST exact)   |
+- **Backend:** From repo root, `cd backend && pip install -r requirements.txt && python manage.py migrate && python manage.py runserver` (uses `development` settings if `DJANGO_SETTINGS_MODULE` unset; see `wsgi.py`).
+- **Frontend:** `cd frontend && npm install && npm run dev` — uses `http://localhost:8000` for API when `VITE_API_BASE_URL` / `VITE_BACKEND_BASE_URL` are not set (see `frontend/src/config.ts`).
 
-**Filtering via query parameters:** `dish_list_view` reads `request.GET.get('search')` and filters with `Dish.objects.filter(dish_name__icontains=query)` — e.g. `/api/dishes/?search=chicken` returns only matching dishes. `AIMealView.get()` reads `request.GET.get('dishes')`, splits by comma, and chains `Q()` filters across related models (`items__dish__dish_name__icontains`) — e.g. `/api/aimeals/?dishes=Rice,Chicken` returns meals containing all specified dishes.
+---
 
-**HttpResponse vs JsonResponse:** `dining_hall_view` uses `HttpResponse(json.dumps(...), content_type="application/json")` (manual); `dish_list_view` uses `JsonResponse(data, safe=False)` (auto-serializes + sets MIME type). `JsonResponse` is a subclass of `HttpResponse` that handles encoding and content-type automatically.
+## Other APIs (reference)
 
-**Screenshots:** `backend/docs/08_screenshots_week5/`
+| Endpoint | Description |
+| -------- | ----------- |
+| `/api/halls/` | Dining halls list |
+| `/api/dishes/`, `/api/dishes/<id>/` | Dishes list (optional `?search=`), detail |
+| `/api/dish-stats/` | Aggregation stats (totals, by category, by hall) |
+| `/api/profiles/`, `/api/meals/` | User profiles, meal history |
+| `/api/dishes-manage/` | GET list / POST create dish (CSRF) |
+| `/api/aimeals/` | AI meal search (GET fuzzy, POST exact) |
+| `/api/dish-summary-img/<id>/`, `/api/charts/*.png`, `/api/chart/` | Matplotlib chart images |
+| `/api/meal-reports/` | Reports JSON (totals, macros, categories, chart base64) |
 
-## Data Model Design
+---
 
-We extend Django's built-in User model via a `UserProfile` model to store personalized health data without redefining built-in fields (e.g., email).
+Archived section docs (pre–A4): `backend/docs/archive/README_sections_prior_to_week4.md`.
