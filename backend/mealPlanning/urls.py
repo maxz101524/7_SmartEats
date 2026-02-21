@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import api_views
 
 urlpatterns = [
 
@@ -27,6 +28,15 @@ urlpatterns = [
 
      path("charts/dishes_per_hall.png", views.dishes_per_hall_png, name="dishes_per_hall_png"),
     path("charts/meals_per_day.png", views.meals_per_day_png, name="meals_per_day_png"),
+
+    path("nutrition-lookup/", views.nutrition_lookup_view, name="nutrition_lookup"),
+
+
+    path("dishes-by-category/", api_views.api_dishes_by_category, name="api_dishes_by_category"),
+    path("meals-per-day/", api_views.api_meals_per_day, name="api_meals_per_day"),
+
+    path("export-meals/", views.export_meals, name="export_meals"),
+    path("meal-reports/", views.MealReportsView.as_view(), name="meal_reports"),
 
 
 ]

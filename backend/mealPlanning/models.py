@@ -137,13 +137,16 @@ class Meal(models.Model):
 
     meal_id = models.AutoField(primary_key=True)
     
+    category = models.CharField(blank=True, null=True)
 
     total_calories = models.PositiveIntegerField(default=0)
     total_protein = models.PositiveIntegerField(default=0)
     total_carbohydrates = models.PositiveIntegerField(default=0)
     total_fat = models.PositiveIntegerField(default=0)
 
-    contain_dish = models.ManyToManyField(Dish, blank=True)
+    # This table should not be linked to the Dish table.
+    # The Dish table is updated bi-weekly, whereas this Meal table stores historical records.
+    contain_dish = models.CharField(blank=True)
 
     user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name="meals")
     date = models.DateField(auto_now_add=True) 

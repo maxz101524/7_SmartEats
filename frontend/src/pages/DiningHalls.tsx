@@ -1,4 +1,5 @@
 import ShowData from "../components/ShowData";
+import { API_BASE } from "../config";
 
 interface DiningHall {
   Dining_Hall_ID: number;
@@ -9,7 +10,7 @@ interface DiningHall {
 function DiningHalls() {
   return (
     <ShowData<DiningHall>
-      api="http://localhost:8000/api/halls/"
+      api={`${API_BASE}/halls/`}
       getKey={(hall) => hall.Dining_Hall_ID}
       title="Dining Halls"
       renderCard={(hall) => (

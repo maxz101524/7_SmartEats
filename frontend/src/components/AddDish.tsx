@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "../config";
 
 function AddDish() {
   const [name, setName] = useState("");
@@ -16,7 +17,7 @@ function AddDish() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/dishes-manage/", {
+    fetch(`${API_BASE}/dishes-manage/`, {
       method: "GET",
       credentials: "include",
     })
@@ -27,7 +28,7 @@ function AddDish() {
       .catch((error) => console.error("Error fetching CSRF token:", error));
 
     // Fetch dining halls for dropdown
-    fetch("http://localhost:8000/api/halls/", {
+    fetch(`${API_BASE}/halls/`, {
       method: "GET",
       credentials: "include",
     })
@@ -98,7 +99,7 @@ function AddDish() {
 
       console.log("Submitting payload:", payload);
 
-      const response = await fetch("http://localhost:8000/api/dishes-manage/", {
+      const response = await fetch(`${API_BASE}/dishes-manage/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

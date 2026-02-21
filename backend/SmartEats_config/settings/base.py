@@ -127,6 +127,7 @@ STATIC_URL = 'static/'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://vega.github.io",
 ]
 
 # CSRF Settings for cross-origin requests
@@ -145,3 +146,4 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_COOKIE_HTTPONLY = False  # Must be False so JavaScript can read it
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
+CORS_ALLOW_ALL_ORIGINS = True

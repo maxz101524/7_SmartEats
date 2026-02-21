@@ -1,0 +1,28 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "title": "Dishes by Category",
+  "width": "container",
+  "height": 350,
+  "data": {
+    "url": "http://localhost:8000/api/dishes-by-category/"
+  },
+  "mark": "bar",
+  "encoding": {
+    "x": {
+      "field": "category",
+      "type": "nominal",
+      "sort": "-y",
+      "title": "Category"
+    },
+    "y": {
+      "field": "count",
+      "type": "quantitative",
+      "title": "Number of Dishes"
+    },
+    "color": {
+      "field": "category",
+      "type": "nominal",
+      "legend": null
+    }
+  }
+}
