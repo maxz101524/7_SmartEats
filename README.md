@@ -99,23 +99,39 @@ Used by the frontend Charts page and by Vega-Lite specs (e.g. in [Vega Editor](h
 
 ## Running locally
 
-- **Backend:** From repo root, `cd backend && pip install -r requirements.txt && python manage.py migrate && python manage.py runserver` (uses `development` settings if `DJANGO_SETTINGS_MODULE` unset; see `wsgi.py`).
-- **Frontend:** `cd frontend && npm install && npm run dev` — uses `http://localhost:8000` for API when `VITE_API_BASE_URL` / `VITE_BACKEND_BASE_URL` are not set (see `frontend/src/config.ts`).
+- **Backend(Django):**
+
+```bash
+cd backend
+python manage.py runserver --settings=SmartEats_config.settings.development
+```
+
+(uses `development` settings if `DJANGO_SETTINGS_MODULE` unset; see `wsgi.py`).
+
+- **Frontend (React):**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+uses `http://localhost:8000` for API when `VITE_API_BASE_URL` / `VITE_BACKEND_BASE_URL` are not set (see `frontend/src/config.ts`).
 
 ---
 
 ## Other APIs (reference)
 
-| Endpoint | Description |
-| -------- | ----------- |
-| `/api/halls/` | Dining halls list |
-| `/api/dishes/`, `/api/dishes/<id>/` | Dishes list (optional `?search=`), detail |
-| `/api/dish-stats/` | Aggregation stats (totals, by category, by hall) |
-| `/api/profiles/`, `/api/meals/` | User profiles, meal history |
-| `/api/dishes-manage/` | GET list / POST create dish (CSRF) |
-| `/api/aimeals/` | AI meal search (GET fuzzy, POST exact) |
-| `/api/dish-summary-img/<id>/`, `/api/charts/*.png`, `/api/chart/` | Matplotlib chart images |
-| `/api/meal-reports/` | Reports JSON (totals, macros, categories, chart base64) |
+| Endpoint                                                          | Description                                             |
+| ----------------------------------------------------------------- | ------------------------------------------------------- |
+| `/api/halls/`                                                     | Dining halls list                                       |
+| `/api/dishes/`, `/api/dishes/<id>/`                               | Dishes list (optional `?search=`), detail               |
+| `/api/dish-stats/`                                                | Aggregation stats (totals, by category, by hall)        |
+| `/api/profiles/`, `/api/meals/`                                   | User profiles, meal history                             |
+| `/api/dishes-manage/`                                             | GET list / POST create dish (CSRF)                      |
+| `/api/aimeals/`                                                   | AI meal search (GET fuzzy, POST exact)                  |
+| `/api/dish-summary-img/<id>/`, `/api/charts/*.png`, `/api/chart/` | Matplotlib chart images                                 |
+| `/api/meal-reports/`                                              | Reports JSON (totals, macros, categories, chart base64) |
 
 ---
 
