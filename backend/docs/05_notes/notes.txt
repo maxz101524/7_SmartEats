@@ -3,72 +3,92 @@
 Week 4 — A4: Internal/External APIs, Charts, Exports & Deployment
 ================================================================================
 
-PART 1: Internal JSON API + Vega-Lite Charts
----------------------------------------------
-- Created/confirmed an internal GET JSON endpoint (e.g. /api/summary/)
-  backed directly by our Django models, returning "chart-ready" data
-  (clean JSON, no HTML) for Vega-Lite.
-- Designed the output shape so that Vega-Lite can aggregate by fields
-  like dining hall, dish category, or meal type without extra parsing.
-- Built two Vega-Lite specs in the online editor that read from
-  data: { "url": "https://<our-site>/api/summary/" }:
-  * One bar chart for aggregated summaries (e.g., dishes per hall
-    or average calories by category).
-  * One line or scatter chart for trends / comparisons.
-- Embedded both charts into dedicated HTML endpoints (e.g. /vega-lite/bar/
-  and /vega-lite/trend/), so they can be viewed in the browser and
-  later screenshotted for grading.
-
-
-PART 2: External API Integration (Keyless)
-------------------------------------------
-- Integrated a keyless public API via a Django view that accepts
-  query parameters (e.g. ?q= or ?dish=) and uses requests.get() with
-  params=..., timeout=5, and .raise_for_status() for robust error
-  handling.
-- Combined the external response with our own in-memory internal data
-  (without storing it) to produce a processed/analytics result
-  (for example: enriching dishes with external nutrition, ratings,
-  or price information).
-- Exposed this processed output via a new internal endpoint that
-  returns either JSON or a rendered template, making it consistent
-  with the rest of our API layer.
-
-
-PART 3: CSV + JSON Export & Reports
------------------------------------
-- Implemented a CSV export view for one core model (e.g. Dish,
-  Meal, or Student-equivalent) that returns:
-  Content-Type: text/csv and a Content-Disposition attachment with
-  a timestamped filename like model_YYYY-MM-DD_HH-MM.csv.
-- Implemented a JSON export view for the same model that wraps data
-  in metadata (generated_at, record_count, and a list of objects),
-  using JsonResponse(..., json_dumps_params={"indent": 2}) plus a
-  timestamped filename.
-- Added visible "Download CSV" and "Download JSON" buttons/links on
-  a reports/list page so users can easily export data.
-- Built a reports template (e.g. reports.html) that shows at least
-  two grouped summaries (such as counts per dining hall or category)
-  plus a totals line, with proper table headers and {% empty %}
-  handling.
-
-
-PART 4: Static Files & Initial Deployment
+SECTION 1: Internal JSON APIs for Charts
 -----------------------------------------
-- Verified static file configuration for both development and
-  production settings: STATIC_URL, STATICFILES_DIRS, and collectstatic
-  behavior, keeping the generated staticfiles directory out of Git.
-- Confirmed the base template loads static assets correctly with
-  {% load static %} and uses {% static %} for CSS/JS; styling is
-  visible across multiple pages.
-- Created/updated requirements.txt and .gitignore to reflect the
-  deployed environment, while intentionally committing db.sqlite3
-  for this assignment.
-- Cleaned up code for deployment (removed debug prints/unused imports,
-  ensured /api/... routes are organized, and templates extend
-  base.html) and prepared to clone the repo, set up a virtualenv,
-  install requirements, run collectstatic, and serve the app on
-  PythonAnywhere.
+- We continued to expose aggregation data as clean JSON from real Django models
+  (e.g., dish and meal statistics) so it is "chart-ready" for Vega-Lite: each
+  object already contains the x-axis key and metric field(s) (like date,
+  dining_hall, category, or meal count).
+- These JSON endpoints only return serialized data (no HTML), using
+  JsonResponse(..., safe=False) or dict-shaped responses, which makes them usable
+  both by our React frontend and by external tools like the Vega-Lite editor.
+- In production, these APIs are reachable at /api/... URLs on PythonAnywhere, so
+  classmates can point Vega-Lite's data.url directly at our deployed endpoints.
+
+
+SECTION 2: External API Integration (Wger)
+-------------------------------------------
+- Implemented nutrition lookup at the view function `nutrition_lookup_view`
+  using a keyless public API: Wger's ingredient endpoint
+  (https://wger.de/api/v2/ingredient/).
+- The view accepts a `?q=` query parameter, calls http_requests.get() with
+  params (name, language, format, limit), sets timeout=5, and uses
+  .raise_for_status() inside try/except blocks to handle timeouts and
+  RequestException cleanly.
+- The JSON body from Wger is normalized into a compact list of external_items
+  with per_100g macros (kcal, protein, carbohydrates, fat, fiber, sodium).
+- In parallel, we query our own Dish model with dish_name__icontains=query and
+  join related dining hall information; this gives us internal_matches that we
+  do NOT persist back into the database.
+- The response combines both sources plus optional analytics per user:
+  if a netID is provided, we look up UserProfile, compute BMR/TDEE using
+  Mifflin-St Jeor, derive daily macro targets based on goal (fat_loss or
+  muscle_gain), compare against today's Meal intake, and return remaining macros.
+- Final output is a single JsonResponse with keys:
+  query, external_results, internal_matches, and user_analysis, demonstrating
+  triangulation between external and internal data without storing the external
+  API payload.
+
+
+SECTION 3: CSV + JSON Export of Meals
+--------------------------------------
+- Implemented `export_meals` view that exports historical Meal records for the
+  current user (temporarily using the first UserProfile until auth is wired).
+- The view reads ?format= from the query string (csv or json, default csv).
+- For JSON export:
+  - We build a list of plain dicts for each meal (meal_id, total_calories,
+    total_protein, total_carbohydrates, total_fat, date).
+  - We wrap it with metadata: generated_at ISO timestamp and record_count.
+  - We return JsonResponse(data, json_dumps_params={"indent": 2}) and set
+    Content-Disposition to attachment; filename="my_meals_YYYY-MM-DD_HH-MM.json".
+- For CSV export:
+  - We return HttpResponse(content_type="text/csv") and set Content-Disposition
+    with a timestamped "my_meals_YYYY-MM-DD_HH-MM.csv" filename.
+  - We write one header row followed by one row per Meal using csv.writer.
+- These exports are linked from the reports UI as "Download CSV" / "Download JSON"
+  so users can download their historical data in both formats.
+
+
+SECTION 4: Reports Page & Aggregated Summaries
+-----------------------------------------------
+- Implemented `MealReportsView` (class-based View) that aggregates Meal data for
+  a (temporary) current user and returns a structured JSON report.
+- The view supports optional start/end date filters (YYYY-MM-DD) and computes:
+  - total_count of meals,
+  - category_stats: meals.values("category").annotate(num=Count("pk")),
+  - macro totals via aggregate(Sum(...)) for calories, protein, carbs, and fat.
+- From these, we derive labels/values arrays for macros and categories, which are
+  used to generate a Matplotlib figure (two side-by-side pie charts) rendered to
+  a base64 PNG string.
+- The JsonResponse payload includes user_info, statistics (totals + grouped
+  summaries), and chart_base64 (data:image/png;base64,...) so the frontend can
+  show a visual report alongside totals.
+
+
+SECTION 5: Static Files, Vega-Lite, and Deployment Prep
+--------------------------------------------------------
+- Updated settings to allow embedding Vega/Vega-Lite from https://vega.github.io
+  in production (CSP / allowed hosts in base.py and production.py).
+- Verified static file configuration in development and production: STATIC_URL,
+  STATICFILES_DIRS, and collectstatic behavior, keeping the collected staticfiles
+  directory out of Git to avoid bloating the repo.
+- Confirmed the base template (and React entry) use {% load static %} and
+  {% static %} for CSS/JS so styling loads correctly on multiple pages.
+- Prepared deployment flow for PythonAnywhere: commit db.sqlite3 for this
+  assignment, push code + requirements.txt, create a virtualenv on the server,
+  pip install -r requirements.txt, run collectstatic with production settings,
+  and wire the WSGI config to serve SmartEats.
+
 
 ================================================================================
 Week 3 — A3: User Input, Analysis, & APIs
