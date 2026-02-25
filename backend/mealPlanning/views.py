@@ -14,7 +14,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import base64
 from datetime import datetime
-
+from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 import io
 from datetime import timedelta
@@ -24,12 +24,113 @@ from .models import DiningHall, Dish, UserProfile, Meal
 from django.forms.models import model_to_dict
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
-
-
+from django.contrib.auth import authenticate
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
+from rest_framework import status
 from django.utils.timezone import now
 import csv
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 # Create your views here.
+
+class RegisterAPIView(APIView):
+    def post(self, request):
+
+        netID = request.data.get("netID")
+        email = request.data.get("email")
+        password = request.data.get("password")
+        first_name = request.data.get("first_name")
+        last_name = request.data.get("last_name")
+
+
+        sex = request.data.get("sex")
+        age = request.data.get("age")
+        height_cm = request.data.get("height_cm")
+        weight_kg = request.data.get("weight_kg")
+        goal = request.data.get("goal")
+
+        if User.objects.filter(username = netID).exists():
+            return Response({"error": "A user with this NetID already exists."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        else:
+
+            user = User.objects.create_user(
+            username=netID, 
+            email=email, 
+            password=password,
+            first_name=first_name,
+            last_name=last_name)
+
+        
+            profile = UserProfile.objects.create(
+                user=user,
+                netID=netID,
+                sex=sex,
+                age=age,
+                height_cm=height_cm,
+                weight_kg=weight_kg,
+                goal=goal
+            )
+            token, created = Token.objects.get_or_create(user=user)
+
+
+            return Response({
+            "token": token.key,
+            "message": "User created successfully!"
+            }, status=status.HTTP_201_CREATED)
+
+        
+
+
+
+
+class LoginAPIView(APIView):
+    def post(self, request):
+
+        netID = request.data.get("netID")
+        password = request.data.get("password")
+
+
+        user = authenticate(username = netID, password = password)
+
+
+        if user is not None:
+            token, created = Token.objects.get_or_create(user = user)
+
+            profile= user.profile
+
+            return Response({"token": token.key,
+                             "first_name": user.first_name,
+                             "last_name":user.last_name,
+                             "netID": profile.netID,
+                             "goal": profile.goal}, status=status.HTTP_200_OK )
+
+        else: 
+            return Response({"error": "Invalid NetID or Password"}, status=status.HTTP_400_BAD_REQUEST)
+        
+class UserProfileView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        profile=user.profile
+
+        return Response({
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+            "netID": profile.netID,
+            "sex": profile.sex,
+            "age": profile.age,
+            "height_cm": profile.height_cm,
+            "weight_kg": profile.weight_kg,
+            "goal": profile.goal
+
+        })
+
 
 
 def dining_hall_view(request):
@@ -37,12 +138,6 @@ def dining_hall_view(request):
     dining_hall = list(DiningHall.objects.values())
 
     return HttpResponse(json.dumps(dining_hall), content_type="application/json")
-
-
-# def dish_list_view(request):
-
-#     dishes = list(Dish.objects.values('dish_id', 'dish_name', 'calories', 'category', 'dining_hall__name'))
-#     return JsonResponse(dishes,safe=False)
 
 
 class DishManagementView(View):

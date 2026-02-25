@@ -13,6 +13,7 @@ urlpatterns = [
 
     path('profiles/', views.UserProfileBaseView.as_view(), name='user_profiles'),
     path('profiles/<str:netID>/', views.user_profile_detail_view, name='user_profile_detail'),
+    path('profile/', views.UserProfileView.as_view(), name='user_profile'),
    
 
     path('meals/', views.MealListView.as_view(), name='meal_history'),
@@ -37,6 +38,10 @@ urlpatterns = [
 
     path("export-meals/", views.export_meals, name="export_meals"),
     path("meal-reports/", views.MealReportsView.as_view(), name="meal_reports"),
+
+
+    path("login/", views.LoginAPIView.as_view(), name = 'api-login'),
+    path("register/", views.RegisterAPIView.as_view(), name = 'api-register'),
 
 
 ]

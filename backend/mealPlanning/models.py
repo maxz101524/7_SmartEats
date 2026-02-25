@@ -1,5 +1,6 @@
 from django.db import models
 from django.urls import reverse
+from django.contrib.auth.models import User
 
 class DiningHall(models.Model):
 
@@ -67,9 +68,9 @@ class UserProfile(models.Model):
     and provide progress tracking toward health goals. 
 
     """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     netID = models.CharField(max_length=50, primary_key=True)
-    name = models.CharField(max_length=100)
-    lastName = models.CharField(max_length=100)
+  
 
 
     sex = models.CharField(
@@ -111,11 +112,11 @@ class UserProfile(models.Model):
 
     class Meta:
 
-        ordering = ["netID", "name" , "lastName"]
+        ordering = ["user__username"]
 
 
     def __str__(self):
-        return f"{self.name} {self.lastName}: ({self.netID})"
+        return f"{self.user.first_name} {self.user.last_name}: ({self.netID})"
 
     def get_absolute_url(self):
         return reverse('user_profile_detail', kwargs={'netID': self.netID})
@@ -148,7 +149,7 @@ class Meal(models.Model):
     # The Dish table is updated bi-weekly, whereas this Meal table stores historical records.
     contain_dish = models.CharField(blank=True)
 
-    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name="meals")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="meals")
     date = models.DateField(auto_now_add=True) 
 
     class Meta:
