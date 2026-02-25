@@ -4,14 +4,17 @@
  * Inter font loaded via <link> in index.html.
  */
 
+/* ── Design tokens (source of truth) ─────────────────────────── */
+@import "../../styles/tokens.css";
+
 /* ── Design tokens & Tailwind v4 variable overrides ──────────── */
 :root {
-  /* Font */
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Font — kept in sync with --se-font-sans */
+  --font-sans: var(--se-font-sans);
 
-  /* SmartEats brand */
-  --se-illini-navy: #13294b;
-  --se-illini-orange: #e84a27;
+  /* SmartEats brand aliases (legacy names; use --se-navy / --se-primary going forward) */
+  --se-illini-navy:   var(--se-navy);
+  --se-illini-orange: var(--se-primary);
 
   /* ── Dark-theme: remap Tailwind gray scale ───────────────────
      bg-white  → dark surface,  text-gray-900 → near-white, etc. */
@@ -76,8 +79,8 @@ html {
 
 /* ── Flat dark page background ───────────────────────────────── */
 body {
-  background-color: #0d1021;
-  color: #e8ebf2;
+  background-color: var(--se-bg-base);
+  color: var(--se-text-main);
 }
 
 /* ── Root container ──────────────────────────────────────────── */
@@ -87,13 +90,13 @@ body {
 
 /* ── Focus-visible ring (accessibility) ──────────────────────── */
 :focus-visible {
-  outline: 2px solid var(--se-illini-orange);
+  outline: 2px solid var(--se-primary);
   outline-offset: 2px;
 }
 
 /* ── Selection highlight ─────────────────────────────────────── */
 ::selection {
-  background: rgba(232, 74, 39, 0.3);
+  background: rgba(var(--se-primary-rgb), 0.3);
   color: #fff;
 }
 
@@ -101,18 +104,18 @@ body {
 input,
 textarea,
 select {
-  background-color: #1e2235;
-  color: #e8ebf2;
-  border-color: #3e4560;
+  background-color: var(--se-bg-input);
+  color: var(--se-text-main);
+  border-color: var(--se-border-strong);
 }
 input::placeholder,
 textarea::placeholder {
-  color: #6b7488;
+  color: var(--se-text-faint);
 }
 
 /* ── Card borders: subtle warm tint ──────────────────────────── */
 .border {
-  border-color: #252a40 !important;
+  border-color: var(--se-border) !important;
 }
 
 /* ── Scrollbar (webkit browsers) ─────────────────────────────── */
@@ -120,12 +123,12 @@ textarea::placeholder {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0d1021;
+  background: var(--se-bg-base);
 }
 ::-webkit-scrollbar-thumb {
-  background: #2b3148;
-  border-radius: 9999px;
+  background: var(--se-border-muted);
+  border-radius: var(--se-radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3e4560;
+  background: var(--se-border-strong);
 }

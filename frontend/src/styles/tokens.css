@@ -1,0 +1,119 @@
+/*
+ * SmartEats Design Tokens
+ * Source of truth: DESIGN_SYSTEM_SMARTEATS.md §3
+ * All tokens use the --se-* prefix.
+ * Do NOT add values here without first updating the spec.
+ */
+
+:root {
+
+  /* ── §3.1 Color Tokens ─────────────────────────────────────── */
+
+  /* Base Surfaces */
+  --se-bg-base:     #0d1021; /* Page background */
+  --se-bg-surface:  #161929; /* Cards, panels */
+  --se-bg-elevated: #1a1e30; /* Modals, tooltips, dropdowns */
+  --se-bg-subtle:   #21263a; /* Subtle containers, table rows */
+  --se-bg-input:    #1e2235; /* Input field backgrounds */
+
+  /* Borders */
+  --se-border:        #252a40; /* Default card/section borders */
+  --se-border-muted:  #2b3148; /* Muted dividers, scrollbar thumb */
+  --se-border-strong: #3e4560; /* Focused inputs, strong separators */
+
+  /* Brand */
+  --se-primary:       #e84a27; /* Illinois orange — primary CTA, active state */
+  --se-primary-hover: #d43e1e; /* Darker orange for button hover */
+  --se-primary-dim:   #2d2219; /* Tinted orange bg (chips, highlighted rows) */
+  --se-navy:          #13294b; /* Illinois navy — header gradient start, nav bg */
+  --se-navy-dark:     #0f1a33; /* Deeper navy for gradient */
+  --se-navy-mid:      #162040; /* Mid navy for gradient end */
+
+  /*
+   * Helper: RGB channels of --se-primary for use in rgba().
+   * CSS cannot decompose a hex var inside rgba(), so we store the channels
+   * separately. Not in the spec directly — added to serve ::selection etc.
+   */
+  --se-primary-rgb: 232, 74, 39;
+
+  /* Text */
+  --se-text-main:      #e8ebf2; /* Primary body text */
+  --se-text-secondary: #c0c6d6; /* Secondary labels, descriptions */
+  --se-text-muted:     #a3aabe; /* Tertiary info, timestamps */
+  --se-text-faint:     #6b7488; /* Placeholder text, disabled elements */
+  --se-text-inverted:  #0d1021; /* Text on bright/orange backgrounds */
+  --se-text-accent:    #e84a27; /* Highlighted/accent text */
+  --se-text-link:      #6ba0f7; /* Hyperlinks */
+
+  /* Macro Color Coding — NEVER deviate from these for nutrition displays */
+  --se-macro-protein: #6ba0f7; /* Protein (blue) */
+  --se-macro-carbs:   #fbbf24; /* Carbohydrates (yellow) */
+  --se-macro-fat:     #f0784a; /* Fat (orange) */
+  --se-macro-cal:     #e84a27; /* Calories (red-orange) */
+  --se-macro-fiber:   #4ade80; /* Fiber (green) */
+
+  /* Semantic / Status */
+  --se-success:     #4ade80; /* Success states, "available", positive trends */
+  --se-success-dim: #19291e; /* Success background tint */
+  --se-warning:     #fbbf24; /* Warnings, "limited hours" */
+  --se-warning-dim: #2b2819; /* Warning background tint */
+  --se-error:       #f87171; /* Errors, allergen flags */
+  --se-error-dim:   #2d1a1e; /* Error background tint */
+  --se-info:        #6ba0f7; /* Info banners, neutral callouts */
+  --se-info-dim:    #1c2744; /* Info background tint */
+
+  /* ── §3.2 Typography Tokens ────────────────────────────────── */
+
+  /* Font Stack */
+  --se-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Size Scale */
+  --se-text-display: 2.5rem;   /* 40px — Hero numbers, big stats */
+  --se-text-h1:      2rem;     /* 32px — Page titles */
+  --se-text-h2:      1.5rem;   /* 24px — Section headings */
+  --se-text-h3:      1.25rem;  /* 20px — Card headings, subheadings */
+  --se-text-lg:      1.125rem; /* 18px — Prominent body, large labels */
+  --se-text-base:    1rem;     /* 16px — Default body text */
+  --se-text-sm:      0.875rem; /* 14px — Secondary body, list item details */
+  --se-text-xs:      0.75rem;  /* 12px — Captions, timestamps, badges */
+
+  /* Line Heights */
+  --se-leading-tight:       1.1; /* Display / headings */
+  --se-leading-body:        1.5; /* Body text */
+  --se-leading-caption:     1.4; /* Captions */
+
+  /* Font Weights */
+  --se-weight-regular:   400;
+  --se-weight-medium:    500;
+  --se-weight-semibold:  600;
+  --se-weight-bold:      700;
+  --se-weight-extrabold: 800;
+
+  /* ── §3.3 Spacing Scale (4px base unit) ───────────────────── */
+
+  --se-space-1:  4px;  /* Icon gap, tight inline spacing */
+  --se-space-2:  8px;  /* Badge padding, small gaps */
+  --se-space-3:  12px; /* Chip padding, compact row gaps */
+  --se-space-4:  16px; /* Card padding (mobile), list item gap */
+  --se-space-5:  20px; /* Section inner padding */
+  --se-space-6:  24px; /* Card padding (desktop), section gap */
+  --se-space-8:  32px; /* Large section spacing */
+  --se-space-10: 40px; /* Page section breaks */
+  --se-space-12: 48px; /* Major page zones */
+  --se-space-16: 64px; /* Page top padding, hero spacing */
+
+  /* ── §3.4 Border Radius Scale ──────────────────────────────── */
+
+  --se-radius-sm:   6px;    /* Tags, small badges, tooltips */
+  --se-radius-md:   10px;   /* Inputs, buttons, filter chips */
+  --se-radius-lg:   16px;   /* Cards, list items */
+  --se-radius-xl:   20px;   /* Large panels, modal dialogs */
+  --se-radius-full: 9999px; /* Pills, circular avatars, range sliders */
+
+  /* ── §3.5 Shadow Scale ─────────────────────────────────────── */
+
+  --se-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);   /* Cards at rest */
+  --se-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);  /* Hovered cards, dropdowns */
+  --se-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);  /* Modals, floating panels */
+
+}
