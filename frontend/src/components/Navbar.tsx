@@ -1,64 +1,82 @@
 import { useLocation, Link } from "react-router-dom";
 
+const navLinks = [
+  { to: "/", label: "Home" },
+  { to: "/halls", label: "Dining Halls" },
+  { to: "/dishes", label: "Dishes" },
+  { to: "/profile", label: "Profile" },
+  { to: "/aimeals", label: "AIMeal" },
+  { to: "/charts", label: "Charts" },
+  { to: "/reports", label: "Reports" },
+];
+
 function Navbar() {
   const location = useLocation();
 
-  const navLinks = [
-    { to: "/", label: "Home" },
-    { to: "/halls", label: "Dining Halls" },
-    { to: "/dishes", label: "Dishes" },
-    { to: "/profile", label: "Profile" },
-    { to: "/aimeals", label: "AIMeal" },
-    { to: "/charts", label: "Charts" },
-    { to: "/reports", label: "Reports" },
-  ];
-
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-[#1e2540]"
-         style={{ background: "linear-gradient(135deg, #0f1a33 0%, #13294B 50%, #162040 100%)" }}>
+    <nav
+      className="sticky top-0 z-50 w-full border-b"
+      style={{
+        background: "var(--se-bg-surface)",
+        borderColor: "var(--se-border)",
+        boxShadow: "var(--se-shadow-sm)",
+      }}
+    >
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-14">
-          <Link to="/" className="flex items-center gap-2 group">
-            <span className="text-lg font-black tracking-tight"
-                  style={{ color: "#E84A27" }}>
+
+          {/* Wordmark */}
+          <Link to="/" className="flex items-center gap-0.5 flex-shrink-0">
+            <span
+              className="text-lg font-extrabold tracking-tight"
+              style={{ color: "var(--se-primary)", fontFamily: "var(--se-font-sans)" }}
+            >
               Smart
             </span>
-            <span className="text-lg font-black tracking-tight"
-                  style={{ color: "#f0f2f8" }}>
+            <span
+              className="text-lg font-extrabold tracking-tight"
+              style={{ color: "var(--se-text-main)", fontFamily: "var(--se-font-sans)" }}
+            >
               Eats
             </span>
           </Link>
 
+          {/* Nav links — desktop */}
           <ul className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => {
               const isActive = location.pathname === link.to;
-
               return (
                 <li key={link.to}>
                   <Link
                     to={link.to}
-                    className="relative px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200"
+                    className="relative px-3 py-1.5 rounded-[var(--se-radius-md)] text-sm font-medium transition-colors duration-150"
                     style={{
-                      color: isActive ? "#ffffff" : "#8b95b0",
-                      backgroundColor: isActive ? "rgba(232, 74, 39, 0.15)" : "transparent",
+                      color: isActive ? "var(--se-primary)" : "var(--se-text-muted)",
+                      fontFamily: "var(--se-font-sans)",
                     }}
                     onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.color = "#d0d5e2";
+                      if (!isActive)
+                        e.currentTarget.style.color = "var(--se-text-main)";
                     }}
                     onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.color = "#8b95b0";
+                      if (!isActive)
+                        e.currentTarget.style.color = "var(--se-text-muted)";
                     }}
                   >
                     {link.label}
+                    {/* Active indicator dot */}
                     {isActive && (
-                      <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
-                            style={{ backgroundColor: "#E84A27" }} />
+                      <span
+                        className="absolute -bottom-[17px] left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
+                        style={{ background: "var(--se-primary)" }}
+                      />
                     )}
                   </Link>
                 </li>
               );
             })}
           </ul>
+
         </div>
       </div>
     </nav>

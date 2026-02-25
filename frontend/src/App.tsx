@@ -9,12 +9,16 @@ import DishDetail from "./pages/DishDetail";
 import AIMeals from "./pages/AIMeals";
 import Charts from "./pages/Charts";
 import Reports from "./pages/Reports";
+import Showcase from "./pages/Showcase";
 
 function App() {
   return (
     <>
       <BrowserRouter>
         <Routes>
+          {/* Design review — remove before final deploy */}
+          <Route path="/showcase" element={<Showcase />} />
+
           <Route path="/" element={<Base />}>
             <Route index element={<Dishes />} />
             <Route path="dishes" element={<Dishes />}></Route>

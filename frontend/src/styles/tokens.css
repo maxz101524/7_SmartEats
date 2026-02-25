@@ -1,5 +1,5 @@
 /*
- * SmartEats Design Tokens
+ * SmartEats Design Tokens — v2.0
  * Source of truth: DESIGN_SYSTEM_SMARTEATS.md §3
  * All tokens use the --se-* prefix.
  * Do NOT add values here without first updating the spec.
@@ -9,63 +9,63 @@
 
   /* ── §3.1 Color Tokens ─────────────────────────────────────── */
 
-  /* Base Surfaces */
-  --se-bg-base:     #0d1021; /* Page background */
-  --se-bg-surface:  #161929; /* Cards, panels */
-  --se-bg-elevated: #1a1e30; /* Modals, tooltips, dropdowns */
-  --se-bg-subtle:   #21263a; /* Subtle containers, table rows */
-  --se-bg-input:    #1e2235; /* Input field backgrounds */
+  /* Base Surfaces — warm light mode */
+  --se-bg-base:     #F3F0EA; /* Page background (warm cream) */
+  --se-bg-surface:  #FFFFFF; /* Cards, panels, nav bar */
+  --se-bg-elevated: #F8F6F2; /* Modals, tooltips, dropdowns */
+  --se-bg-subtle:   #EDE9E1; /* Subtle containers, table rows, skeleton base */
+  --se-bg-input:    #FFFFFF; /* Input field backgrounds (border distinguishes) */
 
-  /* Borders */
-  --se-border:        #252a40; /* Default card/section borders */
-  --se-border-muted:  #2b3148; /* Muted dividers, scrollbar thumb */
-  --se-border-strong: #3e4560; /* Focused inputs, strong separators */
+  /* Borders — warm neutral */
+  --se-border:        #E4DED5; /* Default card/section borders */
+  --se-border-muted:  #EDE9E1; /* Muted dividers, scrollbar thumb */
+  --se-border-strong: #C8BFB4; /* Focused inputs, strong separators */
 
-  /* Brand */
-  --se-primary:       #e84a27; /* Illinois orange — primary CTA, active state */
-  --se-primary-hover: #d43e1e; /* Darker orange for button hover */
-  --se-primary-dim:   #2d2219; /* Tinted orange bg (chips, highlighted rows) */
-  --se-navy:          #13294b; /* Illinois navy — header gradient start, nav bg */
-  --se-navy-dark:     #0f1a33; /* Deeper navy for gradient */
-  --se-navy-mid:      #162040; /* Mid navy for gradient end */
+  /* Brand — orange only; navy removed in v2.0 */
+  --se-primary:       #E84A27; /* Orange — primary CTA, active state, accent */
+  --se-primary-hover: #D43E1E; /* Darker orange for hover */
+  --se-primary-dim:   #FDE8E2; /* Soft orange tint (chip backgrounds, highlighted rows) */
 
   /*
-   * Helper: RGB channels of --se-primary for use in rgba().
-   * CSS cannot decompose a hex var inside rgba(), so we store the channels
-   * separately. Not in the spec directly — added to serve ::selection etc.
+   * Helper: RGB channels of --se-primary for rgba().
+   * CSS cannot decompose a hex var inside rgba(), so we store channels separately.
    */
   --se-primary-rgb: 232, 74, 39;
 
-  /* Text */
-  --se-text-main:      #e8ebf2; /* Primary body text */
-  --se-text-secondary: #c0c6d6; /* Secondary labels, descriptions */
-  --se-text-muted:     #a3aabe; /* Tertiary info, timestamps */
-  --se-text-faint:     #6b7488; /* Placeholder text, disabled elements */
-  --se-text-inverted:  #0d1021; /* Text on bright/orange backgrounds */
-  --se-text-accent:    #e84a27; /* Highlighted/accent text */
-  --se-text-link:      #6ba0f7; /* Hyperlinks */
+  /* Text — dark on light */
+  --se-text-main:      #1C1916; /* Primary body text (warm near-black) */
+  --se-text-secondary: #4A4540; /* Secondary labels, descriptions */
+  --se-text-muted:     #7A736B; /* Tertiary info, timestamps */
+  --se-text-faint:     #A89E95; /* Placeholder text, disabled elements */
+  --se-text-inverted:  #FFFFFF; /* Text on orange backgrounds */
+  --se-text-accent:    #E84A27; /* Highlighted/accent text */
+  --se-text-link:      #3B6CD4; /* Hyperlinks */
 
-  /* Macro Color Coding — NEVER deviate from these for nutrition displays */
-  --se-macro-protein: #6ba0f7; /* Protein (blue) */
-  --se-macro-carbs:   #fbbf24; /* Carbohydrates (yellow) */
-  --se-macro-fat:     #f0784a; /* Fat (orange) */
-  --se-macro-cal:     #e84a27; /* Calories (red-orange) */
-  --se-macro-fiber:   #4ade80; /* Fiber (green) */
+  /*
+   * Macro Color Coding — NEVER deviate from these for nutrition displays.
+   * v2.0: adjusted from v1.0 for readability on light/white backgrounds.
+   * Do NOT revert to #6ba0f7 (protein) or #fbbf24 (carbs) — insufficient contrast on white.
+   */
+  --se-macro-protein: #3B82F6; /* Protein (blue) */
+  --se-macro-carbs:   #D97706; /* Carbohydrates (amber) */
+  --se-macro-fat:     #F0784A; /* Fat (orange) */
+  --se-macro-cal:     #E84A27; /* Calories (red-orange) */
+  --se-macro-fiber:   #22C55E; /* Fiber (green) */
 
-  /* Semantic / Status */
-  --se-success:     #4ade80; /* Success states, "available", positive trends */
-  --se-success-dim: #19291e; /* Success background tint */
-  --se-warning:     #fbbf24; /* Warnings, "limited hours" */
-  --se-warning-dim: #2b2819; /* Warning background tint */
-  --se-error:       #f87171; /* Errors, allergen flags */
-  --se-error-dim:   #2d1a1e; /* Error background tint */
-  --se-info:        #6ba0f7; /* Info banners, neutral callouts */
-  --se-info-dim:    #1c2744; /* Info background tint */
+  /* Semantic / Status — light pastel tints for light mode */
+  --se-success:     #16A34A; /* Success states, "available", positive trends */
+  --se-success-dim: #DCFCE7; /* Success background tint */
+  --se-warning:     #D97706; /* Warnings, "limited hours" */
+  --se-warning-dim: #FEF9C3; /* Warning background tint */
+  --se-error:       #DC2626; /* Errors, allergen flags */
+  --se-error-dim:   #FEE2E2; /* Error background tint */
+  --se-info:        #3B82F6; /* Info banners, neutral callouts */
+  --se-info-dim:    #DBEAFE; /* Info background tint */
 
   /* ── §3.2 Typography Tokens ────────────────────────────────── */
 
   /* Font Stack */
-  --se-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --se-font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* Size Scale */
   --se-text-display: 2.5rem;   /* 40px — Hero numbers, big stats */
@@ -78,9 +78,9 @@
   --se-text-xs:      0.75rem;  /* 12px — Captions, timestamps, badges */
 
   /* Line Heights */
-  --se-leading-tight:       1.1; /* Display / headings */
-  --se-leading-body:        1.5; /* Body text */
-  --se-leading-caption:     1.4; /* Captions */
+  --se-leading-tight:   1.1; /* Display / headings */
+  --se-leading-body:    1.5; /* Body text */
+  --se-leading-caption: 1.4; /* Captions */
 
   /* Font Weights */
   --se-weight-regular:   400;
@@ -110,10 +110,10 @@
   --se-radius-xl:   20px;   /* Large panels, modal dialogs */
   --se-radius-full: 9999px; /* Pills, circular avatars, range sliders */
 
-  /* ── §3.5 Shadow Scale ─────────────────────────────────────── */
+  /* ── §3.5 Shadow Scale — light shadows for white-on-cream ─── */
 
-  --se-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);   /* Cards at rest */
-  --se-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);  /* Hovered cards, dropdowns */
-  --se-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);  /* Modals, floating panels */
+  --se-shadow-sm: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);   /* Cards at rest */
+  --se-shadow-md: 0 4px 12px rgba(0,0,0,0.09), 0 2px 4px rgba(0,0,0,0.05); /* Hovered cards, dropdowns */
+  --se-shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06); /* Modals, floating panels */
 
 }
