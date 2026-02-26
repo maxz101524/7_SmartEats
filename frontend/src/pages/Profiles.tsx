@@ -22,25 +22,25 @@ interface UserProfile {
   detail_url?: string; // from model's get_absolute_url()
 }
 
-interface Meal {
-  meal_id: number;
-  user: string;
+// interface Meal {
+//   meal_id: number;
+//   user: string;
 
-  total_calories: number;
-  total_protein: number;
-  total_carbohydrates: number;
-  total_fat: number;
+//   total_calories: number;
+//   total_protein: number;
+//   total_carbohydrates: number;
+//   total_fat: number;
 
-  contain_dish: any; //fix later
+//   contain_dish: any; //fix later
 
-  user_id: UserProfile | string;
+//   user_id: UserProfile | string;
 
-  date: string;
-}
+//   date: string;
+// }
 
 function Profiles() {
   const [profileData, setProfileData] = useState<UserProfile | null>(null);
-  const [mealData, setMealData] = useState<Meal[]>([]);
+  // const [mealData, setMealData] = useState<Meal[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -61,10 +61,10 @@ function Profiles() {
       .then((result) => setProfileData(result.data))
       .catch((err) => console.log(err));
 
-    axios
-      .get(`${API_BASE}/meals/`, config)
-      .then((result) => setMealData(result.data))
-      .catch((err) => console.log(err));
+    // axios
+    //   .get(`${API_BASE}/meals/`, config)
+    //   .then((result) => setMealData(result.data))
+    //   .catch((err) => console.log(err));
   }, [navigate]);
 
   return (
