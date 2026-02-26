@@ -86,7 +86,9 @@ const Login = () => {
               Sign Up
             </button>
           </div>
-          <GGLogin />
+          <div className="w-full">
+            <GGLogin />
+          </div>
         </form>
       </div>
     </div>

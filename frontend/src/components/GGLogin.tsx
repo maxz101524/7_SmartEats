@@ -24,7 +24,7 @@ const GGLogin = () => {
   };
 
   return (
-    <div>
+    <div className="w-full">
       <GoogleLogin
         onSuccess={handleGoogleSuccess}
         onError={() => {
