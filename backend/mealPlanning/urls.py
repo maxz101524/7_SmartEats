@@ -43,5 +43,7 @@ urlpatterns = [
     path("login/", views.LoginAPIView.as_view(), name = 'api-login'),
     path("register/", views.RegisterAPIView.as_view(), name = 'api-register'),
 
+    path("google-login/", views.GoogleLogin.as_view(), name='api-google-login'),
+
 
 ]

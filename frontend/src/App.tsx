@@ -11,6 +11,7 @@ import Charts from "./pages/Charts";
 import Reports from "./pages/Reports";
 import Login from "./components/Login";
 import Register from "./components/Register";
+import GGLogin from "./components/GGLogin";
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="dishes/:id" element={<DishDetail />}></Route>
             <Route path="login" element={<Login />}></Route>
             <Route path="register" element={<Register />}></Route>
+            <Route path="gglogin" element={<GGLogin />}></Route>
             <Route path="*" element={<NotFound />}></Route>
           </Route>
         </Routes>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import GGLogin from "./GGLogin";
 
 const Login = () => {
   const [netID, setNetID] = useState("");
@@ -66,14 +67,24 @@ const Login = () => {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
-          <div className=" flex justify-center item-center">
+          <div className="  mb-5 w-full ">
             <button
               type="submit"
-              className="bg-blue-500 hover:bg-blue-700 text-white-900 font-bold py-2 px-4 rounded"
+              className="bg-blue-500 hover:bg-blue-700 text-white-900 font-bold py-2 px-4 rounded w-full"
             >
               Log In
             </button>
           </div>
+          <div className="w-full  mb-4 ">
+            <button
+              className="bg-blue-500 hover:bg-blue-700 text-white-900 font-bold py-2 px-4 rounded w-full"
+              type="button"
+              onClick={() => navigate("/register")}
+            >
+              Sign Up
+            </button>
+          </div>
+          <GGLogin />
         </form>
       </div>
     </div>

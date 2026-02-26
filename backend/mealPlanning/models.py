@@ -1,7 +1,9 @@
 from django.db import models
 from django.urls import reverse
 from django.contrib.auth.models import User
-
+from django.db.models.signals import post_save     
+from django.dispatch import receiver
+from django.db.models.signals import m2m_changed
 class DiningHall(models.Model):
 
     """
@@ -69,7 +71,7 @@ class UserProfile(models.Model):
 
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    netID = models.CharField(max_length=50, primary_key=True)
+    netID = models.CharField(max_length=50, unique=True, null=True, blank=True)
   
 
 
@@ -147,10 +149,22 @@ class Meal(models.Model):
 
     # This table should not be linked to the Dish table.
     # The Dish table is updated bi-weekly, whereas this Meal table stores historical records.
-    contain_dish = models.CharField(blank=True)
+    contain_dish = models.ManyToManyField(Dish, blank=True)
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="meals")
     date = models.DateField(auto_now_add=True) 
+
+
+    def update_nutrition(self):
+        """
+        Recalculate total calories, protein, carbs, and fat based on the dishes in the meal.
+        This should be called whenever dishes are added or removed from the meal.
+        """
+        self.total_calories = sum(dish.calories for dish in self.contain_dish.all())
+        self.total_protein = sum(dish.protein for dish in self.contain_dish.all())
+        self.total_carbohydrates = sum(dish.carbohydrates for dish in self.contain_dish.all())
+        self.total_fat = sum(dish.fat for dish in self.contain_dish.all())
+        self.save()
 
     class Meta:
 
@@ -210,3 +224,20 @@ class TempMealItem(models.Model):
 
     def __str__(self):
         return f"{self.dish.dish_name} - {self.weight_in_grams}g"
+    
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    instance.profile.save()
+
+
+@receiver(m2m_changed, sender=Meal.contain_dish.through)
+def auto_update_meal_nutrition(sender, instance, action, **kwargs):
+  
+    if action in ["post_add", "post_remove", "post_clear"]:
+        instance.update_nutrition()

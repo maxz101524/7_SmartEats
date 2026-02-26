@@ -35,6 +35,19 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 # Create your views here.
 
+#for google auth
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from dj_rest_auth.registration.views import SocialLoginView
+
+
+
+
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
+    client_class = OAuth2Client
+    callback_url = "http://localhost:5173"
+
 class RegisterAPIView(APIView):
     def post(self, request):
 
@@ -55,30 +68,30 @@ class RegisterAPIView(APIView):
             return Response({"error": "A user with this NetID already exists."}, status=status.HTTP_400_BAD_REQUEST)
         
         else:
-
+           
             user = User.objects.create_user(
-            username=netID, 
-            email=email, 
-            password=password,
-            first_name=first_name,
-            last_name=last_name)
-
-        
-            profile = UserProfile.objects.create(
-                user=user,
-                netID=netID,
-                sex=sex,
-                age=age,
-                height_cm=height_cm,
-                weight_kg=weight_kg,
-                goal=goal
+                username=netID, 
+                email=email, 
+                password=password,
+                first_name=first_name,
+                last_name=last_name
             )
+
+           
+            profile = user.profile
+            profile.netID = netID
+            profile.sex = sex
+            profile.age = age
+            profile.height_cm = height_cm
+            profile.weight_kg = weight_kg
+            profile.goal = goal
+            profile.save() 
+
             token, created = Token.objects.get_or_create(user=user)
 
-
             return Response({
-            "token": token.key,
-            "message": "User created successfully!"
+                "token": token.key,
+                "message": "User created successfully!"
             }, status=status.HTTP_201_CREATED)
 
         
@@ -135,10 +148,20 @@ class UserProfileView(APIView):
 
 def dining_hall_view(request):
 
-    dining_hall = list(DiningHall.objects.values())
+    halls = DiningHall.objects.prefetch_related('dish').all()
 
-    return HttpResponse(json.dumps(dining_hall), content_type="application/json")
+    data = []
 
+    for hall in halls:
+
+        data.append({
+            "Dining_Hall_ID": hall.Dining_Hall_ID,
+            "name": hall.name,
+            "location":hall.location,
+            "dishes": list(hall.dish.values('dish_id', 'dish_name', 'calories', 'protein', 'carbohydrates', 'fat'))
+        })
+
+    return JsonResponse(data, safe=False)
 
 class DishManagementView(View):
     @method_decorator(ensure_csrf_cookie)
@@ -185,12 +208,18 @@ class DishManagementView(View):
 def dish_list_view(request):
     
     search_query = request.GET.get('search', None)
+    hall_id = request.GET.get('hall_id', None)
+
 
     dishes = Dish.objects.select_related('dining_hall').all()
 
+   
     
     if search_query:
         dishes = dishes.filter(dish_name__icontains=search_query)
+
+    if hall_id:
+        dishes = dishes.filter(dining_hall_id=hall_id)
 
     data = []
     for dish in dishes:
@@ -212,6 +241,7 @@ def dish_detail_view(request, dish_id):
     data['dining_hall__name'] = dish.dining_hall.name
     data['detail_url'] = dish.get_absolute_url()  # model-driven URL
     return JsonResponse(data)
+
 
 
 class UserProfileBaseView(View):
@@ -768,26 +798,119 @@ def export_meals(request):
 
 
 
-class MealReportsView(View):
+# class MealReportsView(View):
+#     """
+#     Reports page showing:
+#     - Macronutrient summary
+#     - Category summary
+#     - Totals line
+#     - CSV + JSON download buttons
+
+#     TEMPORARY TESTING: uses first user in database until authentication is implemented
+#     """
+
+#     def get(self, request):
+#         # -------- TEMPORARY TEST USER --------
+#         current_user = UserProfile.objects.first()  # replace with request.user.userprofile later
+
+#         # -------- Filter Meals --------
+#         start = request.GET.get("start")
+#         end = request.GET.get("end")
+
+#         meals = Meal.objects.filter(user=current_user)
+#         if start and end:
+#             try:
+#                 start_dt = datetime.strptime(start, "%Y-%m-%d")
+#                 end_dt = datetime.strptime(end, "%Y-%m-%d")
+#                 meals = meals.filter(date__range=[start_dt, end_dt])
+#             except ValueError:
+#                 pass  # ignore date filtering if invalid
+
+#         total_count = meals.count()
+
+#         # -------- Category Summary --------
+#         category_stats = meals.values("category").annotate(num=Count("pk")).order_by()
+#         category_labels = [item["category"] or "Uncategorized" for item in category_stats]
+#         category_values = [item["num"] for item in category_stats]
+
+#         # -------- Macronutrient Summary --------
+#         totals = meals.aggregate(
+#             total_calories=Coalesce(Sum("total_calories"), 0),
+#             total_protein=Coalesce(Sum("total_protein"), 0),
+#             total_carbs=Coalesce(Sum("total_carbohydrates"), 0),
+#             total_fat=Coalesce(Sum("total_fat"), 0),
+#         )
+#         macro_labels = ["Protein", "Carbs", "Fat"]
+#         macro_values = [totals["total_protein"], totals["total_carbs"], totals["total_fat"]]
+
+#         # -------- Generate Charts as Base64 --------
+#         fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+#         if sum(macro_values) > 0:
+#             axs[0].pie(macro_values, labels=macro_labels, autopct="%1.1f%%", startangle=90)
+#             axs[0].axis("equal")
+#         else:
+#             axs[0].text(0.5, 0.5, "No Macro Data", ha="center")
+#         axs[0].set_title("Macronutrient Distribution")
+
+#         if sum(category_values) > 0:
+#             axs[1].pie(category_values, labels=category_labels, autopct="%1.1f%%", startangle=90)
+#             axs[1].axis("equal")
+#         else:
+#             axs[1].text(0.5, 0.5, "No Category Data", ha="center")
+#         axs[1].set_title("Meal Category Distribution")
+
+#         fig.suptitle(f"{current_user.netID}'s Meal Summary", fontsize=18, y=1.02)
+#         fig.text(0.5, 0.95, f"Total Meals: {total_count}", ha="center", fontsize=12)
+#         fig.tight_layout(rect=[0, 0, 1, 0.88])
+
+#         buffer = BytesIO()
+#         fig.savefig(buffer, format="png", bbox_inches="tight")
+#         plt.close(fig)
+#         buffer.seek(0)
+#         chart_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+#         return JsonResponse({
+#             "user_info": {
+#                 "netID": current_user.netID,
+#                 "name": current_user.name,
+#             },
+#             "statistics": {
+#                 "total_count": total_count,
+#                 "macros": {
+#                     "labels": macro_labels,
+#                     "values": macro_values,
+#                 },
+#                 "categories": {
+#                     "labels": category_labels,
+#                     "values": category_values,
+#                 }
+#             },
+#             "chart_base64": f"data:image/png;base64,{chart_base64}"
+#         })
+
+class MealReportsView(APIView):
     """
     Reports page showing:
     - Macronutrient summary
     - Category summary
     - Totals line
     - CSV + JSON download buttons
-
-    TEMPORARY TESTING: uses first user in database until authentication is implemented
     """
+    # 1. Require the user to be logged in with a valid token
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # -------- TEMPORARY TEST USER --------
-        current_user = UserProfile.objects.first()  # replace with request.user.userprofile later
+        # 2. Grab the actual authenticated user and their profile
+        user = request.user
+        profile = user.profile
 
         # -------- Filter Meals --------
         start = request.GET.get("start")
         end = request.GET.get("end")
 
-        meals = Meal.objects.filter(user=current_user)
+        # 3. Filter meals by the authenticated user
+        meals = Meal.objects.filter(user=user)
+        
         if start and end:
             try:
                 start_dt = datetime.strptime(start, "%Y-%m-%d")
@@ -829,7 +952,10 @@ class MealReportsView(View):
             axs[1].text(0.5, 0.5, "No Category Data", ha="center")
         axs[1].set_title("Meal Category Distribution")
 
-        fig.suptitle(f"{current_user.netID}'s Meal Summary", fontsize=18, y=1.02)
+        # 4. Handle display name gracefully (Google users might not have a netID right away)
+        display_name = profile.netID if profile.netID else f"{user.first_name} {user.last_name}".strip()
+        
+        fig.suptitle(f"{display_name}'s Meal Summary", fontsize=18, y=1.02)
         fig.text(0.5, 0.95, f"Total Meals: {total_count}", ha="center", fontsize=12)
         fig.tight_layout(rect=[0, 0, 1, 0.88])
 
@@ -839,10 +965,11 @@ class MealReportsView(View):
         buffer.seek(0)
         chart_base64 = base64.b64encode(buffer.getvalue()).decode()
 
-        return JsonResponse({
+        # 5. Use DRF's Response instead of JsonResponse
+        return Response({
             "user_info": {
-                "netID": current_user.netID,
-                "name": current_user.name,
+                "netID": profile.netID,
+                "name": f"{user.first_name} {user.last_name}".strip(),
             },
             "statistics": {
                 "total_count": total_count,

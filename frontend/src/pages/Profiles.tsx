@@ -7,7 +7,8 @@ import { API_BASE } from "../config";
 import Logout from "../components/logout";
 
 interface UserProfile {
-  netID: string;
+  user_id: string;
+  netID?: string;
   first_name: string;
   last_name: string;
 
@@ -23,6 +24,7 @@ interface UserProfile {
 
 interface Meal {
   meal_id: number;
+  user: string;
 
   total_calories: number;
   total_protein: number;
@@ -96,7 +98,7 @@ function Profiles() {
               <h4 className="font-semibold text-gray-800 mb-2">Meals</h4>
 
               {mealData
-                .filter((meal) => meal.user_id == profileData.netID)
+                .filter((meal) => meal.user == profileData.user_id)
                 .map((meal) => (
                   <div
                     key={meal.meal_id}
