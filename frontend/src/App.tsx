@@ -12,12 +12,16 @@ import Reports from "./pages/Reports";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import GGLogin from "./components/GGLogin";
+import Showcase from "./pages/Showcase";
 
 function App() {
   return (
     <>
       <BrowserRouter>
         <Routes>
+          {/* Design review — remove before final deploy */}
+          <Route path="/showcase" element={<Showcase />} />
+
           <Route path="/" element={<Base />}>
             <Route index element={<Dishes />} />
             <Route path="dishes" element={<Dishes />}></Route>

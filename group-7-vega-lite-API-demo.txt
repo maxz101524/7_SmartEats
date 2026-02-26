@@ -1,0 +1,30 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "title": "SmartEats: Dishes by Category",
+  "description": "Number of dishes available per food category at UIUC dining halls",
+  "data": {
+    "url": "https://smarteats-backend.onrender.com/api/dishes-by-category/",
+    "format": {"type": "json"}
+  },
+  "mark": {"type": "bar", "tooltip": true},
+  "encoding": {
+    "x": {
+      "field": "category",
+      "type": "nominal",
+      "title": "Food Category",
+      "axis": {"labelAngle": -40}
+    },
+    "y": {
+      "field": "count",
+      "type": "quantitative",
+      "title": "Number of Dishes"
+    },
+    "color": {
+      "field": "category",
+      "type": "nominal",
+      "legend": null
+    }
+  },
+  "width": 500,
+  "height": 300
+}

@@ -42,15 +42,15 @@ function Navbar() {
             </span>
           </Link>
 
+          {/* Nav links — desktop */}
           <ul className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => {
               const isActive = location.pathname === link.to;
-
               return (
                 <li key={link.to}>
                   <Link
                     to={link.to}
-                    className="relative px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200"
+                    className="relative px-3 py-1.5 rounded-[var(--se-radius-md)] text-sm font-medium transition-colors duration-150"
                     style={{
                       color: isActive ? "#ffffff" : "#8b95b0",
                       backgroundColor: isActive
@@ -58,13 +58,16 @@ function Navbar() {
                         : "transparent",
                     }}
                     onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.color = "#d0d5e2";
+                      if (!isActive)
+                        e.currentTarget.style.color = "var(--se-text-main)";
                     }}
                     onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.color = "#8b95b0";
+                      if (!isActive)
+                        e.currentTarget.style.color = "var(--se-text-muted)";
                     }}
                   >
                     {link.label}
+                    {/* Active indicator dot */}
                     {isActive && (
                       <span
                         className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
