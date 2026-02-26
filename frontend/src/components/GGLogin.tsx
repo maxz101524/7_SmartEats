@@ -1,12 +1,13 @@
 import { GoogleLogin } from "@react-oauth/google";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from "../config";
 
 const GGLogin = () => {
   const navigate = useNavigate();
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
-      const res = await axios.post("http://localhost:8000/api/google-login/", {
+      const res = await axios.post(`${API_BASE}/google-login/`, {
         id_token: credentialResponse.credential,
 
         access_token: credentialResponse.credential,

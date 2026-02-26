@@ -95,7 +95,7 @@ function Profiles() {
             </div>
 
             <div className="mt-4 border-t pt-3">
-              <h4 className="font-semibold text-gray-800 mb-2">Meals</h4>
+              {/* <h4 className="font-semibold text-gray-800 mb-2">Meals</h4>
 
               {mealData
                 .filter((meal) => meal.user == profileData.user_id)
@@ -111,7 +111,7 @@ function Profiles() {
                     <p>Fat: {meal.total_fat}</p>
                     <p className="text-gray-500 text-xs">Date: {meal.date}</p>
                   </div>
-                ))}
+                ))} */}
             </div>
           </div>
         </div>

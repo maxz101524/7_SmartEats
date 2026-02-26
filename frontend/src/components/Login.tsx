@@ -2,7 +2,9 @@ import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import GGLogin from "./GGLogin";
+import { API_BASE } from "../config";
 
+`${API_BASE}/halls/`;
 const Login = () => {
   const [netID, setNetID] = useState("");
   const [password, setPassword] = useState("");
@@ -14,7 +16,7 @@ const Login = () => {
     e.preventDefault();
     setError("");
     try {
-      const response = await axios.post("http://localhost:8000/api/login/", {
+      const response = await axios.post(`${API_BASE}/login/`, {
         netID: netID,
         password: password,
       });

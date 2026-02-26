@@ -153,6 +153,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://vega.github.io",
+    "https://seven-smarteats.onrender.com",
+    
 ]
 
 # CSRF Settings for cross-origin requests
