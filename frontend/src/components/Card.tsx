@@ -1,5 +1,4 @@
-import { ReactNode } from "react";
-
+import { type ReactNode } from "react";
 interface CardProps {
   children: ReactNode;
   className?: string;
@@ -39,9 +38,7 @@ export function Card({
         .join(" ")}
       style={{
         boxShadow: "var(--se-shadow-sm)",
-        ...(hover
-          ? undefined
-          : {}),
+        ...(hover ? undefined : {}),
       }}
       onMouseEnter={
         hover
