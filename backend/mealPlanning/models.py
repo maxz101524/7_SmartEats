@@ -140,7 +140,7 @@ class Meal(models.Model):
 
     meal_id = models.AutoField(primary_key=True)
     
-    category = models.CharField(blank=True, null=True)
+    category = models.CharField(max_length=100, blank=True, null=True)
 
     total_calories = models.PositiveIntegerField(default=0)
     total_protein = models.PositiveIntegerField(default=0)
