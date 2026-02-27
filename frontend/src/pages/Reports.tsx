@@ -43,27 +43,38 @@ function Reports() {
       .finally(() => setLoading(false));
   }, [navigate]);
 
-  // 2. Function to handle authenticated downloads
   const handleDownload = async (format: "csv" | "json") => {
     const token = localStorage.getItem("authToken");
     try {
       const response = await axios.get(
-        `${API_BASE}/export-meals/?format=${format}`,
+        // CHANGE HERE: Use file_type instead of format
+        `${API_BASE}/export-meals/?file_type=${format}`,
         {
           headers: { Authorization: `Token ${token}` },
-          responseType: "blob", // Important for file downloads
+          responseType: "blob",
         },
       );
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const mimeType = format === "csv" ? "text/csv" : "application/json";
+      const blob = new Blob([response.data], { type: mimeType });
+
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `meal_report.${format}`);
+
+      const timestamp = new Date().getTime();
+      link.setAttribute("download", `meal_report_${timestamp}.${format}`);
+
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch (err) {
-      alert("Failed to download file.");
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 100);
+    } catch (err: any) {
+      console.error("Download Error:", err);
+      alert("Failed to download file. Check the console.");
     }
   };
 
@@ -87,7 +98,6 @@ function Reports() {
 
   const { statistics, chart_base64 } = report;
 
-  // 3. Safe calculation for new users with 0 data
   const protein = statistics.macros.values[0] || 0;
   const carbs = statistics.macros.values[1] || 0;
   const fat = statistics.macros.values[2] || 0;

@@ -36,7 +36,7 @@ urlpatterns = [
     path("dishes-by-category/", api_views.api_dishes_by_category, name="api_dishes_by_category"),
     path("meals-per-day/", api_views.api_meals_per_day, name="api_meals_per_day"),
 
-    path("export-meals/", views.export_meals, name="export_meals"),
+    path('export-meals/', views.ExportMealsView.as_view(), name='export-meals'),
     path("meal-reports/", views.MealReportsView.as_view(), name="meal_reports"),
 
 

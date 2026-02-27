@@ -19,6 +19,13 @@ from django.utils import timezone
 import io
 from datetime import timedelta
 
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.http import HttpResponse, JsonResponse
+import csv
+from django.utils.timezone import now
+
 
 from .models import DiningHall, Dish, UserProfile, Meal
 from django.forms.models import model_to_dict
@@ -728,73 +735,140 @@ def nutrition_lookup_view(request):
 
 
 # @login_required
-def export_meals(request):
-    """
-    Export historical Meal records for CURRENT logged-in user as CSV or JSON.
-    """
+# def export_meals(request):
+#     """
+#     Export historical Meal records for CURRENT logged-in user as CSV or JSON.
+#     """
 
-    export_format = request.GET.get("format", "csv").lower()
+#     permission_classes = [IsAuthenticated]
 
-    # # Filter by current logged-in user
-    # meals = Meal.objects.filter(user=request.user.userprofile)
+#     export_format = request.GET.get("format", "csv").lower()
 
-    # temporary testing only
-    # Will be replaced with the currently logged-in user once authentication is implemented
-    # After that, this view will return only the data belonging to the authenticated user
-    fake_user = UserProfile.objects.first()
-    meals = Meal.objects.filter(user=fake_user).order_by("-date", "meal_id")
+#     # # Filter by current logged-in user
+#     # meals = Meal.objects.filter(user=request.user.userprofile)
 
-    timestamp = now().strftime("%Y-%m-%d_%H-%M")
+#     # temporary testing only
+#     # Will be replaced with the currently logged-in user once authentication is implemented
+#     # After that, this view will return only the data belonging to the authenticated user
+#     fake_user = UserProfile.objects.first()
+#     meals = Meal.objects.filter(user=fake_user).order_by("-date", "meal_id")
 
-    # ---------------- JSON export ----------------
-    if export_format == "json":
-        meal_list = []
+#     timestamp = now().strftime("%Y-%m-%d_%H-%M")
 
-        for meal in meals:
-            meal_list.append({
-                "meal_id": meal.meal_id,
-                "total_calories": meal.total_calories,
-                "total_protein": meal.total_protein,
-                "total_carbohydrates": meal.total_carbohydrates,
-                "total_fat": meal.total_fat,
-                "date": meal.date.isoformat(),
+#     # ---------------- JSON export ----------------
+#     if export_format == "json":
+#         meal_list = []
+
+#         for meal in meals:
+#             meal_list.append({
+#                 "meal_id": meal.meal_id,
+#                 "total_calories": meal.total_calories,
+#                 "total_protein": meal.total_protein,
+#                 "total_carbohydrates": meal.total_carbohydrates,
+#                 "total_fat": meal.total_fat,
+#                 "date": meal.date.isoformat(),
+#             })
+
+#         data = {
+#             "generated_at": now().isoformat(),
+#             "record_count": meals.count(),
+#             "meals": meal_list
+#         }
+
+#         response = JsonResponse(data, json_dumps_params={"indent": 2})
+#         response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.json"'
+#         return response
+
+#     # ---------------- CSV export ----------------
+#     response = HttpResponse(content_type="text/csv")
+#     response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.csv"'
+
+#     writer = csv.writer(response)
+#     writer.writerow([
+#         "Meal ID",
+#         "Total Calories",
+#         "Total Protein (g)",
+#         "Total Carbohydrates (g)",
+#         "Total Fat (g)",
+#         "Date"
+#     ])
+
+#     for meal in meals:
+#         writer.writerow([
+#             meal.meal_id,
+#             meal.total_calories,
+#             meal.total_protein,
+#             meal.total_carbohydrates,
+#             meal.total_fat,
+#             meal.date
+#         ])
+
+#     return response
+
+
+
+
+
+class ExportMealsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        export_format = request.GET.get("file_type", "csv").lower()
+        
+        # Filter by the authenticated user
+        meals = Meal.objects.filter(user=request.user).order_by("-date")
+        timestamp = now().strftime("%Y-%m-%d_%H-%M")
+
+        # ==========================================
+        #               JSON EXPORT
+        # ==========================================
+        if export_format == "json":
+            meal_list = []
+            for m in meals:
+                meal_list.append({
+                    "meal_id": getattr(m, 'meal_id', 'N/A'),
+                    "total_calories": float(m.total_calories or 0),
+                    "total_protein": float(m.total_protein or 0),
+                    "total_carbohydrates": float(m.total_carbohydrates or 0),
+                    "total_fat": float(m.total_fat or 0),
+                    "date": m.date.isoformat() if hasattr(m, 'date') and m.date else "",
+                })
+
+            response = JsonResponse({
+                "generated_at": now().isoformat(),
+                "record_count": meals.count(),
+                "meals": meal_list
             })
+            
+            response["Content-Disposition"] = f'attachment; filename="meals_{timestamp}.json"'
+            response["Access-Control-Expose-Headers"] = "Content-Disposition"
+            return response
 
-        data = {
-            "generated_at": now().isoformat(),
-            "record_count": meals.count(),
-            "meals": meal_list
-        }
+        # ==========================================
+        #               CSV EXPORT
+        # ==========================================
+        
+        # 'utf-8-sig' ensures Excel reads the file correctly
+        response = HttpResponse(content_type="text/csv; charset=utf-8-sig")
+        response["Content-Disposition"] = f'attachment; filename="meals_{timestamp}.csv"'
+        response["Access-Control-Expose-Headers"] = "Content-Disposition"
 
-        response = JsonResponse(data, json_dumps_params={"indent": 2})
-        response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.json"'
+        writer = csv.writer(response)
+        writer.writerow(["Meal ID", "Calories", "Protein(g)", "Carbs(g)", "Fat(g)", "Date"])
+
+        # Use str() and getattr() to guarantee NO Python crashes, 
+        # even if database fields are missing or contain weird string data.
+        for m in meals:
+            writer.writerow([
+                str(getattr(m, 'meal_id', 'N/A')),
+                str(getattr(m, 'total_calories', '0')),
+                str(getattr(m, 'total_protein', '0')),
+                str(getattr(m, 'total_carbohydrates', '0')),
+                str(getattr(m, 'total_fat', '0')),
+                str(getattr(m, 'date', 'N/A'))
+            ])
+
         return response
-
-    # ---------------- CSV export ----------------
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow([
-        "Meal ID",
-        "Total Calories",
-        "Total Protein (g)",
-        "Total Carbohydrates (g)",
-        "Total Fat (g)",
-        "Date"
-    ])
-
-    for meal in meals:
-        writer.writerow([
-            meal.meal_id,
-            meal.total_calories,
-            meal.total_protein,
-            meal.total_carbohydrates,
-            meal.total_fat,
-            meal.date
-        ])
-
-    return response
 
 
 
