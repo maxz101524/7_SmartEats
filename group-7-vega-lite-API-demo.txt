@@ -3,7 +3,7 @@
   "title": "SmartEats: Dishes by Category",
   "description": "Number of dishes available per food category at UIUC dining halls",
   "data": {
-    "url": "https://smarteats-backend.onrender.com/api/dishes-by-category/",
+    "url": "https://seven-smarteats.onrender.com/api/dishes-by-category/",
     "format": {"type": "json"}
   },
   "mark": {"type": "bar", "tooltip": true},
