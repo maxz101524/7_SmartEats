@@ -1,5 +1,86 @@
 
 ================================================================================
+Week 5 — A5: Authentication, Google OAuth, Public API & Individual Deployment
+================================================================================
+
+SECTION 1: Token-Based Authentication (dj-rest-auth + DRF)
+------------------------------------------------------------
+- Used DRF's TokenAuthentication as the default auth class alongside
+  SessionAuthentication (configured in REST_FRAMEWORK in base.py).
+- RegisterAPIView (APIView) creates a Django User and linked UserProfile in one
+  request; the UserProfile is auto-created via a post_save signal on User.
+  Returns a token immediately so the user is logged in after registration.
+- LoginAPIView authenticates with Django's authenticate(username, password),
+  retrieves or creates a Token, and returns token + first_name + netID + goal
+  so the frontend can personalize the UI without a second API call.
+- Logout is frontend-only: localStorage.removeItem("authToken") clears the
+  token; no server-side token invalidation (acceptable for this scope).
+- Protected views use permission_classes = [IsAuthenticated]: UserProfileView
+  (/api/profile/) and MealReportsView (/api/meal-reports/).
+- Token is passed as "Authorization: Token <key>" header; frontend sets this
+  via axios default headers after login.
+
+
+SECTION 2: Google OAuth (django-allauth + @react-oauth/google)
+---------------------------------------------------------------
+- Backend: django-allauth with allauth.socialaccount.providers.google installed.
+  GoogleLogin view (SocialLoginView from dj_rest_auth) uses GoogleOAuth2Adapter
+  and OAuth2Client. Receives the Google id_token from the frontend and exchanges
+  it for a DRF Token, returning res.data.key.
+- SITE_ID = 2 required in base.py for allauth's Sites framework.
+- SOCIALACCOUNT_PROVIDERS configured in base.py with profile + email scopes.
+- Frontend: @react-oauth/google provides <GoogleLogin> component. On success,
+  sends credentialResponse.credential (the id_token) to /api/google-login/.
+  Stores the returned key as "authToken" in localStorage and navigates to /dishes.
+- GoogleOAuthProvider wraps the app in main.tsx with the Google client ID from
+  the environment.
+- callback_url in GoogleLogin view is set to the local dev URL; production OAuth
+  redirect URIs must be registered in Google Cloud Console for each deployed domain.
+
+
+SECTION 3: Frontend Auth Flow
+------------------------------
+- Login.tsx: POST /api/login/ with netID + password. Stores token and firstName
+  in localStorage. Navigates to /dishes on success.
+- Register.tsx: POST /api/register/ with full profile data (netID, email,
+  password, name, sex, age, height_cm, weight_kg, goal). Auto-logs in on success.
+- GGLogin.tsx: Wraps @react-oauth/google's <GoogleLogin>. Reused inside Login.tsx
+  so both login and signup surfaces offer "Continue with Google".
+- logout.tsx: Removes authToken and userFirstName from localStorage, navigates
+  to /login.
+- Navbar.tsx: Reads localStorage.getItem("authToken") on each render. Shows
+  Login button when no token, Logout button when token present.
+
+
+SECTION 4: Public API for Vega-Lite (Part 3)
+---------------------------------------------
+- Two endpoints in api_views.py are intentionally public (no auth decorator):
+    /api/dishes-by-category/ → [{ category, count }]
+    /api/meals-per-day/      → [{ date, count }]
+- Both use ORM .values() + .annotate(Count()) for clean aggregation JSON.
+- group-7-vega-lite-API-demo.txt contains the Vega-Lite spec using
+  data: { url: "https://seven-smarteats.onrender.com/api/dishes-by-category/" }
+  so the chart pulls live data from the team's production backend.
+- Alternative uses (A5-part3-deliverables/):
+    1. Python script (requests + json) — aggregates dish counts per category.
+    2. Google Sheets import — =IMPORTDATA() formula pulls the JSON endpoint.
+    3. Jupyter notebook — pandas + matplotlib statistical analysis of the data.
+
+
+SECTION 5: Individual Deployment (A5.2)
+----------------------------------------
+- Each team member deploys their own Vercel (frontend) + Render (backend) pair.
+- Frontend (Vercel): Connected to GitHub main branch, auto-deploys on push.
+  Env var VITE_BACKEND_BASE_URL points to the individual's Render backend.
+  config.ts constructs API_BASE = BACKEND_BASE + "/api" — no trailing slash
+  in the env var or the result becomes //api (broken).
+- Backend (Render): Connected to GitHub main branch. build.sh runs pip install,
+  collectstatic, and migrate. db.sqlite3 is committed so seeded data persists
+  across redeploys on the free tier.
+- Production URLs (Max): https://smarteats7.vercel.app / https://smarteats-backend.onrender.com
+
+
+================================================================================
 Week 4 — A4: Internal/External APIs, Charts, Exports & Deployment
 ================================================================================
 
@@ -12,7 +93,7 @@ SECTION 1: Internal JSON APIs for Charts
 - These JSON endpoints only return serialized data (no HTML), using
   JsonResponse(..., safe=False) or dict-shaped responses, which makes them usable
   both by our React frontend and by external tools like the Vega-Lite editor.
-- In production, these APIs are reachable at /api/... URLs on PythonAnywhere, so
+- In production, these APIs are reachable at /api/... URLs on Render, so
   classmates can point Vega-Lite's data.url directly at our deployed endpoints.
 
 
@@ -84,9 +165,8 @@ SECTION 5: Static Files, Vega-Lite, and Deployment Prep
   directory out of Git to avoid bloating the repo.
 - Confirmed the base template (and React entry) use {% load static %} and
   {% static %} for CSS/JS so styling loads correctly on multiple pages.
-- Prepared deployment flow for PythonAnywhere: commit db.sqlite3 for this
-  assignment, push code + requirements.txt, create a virtualenv on the server,
-  pip install -r requirements.txt, run collectstatic with production settings,
+- Prepared deployment flow for Render: commit db.sqlite3 for this assignment,
+  push code + requirements.txt, run collectstatic with production settings,
   and wire the WSGI config to serve SmartEats.
 
 
@@ -124,13 +204,12 @@ Static file organization choice:
 CSS approach :
 - custom.css remaps Tailwind custom properties (--color-white,
   --color-gray-50 through --color-gray-950, --color-blue-*, --color-green-*,
-  etc.) to dark-palette equivalents. 
+  etc.) to dark-palette equivalents.
 - The Inter font is loaded via <link> in index.html and set through the
   --font-sans variable that Tailwind v4 reads for its default sans-serif
-  stack. 
+  stack.
 - The SmartEats logo is stored at src/static/images/smarteats-logo.png and
   imported in Navbar.tsx as a module
-
 
 
 SECTION 4: Data Visualization (Matplotlib)
@@ -144,7 +223,6 @@ SECTION 4: Data Visualization (Matplotlib)
 - dishes_per_hall_png: bar chart — uses annotate(Count) to count dishes
   per dining hall. Served at /api/charts/dishes_per_hall.png.
 - MealSummaryView: dual pie chart (macronutrient % + meal category %).
- 
 
 
 SECTION 5: Forms & User Input
@@ -164,7 +242,7 @@ SECTION 5: Forms & User Input
 SECTION 6: Creating APIs
 --------------------------
 API planning:
-Since our project uses React, an API would be the primary way to connect the backend and frontend to send data; therefore, 
+Since our project uses React, an API would be the primary way to connect the backend and frontend to send data; therefore,
 every piece of data that we want to display in the frontend needs to be passed via an API.
 
 Data served:
