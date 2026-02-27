@@ -1,4 +1,11 @@
 
+# AI / local tooling — kept local, not for teammates
+CLAUDE.md
+DESIGN_SYSTEM_SMARTEATS.md
+design/
+.agent/
+.cursor/
+
 #backend
 .env
 __pycache__/
