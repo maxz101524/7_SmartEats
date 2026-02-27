@@ -37,8 +37,15 @@ function Reports() {
       .get(`${API_BASE}/meal-reports/`, config)
       .then((res) => setReport(res.data))
       .catch((err) => {
-        console.error(err);
-        setError("Failed to load report data. Please check your connection.");
+        const status = err.response?.status;
+        const message =
+          status === 401
+            ? "Please log in again."
+            : status
+              ? `Failed to load report data (${status}). Check console for details.`
+              : "Failed to load report data. Check your connection and that the backend URL is correct.";
+        console.error("Meal reports fetch failed:", err.message, err.response?.data);
+        setError(message);
       })
       .finally(() => setLoading(false));
   }, [navigate]);

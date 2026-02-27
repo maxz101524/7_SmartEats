@@ -154,7 +154,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "https://vega.github.io",
     "https://seven-smarteats.onrender.com",
-    
+    "https://smarteats7.vercel.app",
 ]
 
 # CSRF Settings for cross-origin requests
