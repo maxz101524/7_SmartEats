@@ -52,7 +52,6 @@ SmartEats/
 │
 ├── A5-part3-deliverables/            # Public API alternative use case demos
 ├── group-7-vega-lite-API-demo.txt    # Vega-Lite spec (submission artifact)
-├── CLAUDE.md                         # Claude Code project instructions
 └── README.md
 ```
 
