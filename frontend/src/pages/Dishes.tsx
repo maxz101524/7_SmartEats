@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import ShowData from "../components/ShowData";
 import { useNavigate } from "react-router-dom";
-import AddDish from "../components/AddDish";
+// import AddDish from "../components/AddDish";
 import axios from "axios";
 import { API_BASE } from "../config";
 export interface Dish {
@@ -80,22 +80,43 @@ function Dishes() {
         <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Total counts */}
           <div className="bg-white rounded-xl shadow-sm border p-5">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Totals</h3>
-            <p className="text-3xl font-bold text-gray-900">{stats.total_dishes} <span className="text-base font-normal text-gray-500">dishes</span></p>
-            <p className="text-lg font-semibold text-gray-600 mt-1">{stats.total_halls} <span className="text-sm font-normal text-gray-500">dining halls</span></p>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Totals
+            </h3>
+            <p className="text-3xl font-bold text-gray-900">
+              {stats.total_dishes}{" "}
+              <span className="text-base font-normal text-gray-500">
+                dishes
+              </span>
+            </p>
+            <p className="text-lg font-semibold text-gray-600 mt-1">
+              {stats.total_halls}{" "}
+              <span className="text-sm font-normal text-gray-500">
+                dining halls
+              </span>
+            </p>
           </div>
 
           {/* Dishes per category (grouped summary) */}
           <div className="bg-white rounded-xl shadow-sm border p-5">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">By Category</h3>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              By Category
+            </h3>
             {stats.dishes_by_category.length === 0 ? (
               <p className="text-gray-400 text-sm">No categories found.</p>
             ) : (
               <ul className="space-y-1">
                 {stats.dishes_by_category.map((cat) => (
-                  <li key={cat.category} className="flex justify-between text-sm">
-                    <span className="text-gray-700">{cat.category || "Uncategorized"}</span>
-                    <span className="font-semibold text-gray-900">{cat.count}</span>
+                  <li
+                    key={cat.category}
+                    className="flex justify-between text-sm"
+                  >
+                    <span className="text-gray-700">
+                      {cat.category || "Uncategorized"}
+                    </span>
+                    <span className="font-semibold text-gray-900">
+                      {cat.count}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -104,15 +125,24 @@ function Dishes() {
 
           {/* Dishes per dining hall (grouped summary) */}
           <div className="bg-white rounded-xl shadow-sm border p-5">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">By Dining Hall</h3>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              By Dining Hall
+            </h3>
             {stats.dishes_by_hall.length === 0 ? (
               <p className="text-gray-400 text-sm">No dining halls found.</p>
             ) : (
               <ul className="space-y-1">
                 {stats.dishes_by_hall.map((hall) => (
-                  <li key={hall.dining_hall__name} className="flex justify-between text-sm">
-                    <span className="text-gray-700">{hall.dining_hall__name}</span>
-                    <span className="font-semibold text-gray-900">{hall.count}</span>
+                  <li
+                    key={hall.dining_hall__name}
+                    className="flex justify-between text-sm"
+                  >
+                    <span className="text-gray-700">
+                      {hall.dining_hall__name}
+                    </span>
+                    <span className="font-semibold text-gray-900">
+                      {hall.count}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -158,7 +188,11 @@ function Dishes() {
 
             {/* Uses model-driven URL from get_absolute_url() instead of manually building the path */}
             <button
-              onClick={() => navigate(`/dishes/${dish.dish_id}`, { state: { detailUrl: dish.detail_url } })}
+              onClick={() =>
+                navigate(`/dishes/${dish.dish_id}`, {
+                  state: { detailUrl: dish.detail_url },
+                })
+              }
               className="mt-4 w-full py-2 bg-gray-50 hover:bg-blue-600 hover:text-white text-gray-700 text-sm font-medium rounded-lg transition-colors border border-gray-200 hover:border-blue-600"
             >
               View Details
@@ -167,7 +201,7 @@ function Dishes() {
         )}
       />
 
-      <AddDish></AddDish>
+      {/* <AddDish></AddDish> */}
     </>
   );
 }
