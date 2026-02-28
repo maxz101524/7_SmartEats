@@ -133,14 +133,12 @@ export default function Menu() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    // Pull flush against Base.tsx's py-6 and horizontal padding
     <div
       style={{
-        marginTop: -24,
-        marginLeft: -16,
-        marginRight: -16,
         display: "flex",
         minHeight: "calc(100vh - 76px)",
+        marginLeft: -16,
+        marginRight: -16,
       }}
       className="sm:-mx-6 lg:-mx-8"
     >
