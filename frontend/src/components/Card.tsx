@@ -7,6 +7,7 @@ interface CardProps {
   /** Uses --se-primary-dim background — for the hero stat tile (calories) */
   hero?: boolean;
   padding?: "none" | "sm" | "md" | "lg";
+  onClick?: () => void;
 }
 
 export function Card({
@@ -15,6 +16,7 @@ export function Card({
   hover = false,
   hero = false,
   padding = "md",
+  onClick,
 }: CardProps) {
   const paddingClass = {
     none: "",
@@ -25,6 +27,7 @@ export function Card({
 
   return (
     <div
+      onClick={onClick}
       className={[
         "rounded-[var(--se-radius-lg)] border border-[var(--se-border)]",
         hero ? "bg-[var(--se-primary-dim)]" : "bg-[var(--se-bg-surface)]",
