@@ -9,7 +9,7 @@
   /* ── §3.1 Color Tokens ─────────────────────────────────────── */
 
   /* Base Surfaces — warm light mode */
-  --se-bg-base: #f3f0ea; /* Page background (warm cream) */
+  --se-bg-base: #f5f3f0; /* Page background (clean cream-grey) */
   --se-bg-surface: #ffffff; /* Cards, panels, nav bar */
   --se-bg-elevated: #f8f6f2; /* Modals, tooltips, dropdowns */
   --se-bg-subtle: #ede9e1; /* Subtle containers, table rows, skeleton base */
