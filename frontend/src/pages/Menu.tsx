@@ -144,7 +144,7 @@ export default function Menu() {
     >
       {/* ── Mobile: fixed chip bar (md:hidden) ──────────────────── */}
       <div
-        className="md:hidden"
+        className="flex md:hidden"
         style={{
           position: "fixed",
           top: 76,
@@ -154,7 +154,6 @@ export default function Menu() {
           background: "var(--se-bg-surface)",
           borderBottom: "1px solid var(--se-border)",
           padding: "8px 16px",
-          display: "flex",
           gap: 8,
           overflowX: "auto",
           WebkitOverflowScrolling: "touch",

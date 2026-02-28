@@ -164,16 +164,18 @@ export default function AIMeals() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
 
   // Pick 3 prompt suggestions once per mount
   const suggestions = useMemo(() => pickRandom(ALL_PROMPTS, 3), []);
 
-  // Auto-scroll to latest message
+  // Auto-scroll to latest message within the container (not the window)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages, loading]);
 
   const sendMessage = async (text: string) => {
@@ -252,6 +254,7 @@ export default function AIMeals() {
       >
         {/* ── Messages area ─────────────────────────────────────── */}
         <div
+          ref={messagesContainerRef}
           style={{
             flex: 1,
             overflowY: "auto",
@@ -297,7 +300,7 @@ export default function AIMeals() {
                   margin: "0 0 6px",
                 }}
               >
-                SmartEats AI
+                <span className="text-gradient-vivid">SmartEats AI</span>
               </h1>
               <p
                 style={{
@@ -427,7 +430,6 @@ export default function AIMeals() {
 
               {/* Typing indicator */}
               {loading && <TypingDots />}
-              <div ref={messagesEndRef} />
             </div>
           )}
         </div>

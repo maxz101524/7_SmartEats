@@ -82,7 +82,7 @@ export default function Home() {
             margin: 0,
           }}
         >
-          Eat Smarter at UIUC
+          Eat Smarter at <span className="text-gradient-vivid">UIUC</span>
         </h1>
 
         <p
