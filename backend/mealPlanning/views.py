@@ -158,7 +158,11 @@ def dining_hall_view(request):
             "Dining_Hall_ID": hall.Dining_Hall_ID,
             "name": hall.name,
             "location":hall.location,
-            "dishes": list(hall.dish.values('dish_id', 'dish_name', 'calories', 'protein', 'carbohydrates', 'fat'))
+            "dishes": list(hall.dish.values(
+                'dish_id', 'dish_name', 'calories', 'protein', 'carbohydrates', 'fat',
+                'fiber', 'sodium', 'allergens', 'dietary_flags', 'nutrition_source',
+                'ai_confidence', 'meal_period', 'course', 'serving_unit', 'serving_size',
+            ))
         })
 
     return JsonResponse(data, safe=False)
@@ -227,11 +231,22 @@ def dish_list_view(request):
             'dish_id': dish.dish_id,
             'dish_name': dish.dish_name,
             'calories': dish.calories,
+            'protein': dish.protein,
+            'carbohydrates': dish.carbohydrates,
+            'fat': dish.fat,
+            'fiber': dish.fiber,
+            'sodium': dish.sodium,
             'category': dish.category,
+            'allergens': dish.allergens,
+            'dietary_flags': dish.dietary_flags,
+            'serving_unit': dish.serving_unit,
+            'serving_size': dish.serving_size,
+            'course': dish.course,
+            'meal_period': dish.meal_period,
             'dining_hall__name': dish.dining_hall.name,
-            'detail_url': dish.get_absolute_url(),  # model-driven URL
+            'detail_url': dish.get_absolute_url(),
         })
-    
+
     return JsonResponse(data, safe=False)
 
 def dish_detail_view(request, dish_id):
