@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
@@ -16,7 +16,17 @@ interface Dish {
   protein: number;
   carbohydrates: number;
   fat: number;
+  fiber?: number;
+  sodium?: number;
   category?: string;
+  allergens?: string[];
+  dietary_flags?: string[];
+  serving_unit?: string;
+  serving_size?: string;
+  course?: string;
+  meal_period?: string;
+  nutrition_source?: string;
+  ai_confidence?: string;
 }
 
 interface DiningHall {
@@ -32,6 +42,11 @@ interface DishStats {
   dishes_by_category: { category: string; count: number }[];
   dishes_by_hall: { dining_hall__name: string; count: number }[];
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Halal", "Jain"];
+const ALLERGEN_FILTERS = ["Gluten", "Milk", "Eggs", "Soy", "Corn", "Wheat", "Fish"];
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
@@ -77,8 +92,12 @@ export default function Menu() {
   const [selectedHall, setSelectedHall] = useState<DiningHall | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
   const [stats, setStats] = useState<DishStats | null>(null);
+
+  // Filter state
+  const [activeMealPeriod, setActiveMealPeriod] = useState("All");
+  const [activeDietary, setActiveDietary] = useState<Set<string>>(new Set());
+  const [excludedAllergens, setExcludedAllergens] = useState<Set<string>>(new Set());
 
   // ── Fetch halls ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -118,35 +137,78 @@ export default function Menu() {
   const selectHall = (hall: DiningHall) => {
     setSelectedHall(hall);
     setSearch("");
-    setActiveCategory("All");
+    setActiveMealPeriod("All");
+    setActiveDietary(new Set());
+    setExcludedAllergens(new Set());
     navigate(`/menu/${hall.Dining_Hall_ID}`);
   };
 
-  // ── Derived: unique categories for filter chips ───────────────────────────
-  const categories: string[] = selectedHall
-    ? [
-        "All",
-        ...Array.from(
-          new Set(
-            selectedHall.dishes
-              .map((d) => d.category)
-              .filter((c): c is string => Boolean(c))
-          )
-        ).sort(),
-      ]
-    : ["All"];
+  // ── Toggle helpers ────────────────────────────────────────────────────────
+  const toggleDietary = (flag: string) => {
+    setActiveDietary((prev) => {
+      const next = new Set(prev);
+      if (next.has(flag)) next.delete(flag);
+      else next.add(flag);
+      return next;
+    });
+  };
+
+  const toggleAllergen = (allergen: string) => {
+    setExcludedAllergens((prev) => {
+      const next = new Set(prev);
+      if (next.has(allergen)) next.delete(allergen);
+      else next.add(allergen);
+      return next;
+    });
+  };
+
+  // ── Derived: available meal periods ────────────────────────────────────────
+  const mealPeriods = useMemo(() => {
+    if (!selectedHall) return ["All"];
+    const periods = new Set(
+      selectedHall.dishes
+        .map((d) => d.meal_period)
+        .filter((p): p is string => Boolean(p))
+    );
+    return ["All", ...Array.from(periods).sort()];
+  }, [selectedHall]);
 
   // ── Derived: filtered dishes ──────────────────────────────────────────────
-  const filteredDishes: Dish[] = selectedHall
-    ? selectedHall.dishes.filter((d) => {
-        const matchSearch = d.dish_name
-          .toLowerCase()
-          .includes(search.toLowerCase());
-        const matchCat =
-          activeCategory === "All" || d.category === activeCategory;
-        return matchSearch && matchCat;
-      })
-    : [];
+  const filteredDishes = useMemo(() => {
+    if (!selectedHall) return [];
+    return selectedHall.dishes.filter((d) => {
+      // Text search
+      if (search && !d.dish_name.toLowerCase().includes(search.toLowerCase())) return false;
+      // Meal period
+      if (activeMealPeriod !== "All" && d.meal_period !== activeMealPeriod) return false;
+      // Dietary flags: dish must have ALL selected flags
+      for (const flag of activeDietary) {
+        if (flag === "Gluten-Free") {
+          if (d.allergens?.includes("Gluten")) return false;
+        } else {
+          if (!d.dietary_flags?.includes(flag)) return false;
+        }
+      }
+      // Allergen exclusions: dish must NOT have any excluded allergen
+      for (const allergen of excludedAllergens) {
+        if (d.allergens?.includes(allergen)) return false;
+      }
+      return true;
+    });
+  }, [selectedHall, search, activeMealPeriod, activeDietary, excludedAllergens]);
+
+  // ── Derived: group by station (serving_unit) ──────────────────────────────
+  const stationGroups = useMemo(() => {
+    const groups: Record<string, Dish[]> = {};
+    for (const dish of filteredDishes) {
+      const station = dish.serving_unit || "Other";
+      (groups[station] ??= []).push(dish);
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredDishes]);
+
+  const hasActiveFilters =
+    search || activeMealPeriod !== "All" || activeDietary.size > 0 || excludedAllergens.size > 0;
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -333,7 +395,7 @@ export default function Menu() {
                 {selectedHall.location}
                 {" · "}
                 <span style={{ color: "var(--se-text-secondary)", fontWeight: 600 }}>
-                  {selectedHall.dishes.length} dishes
+                  {filteredDishes.length} of {selectedHall.dishes.length} dishes
                 </span>
               </p>
             </div>
@@ -365,53 +427,135 @@ export default function Menu() {
               }
             />
 
-            {/* Category filter chips */}
-            {categories.length > 1 && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-                {categories.map((cat) => (
+            {/* Meal period tabs */}
+            {mealPeriods.length > 1 && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                {mealPeriods.map((period) => (
                   <FilterChip
-                    key={cat}
-                    label={cat}
-                    active={activeCategory === cat}
-                    onClick={() => setActiveCategory(cat)}
+                    key={period}
+                    label={period}
+                    active={activeMealPeriod === period}
+                    onClick={() => setActiveMealPeriod(period)}
                   />
                 ))}
               </div>
             )}
 
-            {/* Dish list */}
-            {filteredDishes.length === 0 ? (
+            {/* Dietary preference chips */}
+            <div style={{ marginBottom: 8 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--se-text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 6px" }}>
+                Dietary
+              </p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {DIETARY_FILTERS.map((flag) => (
+                  <FilterChip
+                    key={flag}
+                    label={flag}
+                    active={activeDietary.has(flag)}
+                    onClick={() => toggleDietary(flag)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Allergen exclusion chips */}
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--se-text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 6px" }}>
+                Exclude Allergens
+              </p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {ALLERGEN_FILTERS.map((allergen) => (
+                  <FilterChip
+                    key={allergen}
+                    label={allergen}
+                    active={excludedAllergens.has(allergen)}
+                    onClick={() => toggleAllergen(allergen)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Dish list grouped by station */}
+            {stationGroups.length === 0 ? (
               <EmptyState
-                message={
-                  search || activeCategory !== "All"
-                    ? "No dishes match"
-                    : "No dishes found"
-                }
+                message={hasActiveFilters ? "No dishes match" : "No dishes found"}
                 sub={
-                  search || activeCategory !== "All"
-                    ? "Try a different search term or category."
+                  hasActiveFilters
+                    ? "Try adjusting your filters or search term."
                     : "This hall has no dishes in the database."
                 }
               />
             ) : (
-              <Card padding="none">
-                {filteredDishes.map((dish) => (
-                  <div
-                    key={dish.dish_id}
-                    onClick={() => navigate(`/dishes/${dish.dish_id}`)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <FoodListItem
-                      dishName={dish.dish_name}
-                      category={dish.category}
-                      hallName={selectedHall.name}
-                      calories={dish.calories}
-                      protein={dish.protein}
-                    />
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                {stationGroups.map(([station, dishes]) => (
+                  <div key={station}>
+                    {/* Station header */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: "var(--se-text-faint)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                          margin: 0,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {station}
+                      </p>
+                      <div
+                        style={{
+                          flex: 1,
+                          height: 1,
+                          background: "var(--se-border)",
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "var(--se-text-faint)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {dishes.length}
+                      </span>
+                    </div>
+
+                    {/* Dishes in this station */}
+                    <Card padding="none">
+                      {dishes.map((dish) => (
+                        <div
+                          key={dish.dish_id}
+                          onClick={() => navigate(`/dishes/${dish.dish_id}`)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <FoodListItem
+                            dishName={dish.dish_name}
+                            category={dish.category}
+                            servingUnit={station}
+                            servingSize={dish.serving_size}
+                            calories={dish.calories}
+                            protein={dish.protein}
+                            carbohydrates={dish.carbohydrates}
+                            fat={dish.fat}
+                            dietaryFlags={dish.dietary_flags}
+                          />
+                        </div>
+                      ))}
+                    </Card>
                   </div>
                 ))}
-              </Card>
+              </div>
             )}
+
             <div style={{ marginTop: 32 }}>
               <AddDish />
             </div>
