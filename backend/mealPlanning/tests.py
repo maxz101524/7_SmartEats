@@ -105,3 +105,73 @@ class UIUCDiningClientTest(TestCase):
         mock_post.side_effect = req.exceptions.Timeout("timeout")
         items = fetch_menu(option_id=1, date_str="2026-03-01")
         self.assertEqual(items, [])
+
+
+from mealPlanning.services.wger_client import lookup_nutrition
+
+
+class WgerClientTest(TestCase):
+
+    @patch("mealPlanning.services.wger_client.requests.get")
+    def test_exact_match_returns_nutrition(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "results": [
+                {
+                    "name": "Banana",
+                    "energy": 89,
+                    "protein": "1.100",
+                    "carbohydrates": "23.000",
+                    "fat": "0.300",
+                    "fiber": "2.600",
+                    "sodium": "0.001",
+                }
+            ]
+        }
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        result = lookup_nutrition("Banana")
+        self.assertIsNotNone(result)
+        self.assertEqual(result["calories"], 89)
+        self.assertAlmostEqual(result["protein"], 1.1)
+        self.assertAlmostEqual(result["fiber"], 2.6)
+
+    @patch("mealPlanning.services.wger_client.requests.get")
+    def test_no_match_returns_none(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"results": []}
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        result = lookup_nutrition("Xylophone Casserole")
+        self.assertIsNone(result)
+
+    @patch("mealPlanning.services.wger_client.requests.get")
+    def test_low_similarity_returns_none(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "results": [
+                {
+                    "name": "Completely Different Food Item",
+                    "energy": 200,
+                    "protein": "10.0",
+                    "carbohydrates": "20.0",
+                    "fat": "5.0",
+                    "fiber": "1.0",
+                    "sodium": "0.5",
+                }
+            ]
+        }
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        result = lookup_nutrition("Banana")
+        self.assertIsNone(result)
+
+    @patch("mealPlanning.services.wger_client.requests.get")
+    def test_timeout_returns_none(self, mock_get):
+        import requests as req
+        mock_get.side_effect = req.exceptions.Timeout("timeout")
+        result = lookup_nutrition("Banana")
+        self.assertIsNone(result)
