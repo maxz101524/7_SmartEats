@@ -20,6 +20,7 @@ urlpatterns = [
     path('dishes-manage/', views.DishManagementView.as_view(), name='dish_manage'),
 
     path('aimeals/', views.AIMealView.as_view(), name='meal_plan'),
+    path('ai-chat/', views.AIChatView.as_view(), name='ai_chat'),
 
     path('dish-stats/', views.dish_stats_view, name='dish_stats'),
 

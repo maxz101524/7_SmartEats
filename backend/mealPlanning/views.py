@@ -999,3 +999,29 @@ class MealReportsView(APIView):
             },
             "chart_base64": f"data:image/png;base64,{chart_base64}"
         })
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AIChatView(View):
+    """Gemini-powered AI chat endpoint for dining recommendations."""
+
+    def post(self, request, *args, **kwargs):
+        from mealPlanning.services import ai_chat
+
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        message = body.get("message", "").strip()
+        if not message:
+            return JsonResponse({"error": "Message is required"}, status=400)
+
+        result = ai_chat.get_response(message)
+        if result is None:
+            return JsonResponse(
+                {"error": "AI service unavailable. Please try again later."},
+                status=503,
+            )
+
+        return JsonResponse(result)
