@@ -42,6 +42,51 @@ class Dish(models.Model):
     carbohydrates = models.PositiveIntegerField(default=0)
     fat = models.PositiveIntegerField(default=0)
 
+    fiber = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Grams of fiber per serving"
+    )
+    sodium = models.DecimalField(
+        max_digits=7, decimal_places=2, null=True, blank=True,
+        help_text="Milligrams of sodium per serving"
+    )
+    allergens = models.JSONField(
+        default=list, blank=True,
+        help_text='e.g. ["Gluten", "Milk", "Soy"]'
+    )
+    dietary_flags = models.JSONField(
+        default=list, blank=True,
+        help_text='e.g. ["Vegetarian", "Vegan"]'
+    )
+    nutrition_source = models.CharField(
+        max_length=20, default="", blank=True,
+        help_text='"wger", "ai_generated", or "" (unknown)'
+    )
+    ai_confidence = models.CharField(
+        max_length=10, default="", blank=True,
+        help_text='"high", "medium", "low", or ""'
+    )
+    meal_period = models.CharField(
+        max_length=50, default="", blank=True,
+        help_text='e.g. "Continental Breakfast", "Lunch", "Dinner"'
+    )
+    course = models.CharField(
+        max_length=100, default="", blank=True,
+        help_text='e.g. "Entrees", "Breads"'
+    )
+    serving_unit = models.CharField(
+        max_length=100, default="", blank=True,
+        help_text='Station name, e.g. "Baked Expectations"'
+    )
+    uiuc_item_id = models.IntegerField(
+        null=True, blank=True,
+        help_text="ItemID from UIUC Dining API"
+    )
+    last_seen = models.DateField(
+        null=True, blank=True,
+        help_text="Last date this dish appeared on the menu"
+    )
+
     def get_absolute_url(self):
         return reverse('dish_detail', kwargs={'dish_id': self.dish_id})
 
