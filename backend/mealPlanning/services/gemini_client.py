@@ -5,47 +5,25 @@ import time
 from django.conf import settings
 
 try:
-    import google.generativeai as genai
+    from google import genai
 except ImportError:
     genai = None
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.5-flash"
 _last_call_time = 0.0
 RATE_LIMIT_SECONDS = 0.5
 
-NUTRITION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "calories": {"type": "integer"},
-        "protein": {"type": "number"},
-        "carbohydrates": {"type": "number"},
-        "fat": {"type": "number"},
-        "fiber": {"type": "number"},
-        "sodium": {"type": "number"},
-        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
-    },
-    "required": ["calories", "protein", "carbohydrates", "fat", "fiber", "sodium", "confidence"],
-}
 
-
-def _get_model():
+def _get_client():
     api_key = getattr(settings, "GEMINI_API_KEY", None)
     if not api_key:
         import os
         api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY not configured")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(
-        MODEL_NAME,
-        generation_config={
-            "temperature": 0,
-            "response_mime_type": "application/json",
-            "response_schema": NUTRITION_SCHEMA,
-        },
-    )
+    return genai.Client(api_key=api_key)
 
 
 def estimate_nutrition(
@@ -64,7 +42,7 @@ def estimate_nutrition(
     global _last_call_time
 
     if genai is None:
-        logger.error("google-generativeai not installed")
+        logger.error("google-genai not installed")
         return None
 
     prompt = (
@@ -76,7 +54,8 @@ def estimate_nutrition(
         f"Allergens: {', '.join(allergens or [])}\n"
         f"Dietary flags: {', '.join(dietary_flags or [])}\n\n"
         f"Return JSON with: calories (int), protein (g), carbohydrates (g), "
-        f"fat (g), fiber (g), sodium (mg), and confidence (high/medium/low)."
+        f"fat (g), fiber (g), sodium (mg), and confidence (high/medium/low).\n"
+        f"Return ONLY the JSON object, no markdown."
     )
 
     # Rate limiting
@@ -85,8 +64,15 @@ def estimate_nutrition(
         time.sleep(RATE_LIMIT_SECONDS - elapsed)
 
     try:
-        model = _get_model()
-        response = model.generate_content(prompt)
+        client = _get_client()
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config={
+                "temperature": 0,
+                "response_mime_type": "application/json",
+            },
+        )
         _last_call_time = time.time()
         data = json.loads(response.text)
         # Validate required keys
