@@ -4,13 +4,13 @@ from datetime import date
 from django.core.management.base import BaseCommand
 
 from mealPlanning.models import DiningHall, Dish
-from mealPlanning.services import uiuc_dining, wger_client, gemini_client
+from mealPlanning.services import uiuc_dining, gemini_client
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Fetch today's UIUC dining menu and enrich dishes with nutrition data."
+    help = "Fetch today's UIUC dining menu and enrich dishes with nutrition data via Gemini."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -19,12 +19,18 @@ class Command(BaseCommand):
             default=None,
             help="Menu date in YYYY-MM-DD format (defaults to today)",
         )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Re-enrich dishes that already have nutrition data",
+        )
 
     def handle(self, *args, **options):
         menu_date = options["date"] or date.today().isoformat()
-        self.stdout.write(f"Scraping menu for {menu_date}...")
+        force = options["force"]
+        self.stdout.write(f"Scraping menu for {menu_date} (force={force})...")
 
-        stats = {"halls": 0, "created": 0, "updated": 0, "wger": 0, "ai": 0, "skipped": 0}
+        stats = {"halls": 0, "created": 0, "updated": 0, "ai": 0, "skipped": 0, "force_enriched": 0}
         dishes_to_enrich = []
 
         for option_id, hall_name in uiuc_dining.DINING_OPTIONS.items():
@@ -62,31 +68,17 @@ class Command(BaseCommand):
                 else:
                     stats["updated"] += 1
 
-                # Queue for nutrition enrichment if needed
-                needs_nutrition = (dish.calories == 0 and dish.nutrition_source == "")
-                if needs_nutrition:
+                # Queue for nutrition enrichment
+                needs_nutrition = dish.nutrition_source == ""
+                if force or needs_nutrition:
                     dishes_to_enrich.append(dish)
                 else:
                     stats["skipped"] += 1
 
-        # Nutrition enrichment phase
-        self.stdout.write(f"Enriching {len(dishes_to_enrich)} dishes...")
+        # Nutrition enrichment phase — Gemini only
+        self.stdout.write(f"Enriching {len(dishes_to_enrich)} dishes via Gemini...")
 
         for dish in dishes_to_enrich:
-            wger_data = wger_client.lookup_nutrition(dish.dish_name)
-
-            if wger_data:
-                dish.calories = wger_data["calories"]
-                dish.protein = round(wger_data["protein"])
-                dish.carbohydrates = round(wger_data["carbohydrates"])
-                dish.fat = round(wger_data["fat"])
-                dish.fiber = wger_data["fiber"]
-                dish.sodium = wger_data["sodium"]
-                dish.nutrition_source = "wger"
-                dish.save()
-                stats["wger"] += 1
-                continue
-
             ai_data = gemini_client.estimate_nutrition(
                 dish_name=dish.dish_name,
                 category=dish.category,
@@ -103,9 +95,12 @@ class Command(BaseCommand):
                 dish.fat = round(ai_data["fat"])
                 dish.fiber = ai_data["fiber"]
                 dish.sodium = ai_data["sodium"]
+                dish.serving_size = ai_data.get("serving_size", "")
                 dish.nutrition_source = "ai_generated"
                 dish.ai_confidence = ai_data.get("confidence", "")
                 dish.save()
+                if force and dish.nutrition_source != "":
+                    stats["force_enriched"] += 1
                 stats["ai"] += 1
             else:
                 logger.warning("No nutrition data for '%s'", dish.dish_name)
@@ -113,6 +108,6 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"Done! Halls: {stats['halls']}, "
             f"Created: {stats['created']}, Updated: {stats['updated']}, "
-            f"Wger: {stats['wger']}, AI: {stats['ai']}, "
-            f"Skipped: {stats['skipped']}"
+            f"AI: {stats['ai']}, Skipped: {stats['skipped']}, "
+            f"Force re-enriched: {stats['force_enriched']}"
         ))

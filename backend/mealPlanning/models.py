@@ -82,6 +82,10 @@ class Dish(models.Model):
         null=True, blank=True,
         help_text="ItemID from UIUC Dining API"
     )
+    serving_size = models.CharField(
+        max_length=100, default="", blank=True,
+        help_text='e.g. "1 piece (~170g)", "1 cup", "1 bowl (~300g)"'
+    )
     last_seen = models.DateField(
         null=True, blank=True,
         help_text="Last date this dish appeared on the menu"
