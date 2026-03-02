@@ -16,6 +16,7 @@ import os
 from SmartEats_config.secrets_environment import env
 
 SECRET_KEY = env('SECRET_KEY')
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
