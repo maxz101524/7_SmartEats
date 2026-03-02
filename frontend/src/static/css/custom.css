@@ -50,3 +50,19 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--se-border-strong);
 }
+
+/* ── Animated gradient text ──────────────────────────────────── */
+.text-gradient-vivid {
+  background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 35%, #f97316 65%, #8b5cf6 100%);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 8s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}

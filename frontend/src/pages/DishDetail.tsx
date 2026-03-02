@@ -1,8 +1,19 @@
 import { useParams, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import type { Dish } from "./Dishes";
 import axios from "axios";
 import { BACKEND_BASE } from "../config";
+
+interface Dish {
+  dish_id: number;
+  dish_name: string;
+  calories: number;
+  category: string;
+  dining_hall__name: string;
+  protein: string;
+  carbohydrates: string;
+  fat: string;
+  detail_url: string;
+}
 
 function DishDetail() {
   const { id } = useParams();
