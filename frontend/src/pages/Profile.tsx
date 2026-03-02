@@ -458,6 +458,16 @@ function Profile() {
                   </div>
                 ))}
               </div>
+              <p style={{ marginTop: 16, fontSize: "var(--se-text-xs)", color: "var(--se-text-faint)" }}>
+                Estimated total calories:{" "}
+                <span style={{ fontWeight: "var(--se-weight-semibold)", color: "var(--se-text-secondary)" }}>
+                  {(
+                    (report.statistics.macros.values[0] ?? 0) * 4 +
+                    (report.statistics.macros.values[1] ?? 0) * 4 +
+                    (report.statistics.macros.values[2] ?? 0) * 9
+                  ).toFixed(0)} kcal
+                </span>
+              </p>
             </Card>
 
             {/* Macros + Categories tables */}

@@ -5,6 +5,8 @@ DESIGN_SYSTEM_SMARTEATS.md
 design/
 .agent/
 .cursor/
+.claude/
+*.pptx
 
 #backend
 .env

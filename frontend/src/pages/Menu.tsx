@@ -5,6 +5,7 @@ import { API_BASE } from "../config";
 import { FoodListItem } from "../components/FoodListItem";
 import { FilterChip } from "../components/FilterChip";
 import { Card } from "../components/Card";
+import AddDish from "../components/AddDish";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,13 @@ interface DiningHall {
   name: string;
   location: string;
   dishes: Dish[];
+}
+
+interface DishStats {
+  total_dishes: number;
+  total_halls: number;
+  dishes_by_category: { category: string; count: number }[];
+  dishes_by_hall: { dining_hall__name: string; count: number }[];
 }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
@@ -70,6 +78,7 @@ export default function Menu() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
+  const [stats, setStats] = useState<DishStats | null>(null);
 
   // ── Fetch halls ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -88,6 +97,14 @@ export default function Menu() {
       .catch((err) => console.error("Failed to load halls:", err))
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Fetch dish stats ──────────────────────────────────────────────────────
+  useEffect(() => {
+    axios
+      .get(`${API_BASE}/dish-stats/`)
+      .then((res) => setStats(res.data))
+      .catch((err) => console.error("Failed to load stats:", err));
+  }, []);
 
   // ── URL param → selected hall (back/forward) ──────────────────────────────
   useEffect(() => {
@@ -264,10 +281,39 @@ export default function Menu() {
         <div className="md:hidden" style={{ height: 52 }} />
 
         {!selectedHall ? (
-          <EmptyState
-            message="Select a dining hall"
-            sub="Choose a hall from the left to browse its menu items."
-          />
+          <div style={{ padding: 24 }}>
+            {stats && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
+                <div style={{ background: "var(--se-bg-surface)", borderRadius: "var(--se-radius-lg)", border: "1px solid var(--se-border)", padding: "16px 20px" }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--se-text-faint)", marginBottom: 8 }}>Totals</p>
+                  <p style={{ fontSize: 28, fontWeight: 800, color: "var(--se-text-main)", margin: 0 }}>{stats.total_dishes} <span style={{ fontSize: 14, fontWeight: 400, color: "var(--se-text-muted)" }}>dishes</span></p>
+                  <p style={{ fontSize: 16, fontWeight: 600, color: "var(--se-text-secondary)", margin: "4px 0 0" }}>{stats.total_halls} <span style={{ fontSize: 12, fontWeight: 400, color: "var(--se-text-faint)" }}>dining halls</span></p>
+                </div>
+                <div style={{ background: "var(--se-bg-surface)", borderRadius: "var(--se-radius-lg)", border: "1px solid var(--se-border)", padding: "16px 20px" }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--se-text-faint)", marginBottom: 8 }}>By Category</p>
+                  {stats.dishes_by_category.map((cat) => (
+                    <div key={cat.category} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, color: "var(--se-text-main)" }}>{cat.category || "Uncategorized"}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--se-text-main)" }}>{cat.count}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ background: "var(--se-bg-surface)", borderRadius: "var(--se-radius-lg)", border: "1px solid var(--se-border)", padding: "16px 20px" }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--se-text-faint)", marginBottom: 8 }}>By Dining Hall</p>
+                  {stats.dishes_by_hall.map((hall) => (
+                    <div key={hall.dining_hall__name} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, color: "var(--se-text-main)" }}>{hall.dining_hall__name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--se-text-main)" }}>{hall.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <EmptyState
+              message="Select a dining hall"
+              sub="Choose a hall from the left to browse its menu items."
+            />
+          </div>
         ) : (
           <div style={{ padding: 24 }}>
             {/* Hall header */}
@@ -350,17 +396,25 @@ export default function Menu() {
             ) : (
               <Card padding="none">
                 {filteredDishes.map((dish) => (
-                  <FoodListItem
+                  <div
                     key={dish.dish_id}
-                    dishName={dish.dish_name}
-                    category={dish.category}
-                    hallName={selectedHall.name}
-                    calories={dish.calories}
-                    protein={dish.protein}
-                  />
+                    onClick={() => navigate(`/dishes/${dish.dish_id}`)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <FoodListItem
+                      dishName={dish.dish_name}
+                      category={dish.category}
+                      hallName={selectedHall.name}
+                      calories={dish.calories}
+                      protein={dish.protein}
+                    />
+                  </div>
                 ))}
               </Card>
             )}
+            <div style={{ marginTop: 32 }}>
+              <AddDish />
+            </div>
           </div>
         )}
       </div>
