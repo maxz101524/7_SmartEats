@@ -229,3 +229,124 @@ class GeminiClientTest(TestCase):
             meal_period="Lunch",
         )
         self.assertIsNone(result)
+
+
+from django.core.management import call_command
+from io import StringIO
+from datetime import date
+
+
+class ScrapeMenuCommandTest(TestCase):
+
+    @patch("mealPlanning.services.gemini_client.estimate_nutrition")
+    @patch("mealPlanning.services.wger_client.lookup_nutrition")
+    @patch("mealPlanning.services.uiuc_dining.fetch_menu")
+    def test_creates_hall_and_dishes(self, mock_fetch, mock_wger, mock_gemini):
+        mock_fetch.return_value = [
+            {
+                "formal_name": "Banana",
+                "category": "Fruits",
+                "course": "Fruits",
+                "meal": "Lunch",
+                "serving_unit": "Deli",
+                "item_id": 841,
+                "allergens": [],
+                "dietary_flags": ["Vegan", "Vegetarian"],
+            },
+        ]
+        mock_wger.return_value = {
+            "calories": 89,
+            "protein": 1.1,
+            "carbohydrates": 23.0,
+            "fat": 0.3,
+            "fiber": 2.6,
+            "sodium": 0.001,
+        }
+
+        out = StringIO()
+        call_command("scrape_menu", "--date=2026-03-01", stdout=out)
+
+        # Hall created
+        self.assertTrue(DiningHall.objects.filter(name="Ikenberry Dining Center").exists())
+
+        # Dish created with nutrition
+        dish = Dish.objects.get(dish_name="Banana", dining_hall__name="Ikenberry Dining Center")
+        self.assertEqual(dish.calories, 89)
+        self.assertEqual(dish.nutrition_source, "wger")
+        self.assertEqual(dish.dietary_flags, ["Vegan", "Vegetarian"])
+        self.assertEqual(dish.last_seen, date(2026, 3, 1))
+
+    @patch("mealPlanning.services.gemini_client.estimate_nutrition")
+    @patch("mealPlanning.services.wger_client.lookup_nutrition")
+    @patch("mealPlanning.services.uiuc_dining.fetch_menu")
+    def test_gemini_fallback_when_wger_fails(self, mock_fetch, mock_wger, mock_gemini):
+        mock_fetch.return_value = [
+            {
+                "formal_name": "Mystery Casserole",
+                "category": "Entrees",
+                "course": "Entrees",
+                "meal": "Dinner",
+                "serving_unit": "Grill",
+                "item_id": 999,
+                "allergens": ["Gluten", "Milk"],
+                "dietary_flags": [],
+            },
+        ]
+        mock_wger.return_value = None  # No Wger match
+        mock_gemini.return_value = {
+            "calories": 450,
+            "protein": 20.0,
+            "carbohydrates": 35.0,
+            "fat": 22.0,
+            "fiber": 3.0,
+            "sodium": 800.0,
+            "confidence": "medium",
+        }
+
+        out = StringIO()
+        call_command("scrape_menu", "--date=2026-03-01", stdout=out)
+
+        dish = Dish.objects.get(dish_name="Mystery Casserole", dining_hall__name="Ikenberry Dining Center")
+        self.assertEqual(dish.calories, 450)
+        self.assertEqual(dish.nutrition_source, "ai_generated")
+        self.assertEqual(dish.ai_confidence, "medium")
+
+    @patch("mealPlanning.services.gemini_client.estimate_nutrition")
+    @patch("mealPlanning.services.wger_client.lookup_nutrition")
+    @patch("mealPlanning.services.uiuc_dining.fetch_menu")
+    def test_skips_dishes_already_enriched(self, mock_fetch, mock_wger, mock_gemini):
+        hall = DiningHall.objects.create(name="Ikenberry Dining Center", location="Ikenberry")
+        Dish.objects.create(
+            dish_name="Banana",
+            category="Fruits",
+            dining_hall=hall,
+            calories=89,
+            nutrition_source="wger",
+        )
+
+        items = [
+            {
+                "formal_name": "Banana",
+                "category": "Fruits",
+                "course": "Fruits",
+                "meal": "Lunch",
+                "serving_unit": "Deli",
+                "item_id": 841,
+                "allergens": [],
+                "dietary_flags": ["Vegan"],
+            },
+        ]
+        # Only return items for option 1 (Ikenberry), empty for others
+        mock_fetch.side_effect = lambda option_id, date_str: items if option_id == 1 else []
+
+        out = StringIO()
+        call_command("scrape_menu", "--date=2026-03-01", stdout=out)
+
+        # Wger should NOT have been called — dish already has nutrition
+        mock_wger.assert_not_called()
+        mock_gemini.assert_not_called()
+
+        # But metadata should be updated
+        dish = Dish.objects.get(dish_name="Banana", dining_hall=hall)
+        self.assertEqual(dish.last_seen, date(2026, 3, 1))
+        self.assertEqual(dish.dietary_flags, ["Vegan"])
