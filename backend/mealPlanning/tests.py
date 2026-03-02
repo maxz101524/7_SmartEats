@@ -175,3 +175,57 @@ class WgerClientTest(TestCase):
         mock_get.side_effect = req.exceptions.Timeout("timeout")
         result = lookup_nutrition("Banana")
         self.assertIsNone(result)
+
+
+from mealPlanning.services.gemini_client import estimate_nutrition
+
+
+class GeminiClientTest(TestCase):
+
+    @patch("mealPlanning.services.gemini_client.genai")
+    def test_returns_structured_nutrition(self, mock_genai):
+        mock_model = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = '{"calories": 350, "protein": 8.0, "carbohydrates": 45.0, "fat": 15.0, "fiber": 2.0, "sodium": 400.0, "confidence": "medium"}'
+        mock_model.generate_content.return_value = mock_response
+        mock_genai.GenerativeModel.return_value = mock_model
+
+        result = estimate_nutrition(
+            dish_name="Blueberry Muffin",
+            category="Baked Expectations",
+            meal_period="Continental Breakfast",
+            allergens=["Eggs", "Gluten", "Milk"],
+            dietary_flags=["Vegetarian"],
+            serving_unit="Baked Expectations",
+        )
+        self.assertEqual(result["calories"], 350)
+        self.assertAlmostEqual(result["protein"], 8.0)
+        self.assertEqual(result["confidence"], "medium")
+
+    @patch("mealPlanning.services.gemini_client.genai")
+    def test_returns_none_on_api_error(self, mock_genai):
+        mock_model = MagicMock()
+        mock_model.generate_content.side_effect = Exception("API error")
+        mock_genai.GenerativeModel.return_value = mock_model
+
+        result = estimate_nutrition(
+            dish_name="Mystery Dish",
+            category="Unknown",
+            meal_period="Dinner",
+        )
+        self.assertIsNone(result)
+
+    @patch("mealPlanning.services.gemini_client.genai")
+    def test_returns_none_on_invalid_json(self, mock_genai):
+        mock_model = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = "not valid json"
+        mock_model.generate_content.return_value = mock_response
+        mock_genai.GenerativeModel.return_value = mock_model
+
+        result = estimate_nutrition(
+            dish_name="Bad Response Dish",
+            category="Unknown",
+            meal_period="Lunch",
+        )
+        self.assertIsNone(result)
