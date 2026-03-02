@@ -1,18 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import { API_BASE } from "../config";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface MealResult {
-  meal_id: number;
-  meal_name: string;
-  total_nutrition: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  };
-  dishes_contained: { name: string; weight: number }[];
+interface RecommendedDish {
+  dish_id: number;
+  dish_name: string;
+  reason: string;
 }
 
 type MessageRole = "user" | "ai";
@@ -21,25 +17,25 @@ interface Message {
   id: number;
   role: MessageRole;
   text: string;
-  meals?: MealResult[];
+  recommendedDishes?: RecommendedDish[];
   error?: boolean;
 }
 
 // ─── Prompt suggestions ───────────────────────────────────────────────────────
 
 const ALL_PROMPTS = [
-  "Ask anything about any dining hall",
-  "What's on your mind today?",
-  "Ready to get in some protein?",
-  "What's healthy at ISR?",
-  "I want something under 400 calories",
+  "What's healthy at ISR today?",
   "High protein lunch ideas",
-  "Help me hit my macro goals",
+  "I want something under 400 calories",
   "What vegetarian options are there?",
-  "What's good at Allen today?",
-  "I'm in the mood for pasta",
+  "Help me hit my macro goals",
   "Find me a light dinner option",
   "What can I eat before a workout?",
+  "What's good at Ikenberry?",
+  "I need gluten-free options",
+  "Best post-workout meal at PAR?",
+  "Compare protein options across halls",
+  "Low carb dinner suggestions",
 ];
 
 function pickRandom<T>(arr: T[], n: number): T[] {
@@ -47,64 +43,41 @@ function pickRandom<T>(arr: T[], n: number): T[] {
   return shuffled.slice(0, n);
 }
 
-// ─── Meal result card ─────────────────────────────────────────────────────────
+// ─── Dish recommendation card ─────────────────────────────────────────────────
 
-function MealCard({ meal }: { meal: MealResult }) {
-  const macros = [
-    { label: "Cal", value: meal.total_nutrition.calories, unit: "kcal", color: "var(--se-macro-cal)" },
-    { label: "Pro", value: meal.total_nutrition.protein, unit: "g", color: "var(--se-macro-protein)" },
-    { label: "Carb", value: meal.total_nutrition.carbs, unit: "g", color: "var(--se-macro-carbs)" },
-    { label: "Fat", value: meal.total_nutrition.fat, unit: "g", color: "var(--se-macro-fat)" },
-  ];
-
+function DishRecommendationCard({ dish, onClick }: { dish: RecommendedDish; onClick: () => void }) {
   return (
-    <div
+    <button
+      onClick={onClick}
       style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
         background: "var(--se-bg-elevated)",
         border: "1px solid var(--se-border)",
         borderRadius: 12,
-        padding: "12px 14px",
+        padding: "10px 14px",
         marginTop: 8,
+        cursor: "pointer",
+        transition: "border-color 0.1s",
       }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--se-primary)")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--se-border)")}
     >
       <p
         style={{
           fontSize: 13,
           fontWeight: 700,
           color: "var(--se-text-main)",
-          marginBottom: 8,
+          margin: "0 0 4px",
         }}
       >
-        {meal.meal_name}
+        {dish.dish_name}
       </p>
-      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-        {macros.map(({ label, value, unit, color }) => (
-          <div
-            key={label}
-            style={{
-              flex: 1,
-              textAlign: "center",
-              background: "var(--se-bg-surface)",
-              border: "1px solid var(--se-border)",
-              borderRadius: 8,
-              padding: "4px 0",
-            }}
-          >
-            <p style={{ fontSize: 9, fontWeight: 700, color: "var(--se-text-faint)", textTransform: "uppercase", letterSpacing: "0.04em", margin: 0 }}>
-              {label}
-            </p>
-            <p style={{ fontSize: 12, fontWeight: 800, color, margin: 0 }}>
-              {value}{unit}
-            </p>
-          </div>
-        ))}
-      </div>
-      {meal.dishes_contained.length > 0 && (
-        <p style={{ fontSize: 11, color: "var(--se-text-faint)", margin: 0 }}>
-          {meal.dishes_contained.map((d) => d.name).join(" · ")}
-        </p>
-      )}
-    </div>
+      <p style={{ fontSize: 12, color: "var(--se-text-muted)", margin: 0 }}>
+        {dish.reason}
+      </p>
+    </button>
   );
 }
 
@@ -113,7 +86,6 @@ function MealCard({ meal }: { meal: MealResult }) {
 function TypingDots() {
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 16, paddingBottom: 8 }}>
-      {/* AI avatar */}
       <div
         style={{
           width: 28,
@@ -161,6 +133,7 @@ function TypingDots() {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AIMeals() {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -168,10 +141,8 @@ export default function AIMeals() {
   const inputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
 
-  // Pick 3 prompt suggestions once per mount
   const suggestions = useMemo(() => pickRandom(ALL_PROMPTS, 3), []);
 
-  // Auto-scroll to latest message within the container (not the window)
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
@@ -187,29 +158,26 @@ export default function AIMeals() {
     setLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.append("dishes", text.trim());
-
-      const res = await fetch(`${API_BASE}/aimeals/`, {
-        method: "POST",
-        body: formData,
+      const res = await axios.post(`${API_BASE}/ai-chat/`, {
+        message: text.trim(),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = res.data;
 
-      const data = await res.json();
-      const meals: MealResult[] = data.results ?? [];
-
-      const aiMsg: Message = {
-        id: nextId.current++,
-        role: "ai",
-        text:
-          meals.length > 0
-            ? `Here are ${meals.length} meal${meals.length > 1 ? "s" : ""} I found for you:`
-            : "I couldn't find any meals matching that. Try different keywords — like a specific dish name or ingredient.",
-        meals: meals.length > 0 ? meals : undefined,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      if (data.error) {
+        setMessages((prev) => [
+          ...prev,
+          { id: nextId.current++, role: "ai", text: data.error, error: true },
+        ]);
+      } else {
+        const aiMsg: Message = {
+          id: nextId.current++,
+          role: "ai",
+          text: data.response || "I'm not sure how to help with that.",
+          recommendedDishes: data.recommended_dishes?.length > 0 ? data.recommended_dishes : undefined,
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -235,7 +203,6 @@ export default function AIMeals() {
 
   return (
     <>
-      {/* Keyframes for typing dots */}
       <style>{`
         @keyframes dot-bounce {
           0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
@@ -262,7 +229,6 @@ export default function AIMeals() {
           }}
         >
           {isEmpty ? (
-            /* ── Empty state: greeting + suggestion prompts ── */
             <div
               style={{
                 display: "flex",
@@ -274,7 +240,6 @@ export default function AIMeals() {
                 textAlign: "center",
               }}
             >
-              {/* Logo mark */}
               <div
                 style={{
                   width: 52,
@@ -313,7 +278,6 @@ export default function AIMeals() {
                 Ask about dining options, nutrition, or meal ideas across all UIUC dining halls.
               </p>
 
-              {/* Suggestion chips */}
               <div
                 style={{
                   display: "flex",
@@ -355,7 +319,6 @@ export default function AIMeals() {
               </div>
             </div>
           ) : (
-            /* ── Message bubbles ── */
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {messages.map((msg) => (
                 <div
@@ -367,7 +330,6 @@ export default function AIMeals() {
                     gap: 10,
                   }}
                 >
-                  {/* AI avatar */}
                   {msg.role === "ai" && (
                     <div
                       style={{
@@ -388,7 +350,6 @@ export default function AIMeals() {
                     </div>
                   )}
 
-                  {/* Bubble */}
                   <div
                     style={{
                       maxWidth: "75%",
@@ -420,15 +381,17 @@ export default function AIMeals() {
                     }}
                   >
                     <p style={{ margin: 0 }}>{msg.text}</p>
-                    {/* Meal result cards */}
-                    {msg.meals?.map((meal) => (
-                      <MealCard key={meal.meal_id} meal={meal} />
+                    {msg.recommendedDishes?.map((dish) => (
+                      <DishRecommendationCard
+                        key={dish.dish_id}
+                        dish={dish}
+                        onClick={() => navigate(`/dishes/${dish.dish_id}`)}
+                      />
                     ))}
                   </div>
                 </div>
               ))}
 
-              {/* Typing indicator */}
               {loading && <TypingDots />}
             </div>
           )}
@@ -525,7 +488,7 @@ export default function AIMeals() {
               marginBottom: 0,
             }}
           >
-            SmartEats AI · UIUC Dining
+            Powered by Gemini AI · UIUC Dining
           </p>
         </div>
       </div>

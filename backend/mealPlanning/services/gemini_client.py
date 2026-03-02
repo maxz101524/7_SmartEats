@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 MODEL_NAME = "gemini-2.5-flash"
 _last_call_time = 0.0
-RATE_LIMIT_SECONDS = 0.5
+RATE_LIMIT_SECONDS = 7  # Safe under 10 RPM free tier
 
 
 def _get_client():
@@ -36,8 +36,8 @@ def estimate_nutrition(
 ):
     """
     Use Gemini to estimate nutrition for a dish. Returns a dict with
-    calories, protein, carbohydrates, fat, fiber, sodium, confidence
-    or None on failure.
+    calories, protein, carbohydrates, fat, fiber, sodium, sugar,
+    serving_size, confidence — or None on failure.
     """
     global _last_call_time
 
@@ -46,16 +46,39 @@ def estimate_nutrition(
         return None
 
     prompt = (
-        f"Estimate the nutritional content per standard serving of this university dining hall dish.\n\n"
-        f"Dish: {dish_name}\n"
-        f"Category: {category}\n"
-        f"Meal period: {meal_period}\n"
-        f"Station: {serving_unit}\n"
-        f"Allergens: {', '.join(allergens or [])}\n"
-        f"Dietary flags: {', '.join(dietary_flags or [])}\n\n"
-        f"Return JSON with: calories (int), protein (g), carbohydrates (g), "
-        f"fat (g), fiber (g), sodium (mg), and confidence (high/medium/low).\n"
-        f"Return ONLY the JSON object, no markdown."
+        "You are a university dining hall nutrition expert. Estimate the nutritional "
+        "content for ONE STANDARD SERVING of this dish as it would be served at a "
+        "UIUC (University of Illinois) dining hall.\n\n"
+        "DISH INFORMATION:\n"
+        f"- Name: {dish_name}\n"
+        f"- Dining hall category: {category}\n"
+        f"- Meal period: {meal_period} (e.g. Breakfast, Lunch, Dinner)\n"
+        f"- Station/serving area: {serving_unit}\n"
+        f"- Known allergens: {', '.join(allergens or []) or 'None listed'}\n"
+        f"- Dietary classifications: {', '.join(dietary_flags or []) or 'None listed'}\n\n"
+        "INSTRUCTIONS:\n"
+        "1. Consider this is a UNIVERSITY DINING HALL serving — portions are typically "
+        "generous (not restaurant-style plating).\n"
+        '2. "Standard serving" means what a student would put on their plate in one trip '
+        "— e.g. one piece of chicken, one bowl of soup, one scoop of rice, one cookie.\n"
+        "3. Estimate the serving size in a human-readable format "
+        '(e.g. "1 piece (~170g)", "1 cup (~240ml)", "1 bowl (~350g)").\n'
+        "4. Base your estimates on the dish name, its station context, and typical "
+        "university dining preparations.\n"
+        "5. For sodium, use milligrams (mg). For all other macros, use grams (g). "
+        "Calories as integer.\n"
+        '6. Rate your confidence: "high" for common well-known items, "medium" for '
+        'reasonable estimates, "low" for unusual or ambiguous items.\n\n'
+        "Return a JSON object with these exact keys:\n"
+        "- calories (integer)\n"
+        "- protein (number, grams)\n"
+        "- carbohydrates (number, grams)\n"
+        "- fat (number, grams)\n"
+        "- fiber (number, grams)\n"
+        "- sodium (number, milligrams)\n"
+        "- sugar (number, grams)\n"
+        "- serving_size (string, human-readable)\n"
+        '- confidence (string: "high", "medium", or "low")'
     )
 
     # Rate limiting
@@ -76,7 +99,10 @@ def estimate_nutrition(
         _last_call_time = time.time()
         data = json.loads(response.text)
         # Validate required keys
-        required = {"calories", "protein", "carbohydrates", "fat", "fiber", "sodium", "confidence"}
+        required = {
+            "calories", "protein", "carbohydrates", "fat",
+            "fiber", "sodium", "sugar", "serving_size", "confidence",
+        }
         if not required.issubset(data.keys()):
             logger.warning("Gemini response missing keys for '%s': %s", dish_name, data)
             return None
