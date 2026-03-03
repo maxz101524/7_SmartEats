@@ -10,7 +10,7 @@ djangorestframework-simplejwt==5.3.1
 
 # Database Support for Render
 dj-database-url==2.1.0
-psycopg2-binary==2.9.9
+psycopg[binary]>=3.1
 
 # Authentication & Google Login
 dj-rest-auth==6.0.0
