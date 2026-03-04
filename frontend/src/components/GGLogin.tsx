@@ -9,8 +9,6 @@ const GGLogin = () => {
     try {
       const res = await axios.post(`${API_BASE}/google-login/`, {
         id_token: credentialResponse.credential,
-
-        access_token: credentialResponse.credential,
       });
 
       console.log("Login Success! Backend response:", res.data);
