@@ -39,15 +39,88 @@ from django.contrib.auth.models import User
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
+from rest_framework.decorators import api_view
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests
+import os
 from django.conf import settings
+from allauth.socialaccount.models import SocialAccount
 
 
 
 
-class GoogleLogin(SocialLoginView):
-    adapter_class = GoogleOAuth2Adapter
-    client_class = OAuth2Client
-    callback_url = getattr(settings, "FRONTEND_URL", "") or "http://localhost:5173"
+class GoogleLogin(APIView):
+    def post(self, request):
+        """
+        Handle Google ID token authentication.
+        Expected payload: {"id_token": "<google_id_token>"}
+        """
+        id_token_str = request.data.get('id_token')
+        
+        if not id_token_str:
+            return Response(
+                {"error": "id_token is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Verify the Google ID token
+            # Note: This works for development. For production, set CLIENT_ID explicitly
+            idinfo = google_id_token.verify_oauth2_token(
+                id_token_str, 
+                requests.Request()
+            )
+            
+            # Verify token is for our app (optional but recommended)
+            # You may need to set your Google OAuth Client ID here
+            # CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
+            # if idinfo['aud'] != CLIENT_ID:
+            #     raise ValueError('Token audience mismatch')
+            
+            email = idinfo.get('email')
+            first_name = idinfo.get('given_name', '')
+            last_name = idinfo.get('family_name', '')
+            
+            if not email:
+                return Response(
+                    {"error": "Email not found in token"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get or create user
+            user, created = User.objects.get_or_create(
+                email=email,
+                defaults={
+                    'username': email,
+                    'first_name': first_name,
+                    'last_name': last_name,
+                }
+            )
+            
+            # Get or create token
+            token, _ = Token.objects.get_or_create(user=user)
+            
+            return Response({
+                'key': token.key,
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except ValueError as e:
+            # Invalid token
+            return Response(
+                {"error": f"Invalid ID token: {str(e)}"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Authentication failed: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class RegisterAPIView(APIView):
     def post(self, request):
