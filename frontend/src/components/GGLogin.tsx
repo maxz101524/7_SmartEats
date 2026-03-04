@@ -1,36 +1,56 @@
-import { GoogleLogin } from "@react-oauth/google";
+import { useGoogleLogin, type TokenResponse } from "@react-oauth/google";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { API_BASE } from "../config";
 
 const GGLogin = () => {
   const navigate = useNavigate();
-  const handleGoogleSuccess = async (credentialResponse: any) => {
-    try {
-      const res = await axios.post(`${API_BASE}/google-login/`, {
-        id_token: credentialResponse.credential,
+  const [error, setError] = useState("");
 
-        access_token: credentialResponse.credential,
+  const handleGoogleSuccess = async (tokenResponse: TokenResponse) => {
+    try {
+      setError("");
+      if (!tokenResponse?.access_token) {
+        throw new Error("Missing Google access token");
+      }
+
+      const res = await axios.post(`${API_BASE}/google-login/`, {
+        access_token: tokenResponse.access_token,
       });
 
-      console.log("Login Success! Backend response:", res.data);
+      const token = res.data?.key || res.data?.token;
+      if (!token) {
+        throw new Error("Missing auth token in backend response");
+      }
 
-      localStorage.setItem("authToken", res.data.key);
+      localStorage.setItem("authToken", token);
 
-      navigate("/dishes");
-    } catch (error) {
-      console.error("Error authenticating with backend", error);
+      navigate("/menu");
+    } catch (err) {
+      console.error("Error authenticating with backend", err);
+      setError("Google login failed. Please try again.");
     }
   };
 
+  const startGoogleLogin = useGoogleLogin({
+    scope: "openid profile email",
+    onSuccess: handleGoogleSuccess,
+    onError: () => {
+      setError("Google login popup was closed or failed.");
+    },
+  });
+
   return (
     <div className="w-full">
-      <GoogleLogin
-        onSuccess={handleGoogleSuccess}
-        onError={() => {
-          console.log("Google Login Failed");
-        }}
-      />
+      <button
+        type="button"
+        onClick={() => startGoogleLogin()}
+        className="w-full border border-gray-300 bg-white text-gray-800 font-semibold py-2 px-4 rounded hover:bg-gray-50"
+      >
+        Continue with Google
+      </button>
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   );
 };

@@ -181,7 +181,7 @@ function Profile() {
     const token = localStorage.getItem("authToken");
     try {
       const response = await axios.get(
-        `${API_BASE}/export-meals/?format=${format}`,
+        `${API_BASE}/export-meals/?file_format=${format}`,
         {
           headers: { Authorization: `Token ${token}` },
           responseType: "blob",

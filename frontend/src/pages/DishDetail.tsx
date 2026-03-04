@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { API_BASE, BACKEND_BASE } from "../config";
@@ -85,6 +85,7 @@ function MacroCard({
 function DishDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [dish, setDish] = useState<Dish | null>(null);
 
   useEffect(() => {
@@ -103,7 +104,14 @@ function DishDetail() {
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "24px 16px 48px" }}>
       {/* Back button */}
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => {
+          const from = location.state?.from;
+          if (typeof from === "string" && from.startsWith("/")) {
+            navigate(from);
+            return;
+          }
+          navigate(-1);
+        }}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -121,7 +129,7 @@ function DishDetail() {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Back to menu
+        Back
       </button>
 
       {/* Dish name */}

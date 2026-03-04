@@ -39,6 +39,7 @@ from django.contrib.auth.models import User
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
+from django.conf import settings
 
 
 
@@ -46,7 +47,7 @@ from dj_rest_auth.registration.views import SocialLoginView
 class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
     client_class = OAuth2Client
-    callback_url = "http://localhost:5173"
+    callback_url = getattr(settings, "FRONTEND_URL", "") or "http://localhost:5173"
 
 class RegisterAPIView(APIView):
     def post(self, request):
@@ -742,74 +743,69 @@ def nutrition_lookup_view(request):
 
 
 
-# @login_required
-def export_meals(request):
+class ExportMealsView(APIView):
     """
-    Export historical Meal records for CURRENT logged-in user as CSV or JSON.
+    Export historical Meal records for the authenticated user as CSV or JSON.
     """
+    permission_classes = [IsAuthenticated]
+    format_kwarg = None
 
-    export_format = request.GET.get("format", "csv").lower()
+    def get(self, request):
+        export_format = request.GET.get("file_format", "").lower()
+        if not export_format:
+            export_format = request.GET.get("format", "csv").lower()
+        if export_format not in {"csv", "json"}:
+            return Response(
+                {"error": "Invalid format. Use 'csv' or 'json'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-    # # Filter by current logged-in user
-    # meals = Meal.objects.filter(user=request.user.userprofile)
+        meals = Meal.objects.filter(user=request.user).order_by("-date", "meal_id")
+        timestamp = now().strftime("%Y-%m-%d_%H-%M")
 
-    # temporary testing only
-    # Will be replaced with the currently logged-in user once authentication is implemented
-    # After that, this view will return only the data belonging to the authenticated user
-    fake_user = UserProfile.objects.first()
-    meals = Meal.objects.filter(user=fake_user).order_by("-date", "meal_id")
+        if export_format == "json":
+            meal_list = []
+            for meal in meals:
+                meal_list.append({
+                    "meal_id": meal.meal_id,
+                    "total_calories": meal.total_calories,
+                    "total_protein": meal.total_protein,
+                    "total_carbohydrates": meal.total_carbohydrates,
+                    "total_fat": meal.total_fat,
+                    "date": meal.date.isoformat(),
+                })
 
-    timestamp = now().strftime("%Y-%m-%d_%H-%M")
+            data = {
+                "generated_at": now().isoformat(),
+                "record_count": meals.count(),
+                "meals": meal_list,
+            }
+            response = JsonResponse(data, json_dumps_params={"indent": 2})
+            response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.json"'
+            return response
 
-    # ---------------- JSON export ----------------
-    if export_format == "json":
-        meal_list = []
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.csv"'
 
-        for meal in meals:
-            meal_list.append({
-                "meal_id": meal.meal_id,
-                "total_calories": meal.total_calories,
-                "total_protein": meal.total_protein,
-                "total_carbohydrates": meal.total_carbohydrates,
-                "total_fat": meal.total_fat,
-                "date": meal.date.isoformat(),
-            })
-
-        data = {
-            "generated_at": now().isoformat(),
-            "record_count": meals.count(),
-            "meals": meal_list
-        }
-
-        response = JsonResponse(data, json_dumps_params={"indent": 2})
-        response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.json"'
-        return response
-
-    # ---------------- CSV export ----------------
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="my_meals_{timestamp}.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow([
-        "Meal ID",
-        "Total Calories",
-        "Total Protein (g)",
-        "Total Carbohydrates (g)",
-        "Total Fat (g)",
-        "Date"
-    ])
-
-    for meal in meals:
+        writer = csv.writer(response)
         writer.writerow([
-            meal.meal_id,
-            meal.total_calories,
-            meal.total_protein,
-            meal.total_carbohydrates,
-            meal.total_fat,
-            meal.date
+            "Meal ID",
+            "Total Calories",
+            "Total Protein (g)",
+            "Total Carbohydrates (g)",
+            "Total Fat (g)",
+            "Date",
         ])
-
-    return response
+        for meal in meals:
+            writer.writerow([
+                meal.meal_id,
+                meal.total_calories,
+                meal.total_protein,
+                meal.total_carbohydrates,
+                meal.total_fat,
+                meal.date,
+            ])
+        return response
 
 
 
@@ -1005,6 +1001,48 @@ class MealReportsView(APIView):
 class AIChatView(View):
     """Gemini-powered AI chat endpoint for dining recommendations."""
 
+    def _extract_user_context(self, request):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Token "):
+            return {}
+
+        token_key = auth_header.split(" ", 1)[1].strip()
+        if not token_key:
+            return {}
+
+        token = (
+            Token.objects
+            .select_related("user")
+            .filter(key=token_key)
+            .first()
+        )
+        if token is None:
+            return {}
+
+        user = token.user
+        context = {}
+
+        display_name = f"{user.first_name} {user.last_name}".strip()
+        if display_name:
+            context["name"] = display_name
+
+        profile = getattr(user, "profile", None)
+        if profile is None:
+            return context
+
+        if profile.goal:
+            context["goal"] = profile.goal
+        if profile.sex:
+            context["sex"] = profile.sex
+        if profile.age is not None:
+            context["age"] = profile.age
+        if profile.height_cm is not None:
+            context["height_cm"] = str(profile.height_cm)
+        if profile.weight_kg is not None:
+            context["weight_kg"] = str(profile.weight_kg)
+
+        return context
+
     def post(self, request, *args, **kwargs):
         from mealPlanning.services import ai_chat
 
@@ -1017,7 +1055,15 @@ class AIChatView(View):
         if not message:
             return JsonResponse({"error": "Message is required"}, status=400)
 
-        result = ai_chat.get_response(message)
+        raw_history = body.get("history", [])
+        history = raw_history if isinstance(raw_history, list) else []
+        user_context = self._extract_user_context(request)
+
+        result = ai_chat.get_response(
+            message,
+            history=history,
+            user_context=user_context,
+        )
         if result is None:
             return JsonResponse(
                 {"error": "AI service unavailable. Please try again later."},

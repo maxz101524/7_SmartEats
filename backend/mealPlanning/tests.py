@@ -1,5 +1,18 @@
+import json
+
 from django.test import TestCase
-from mealPlanning.models import DiningHall, Dish
+from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from rest_framework.authtoken.models import Token
+
+from mealPlanning.models import (
+    DiningHall,
+    Dish,
+    Meal,
+    create_user_profile,
+    save_user_profile,
+)
+from mealPlanning.services import ai_chat
 
 
 class DishModelFieldsTest(TestCase):
@@ -372,3 +385,145 @@ class ScrapeMenuCommandTest(TestCase):
         self.assertEqual(dish.calories, 105)
         self.assertEqual(dish.ai_confidence, "high")
         self.assertEqual(dish.serving_size, "1 medium banana (~120g)")
+
+
+class ExportMealsViewTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+
+        self.user = User.objects.create_user(username="user_a", password="pw123456")
+        self.other_user = User.objects.create_user(username="user_b", password="pw123456")
+        self.token = Token.objects.create(user=self.user)
+
+        self.user_meal = Meal.objects.create(
+            user=self.user,
+            total_calories=500,
+            total_protein=30,
+            total_carbohydrates=50,
+            total_fat=15,
+        )
+        Meal.objects.create(
+            user=self.other_user,
+            total_calories=900,
+            total_protein=80,
+            total_carbohydrates=20,
+            total_fat=40,
+        )
+
+    def test_export_meals_requires_auth(self):
+        response = self.client.get("/api/export-meals/?file_format=json")
+        self.assertEqual(response.status_code, 401)
+
+    def test_export_meals_json_returns_only_authenticated_users_data(self):
+        response = self.client.get(
+            "/api/export-meals/?file_format=json",
+            HTTP_AUTHORIZATION=f"Token {self.token.key}",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["record_count"], 1)
+        self.assertEqual(len(payload["meals"]), 1)
+        self.assertEqual(payload["meals"][0]["meal_id"], self.user_meal.meal_id)
+
+    def test_export_meals_invalid_format_returns_400(self):
+        response = self.client.get(
+            "/api/export-meals/?file_format=xml",
+            HTTP_AUTHORIZATION=f"Token {self.token.key}",
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class AIChatViewTest(TestCase):
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_ai_chat_passes_history(self, mock_get_response):
+        mock_get_response.return_value = {"response": "hello", "recommended_dishes": []}
+        payload = {
+            "message": "what should I eat?",
+            "history": [
+                {"role": "user", "content": "I need more protein"},
+                {"role": "assistant", "content": "Try lean meats and yogurt"},
+            ],
+        }
+        response = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mock_get_response.assert_called_once_with(
+            "what should I eat?",
+            history=payload["history"],
+            user_context={},
+        )
+
+    def test_ai_chat_requires_message(self):
+        response = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"history": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class AIChatServiceTest(TestCase):
+    @patch("mealPlanning.services.ai_chat._build_menu_context")
+    @patch("mealPlanning.services.ai_chat._get_client")
+    def test_get_response_grounds_recommendations_and_suggestions(self, mock_get_client, mock_build_context):
+        mock_build_context.return_value = (
+            ["Illinois Street Dining Center"],
+            "- Grilled Chicken | Illinois Street Dining Center | Grill | 250cal 35g P 5g C 8g F",
+            {
+                11: {
+                    "dish_id": 11,
+                    "dish_name": "Grilled Chicken",
+                    "dining_hall_name": "Illinois Street Dining Center",
+                    "serving_unit": "Grill",
+                },
+            },
+            {
+                "grilled chicken": [{
+                    "dish_id": 11,
+                    "dish_name": "Grilled Chicken",
+                    "dining_hall_name": "Illinois Street Dining Center",
+                    "serving_unit": "Grill",
+                }],
+            },
+        )
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = json.dumps({
+            "response": "Try a lean option first.",
+            "recommended_dishes": [
+                {"dish_id": 999, "dish_name": "Not On Menu", "reason": "invalid"},
+                {"dish_id": 11, "dish_name": "Wrong Label", "reason": "High protein"},
+            ],
+            "follow_up_suggestions": [
+                "Show me lower-carb options",
+                "Show me lower-carb options",
+                "x" * 120,
+                "What if I need vegetarian?",
+            ],
+        })
+        mock_client.models.generate_content.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        result = ai_chat.get_response(
+            "I need protein",
+            history=[{"role": "user", "content": "I am cutting"}],
+            user_context={"goal": "fat_loss"},
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["response"], "Try a lean option first.")
+        self.assertEqual(result["recommended_dishes"], [
+            {"dish_id": 11, "dish_name": "Grilled Chicken", "reason": "High protein"},
+        ])
+        self.assertEqual(result["follow_up_suggestions"], [
+            "Show me lower-carb options",
+            "What if I need vegetarian?",
+        ])

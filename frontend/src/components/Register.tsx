@@ -36,9 +36,9 @@ const Register = () => {
       });
 
       localStorage.setItem("authToken", response.data.token);
-      navigate("/dishes");
-    } catch (err: any) {
-      if (err.response) {
+      navigate("/menu");
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response) {
         setError(err.response.data.error);
       } else {
         setError("Something wrong");

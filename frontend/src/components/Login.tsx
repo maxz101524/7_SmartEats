@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import GGLogin from "./GGLogin";
 import { API_BASE } from "../config";
 
-`${API_BASE}/halls/`;
 const Login = () => {
   const [netID, setNetID] = useState("");
   const [password, setPassword] = useState("");
@@ -12,7 +11,7 @@ const Login = () => {
 
   const navigate = useNavigate();
 
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     try {
@@ -24,9 +23,9 @@ const Login = () => {
       localStorage.setItem("authToken", response.data.token);
       localStorage.setItem("userFirstName", response.data.first_name);
 
-      navigate("/dishes");
-    } catch (err: any) {
-      if (err.response && err.response.data) {
+      navigate("/menu");
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response?.data) {
         setError(
           err.response.data.error ||
             "Login failed. Please check your credentials.",

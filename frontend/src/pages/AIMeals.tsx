@@ -18,7 +18,13 @@ interface Message {
   role: MessageRole;
   text: string;
   recommendedDishes?: RecommendedDish[];
+  followUpSuggestions?: string[];
   error?: boolean;
+}
+
+interface ChatHistoryItem {
+  role: "user" | "assistant";
+  content: string;
 }
 
 // ─── Prompt suggestions ───────────────────────────────────────────────────────
@@ -37,6 +43,7 @@ const ALL_PROMPTS = [
   "Compare protein options across halls",
   "Low carb dinner suggestions",
 ];
+const CHAT_STORAGE_KEY = "smarteats_ai_chat_v1";
 
 function pickRandom<T>(arr: T[], n: number): T[] {
   const shuffled = [...arr].sort(() => Math.random() - 0.5);
@@ -149,18 +156,82 @@ export default function AIMeals() {
     }
   }, [messages, loading]);
 
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(CHAT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+
+      const restored: Message[] = parsed
+        .filter((item) => item && typeof item === "object")
+        .map((item) => {
+          const role: MessageRole = item.role === "user" ? "user" : "ai";
+          return {
+            id: Number(item.id) || 0,
+            role,
+            text: String(item.text || ""),
+            recommendedDishes: Array.isArray(item.recommendedDishes)
+              ? item.recommendedDishes
+              : undefined,
+            followUpSuggestions: Array.isArray(item.followUpSuggestions)
+              ? item.followUpSuggestions
+              : undefined,
+            error: Boolean(item.error),
+          };
+        })
+        .filter((item) => item.id > 0 && item.text.trim().length > 0)
+        .map((item) => ({
+          ...item,
+          recommendedDishes: Array.isArray(item.recommendedDishes)
+            ? item.recommendedDishes
+            : undefined,
+          followUpSuggestions: Array.isArray(item.followUpSuggestions)
+            ? item.followUpSuggestions
+            : undefined,
+        }));
+
+      if (restored.length > 0) {
+        setMessages(restored);
+        nextId.current = Math.max(...restored.map((m) => m.id)) + 1;
+      }
+    } catch (err) {
+      console.error("Failed to restore AI chat session", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      sessionStorage.removeItem(CHAT_STORAGE_KEY);
+      return;
+    }
+    sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+  }, [messages]);
+
+  const toHistory = (existingMessages: Message[]): ChatHistoryItem[] =>
+    existingMessages
+      .filter((m) => !m.error)
+      .map((m) => ({
+        role: m.role === "ai" ? "assistant" : "user",
+        content: m.text,
+      }));
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
 
-    const userMsg: Message = { id: nextId.current++, role: "user", text: text.trim() };
+    const trimmed = text.trim();
+    const userMsg: Message = { id: nextId.current++, role: "user", text: trimmed };
+    const history = toHistory(messages);
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
 
     try {
+      const token = localStorage.getItem("authToken");
       const res = await axios.post(`${API_BASE}/ai-chat/`, {
-        message: text.trim(),
-      });
+        message: trimmed,
+        history,
+      }, token ? { headers: { Authorization: `Token ${token}` } } : undefined);
 
       const data = res.data;
 
@@ -175,6 +246,7 @@ export default function AIMeals() {
           role: "ai",
           text: data.response || "I'm not sure how to help with that.",
           recommendedDishes: data.recommended_dishes?.length > 0 ? data.recommended_dishes : undefined,
+          followUpSuggestions: data.follow_up_suggestions?.length > 0 ? data.follow_up_suggestions : undefined,
         };
         setMessages((prev) => [...prev, aiMsg]);
       }
@@ -385,9 +457,36 @@ export default function AIMeals() {
                       <DishRecommendationCard
                         key={dish.dish_id}
                         dish={dish}
-                        onClick={() => navigate(`/dishes/${dish.dish_id}`)}
+                        onClick={() =>
+                          navigate(`/dishes/${dish.dish_id}`, {
+                            state: { from: "/aimeals" },
+                          })
+                        }
                       />
                     ))}
+                    {msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                        {msg.followUpSuggestions.map((suggestion) => (
+                          <button
+                            key={`${msg.id}-${suggestion}`}
+                            type="button"
+                            disabled={loading}
+                            onClick={() => sendMessage(suggestion)}
+                            style={{
+                              fontSize: 12,
+                              borderRadius: 9999,
+                              border: "1px solid var(--se-border)",
+                              background: "var(--se-bg-elevated)",
+                              color: "var(--se-text-secondary)",
+                              padding: "4px 10px",
+                              cursor: loading ? "default" : "pointer",
+                            }}
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -405,6 +504,28 @@ export default function AIMeals() {
             borderTop: "1px solid var(--se-border)",
           }}
         >
+          {!isEmpty && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMessages([]);
+                  nextId.current = 1;
+                  sessionStorage.removeItem(CHAT_STORAGE_KEY);
+                }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--se-text-faint)",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  padding: "2px 4px",
+                }}
+              >
+                New chat
+              </button>
+            </div>
+          )}
           <form
             onSubmit={handleSubmit}
             style={{
