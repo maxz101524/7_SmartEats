@@ -16,6 +16,7 @@ psycopg[binary]>=3.1
 dj-rest-auth==6.0.0
 django-allauth==0.61.1
 cryptography==42.0.5
+google-auth==2.28.0
 
 # AI Nutrition Estimation
 google-genai>=1.0.0
