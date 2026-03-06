@@ -1,0 +1,107 @@
+{
+    "Qwen/Qwen2.5-0.5B-Instruct": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: The average person needs about 2400-3000 calories per day. To calculate this, we use the formula: number of calories = weight (kg) + height (meters) x 100 + age (years) x 0.69. In this case, that would be: 70 kg + 180 m x 0.69 = 2400 - 3000 = 600 calories.\nTherefore, the answer is 600.",
+            "time_taken": 16.22
+        }
+    ],
+    "HuggingFaceTB/SmolLM2-360M-Instruct": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer:\nA 35-year-old woman weighs 70 kg and is 180 cm tall.\nThe weight in kilograms is 70 kg.\nThe height in centimeters is 180 cm.\nThe weight in kilograms is 70 kg.\nThe height in centimeters is 180 cm.\nThe weight in calories is 70 kg * 1000 = 70000 calories.\nThe height in calories is 180 cm * 1000 = 180000 calories.\nThe total calories needed per day is 70000 + 180000 = 250000 calories.\nThe average 35-year-old woman needs 250000 calories per day.\n#### 250000\nThe answer is: 250000",
+            "time_taken": 13.38
+        }
+    ],
+    "EleutherAI/pythia-410m": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: The answer is:\n\nThe average weight of a woman is 70kg.\nThe average height of a woman is 180cm.\nThe average height of a man is 180cm.\n\nThe average weight of a man is 70kg.\nThe average height of a man is 180cm.\n\nThe average weight of a woman is 70kg.\nThe average height of a woman is 180cm.\n\nThe average weight of a man is 70kg.\nThe average height of a man is 180cm.\n\nThe average weight of a woman is 70kg.\nThe average height of a woman is 180cm.\n\nThe average weight of a man is 70kg.\nThe average height of a man is 180cm.\n\nThe average weight of a woman is 70kg.\nThe average height of a woman is 180cm.\n\nThe average weight of a man is 70kg.\nThe average height of a man is 180cm.\n\nThe average weight of a woman is 70kg.\nThe average height of a woman is 180cm.\n\nThe average weight of a man is 70kg.\nThe average height of a man is 180cm.\n\nThe average weight of a woman is 70kg.\nThe average height of a woman is 180cm.\n\nThe average weight of a man is 70kg.\nThe average height of a man is 180cm.\n\nThe average weight of a woman is",
+            "time_taken": 8.29
+        }
+    ],
+    "TinyLlama/TinyLlama-1.1B-Chat-v1.0": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: A 35-year-old woman who weighs 70kg and is 180 cm tall needs 2,100 calories per day.",
+            "time_taken": 14.2
+        }
+    ],
+    "stabilityai/stablelm-2-zephyr-1_6b": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: To calculate the daily calorie requirement for an average 35-year-old woman who weighs 70kg and is 180 cm tall, we need to consider her basal metabolic rate (BMR) and her activity level.\n\nStep 1: Calculate her basal metabolic rate (BMR)\nBMR = 88.36 calories per day (for a woman)\nBMR = 50.49 calories per kilogram (70kg) * 0.2036 (to convert kg to lbs)\nBMR = 403.08 calories per day\n\nStep 2: Calculate her activity level\nActivity level = 1.2 (sedentary) + 1.3 (moderately active) + 1.4 (very active)\nActivity level = 2.9\n\nStep 3: Calculate her daily calorie requirement\nDaily calorie requirement = BMR * Activity level\nDaily calorie requirement = 403.08 * 2.9\nDaily calorie requirement = 1,169.88 calories\n\nSo, an average 35-year-old woman who weighs 70kg and is 180 cm tall needs approximately 1,169 calories per day to maintain her current weight.",
+            "time_taken": 197.92
+        }
+    ],
+    "microsoft/phi-2": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: A 35-year-old woman who weighs 70kg and is 180 cm tall needs about 2,000 calories per day.\n\nExercise 2:\nQuestion: What are some examples of healthy foods that can help you lose weight?\nAnswer: Some examples of healthy foods that can help you lose weight are fruits, vegetables, lean proteins, whole grains, and low-fat dairy products.\n\nExercise 3:\nQuestion: How can you make sure you are getting enough nutrients while on a weight loss diet?\nAnswer: You can make sure you are getting enough nutrients while on a weight loss diet by including a variety of healthy foods in your meals, such as fruits, vegetables, lean proteins, whole grains, and low-fat dairy products.\n\nExercise 4:\nQuestion: What are some ways to stay motivated while on a weight loss journey?\nAnswer: Some ways to stay motivated while on a weight loss journey are setting realistic goals, tracking your progress, rewarding yourself for reaching milestones, and finding a support system.\n\nExercise 5:\nQuestion: How can you make healthy eating more enjoyable?\nAnswer: You can make healthy eating more enjoyable by trying new recipes, experimenting with different flavors and spices, and involving friends or family in meal preparation.\n\nExercise 6:\nQuestion: What are some common misconceptions about weight loss?\nAnswer: Some common misconceptions about weight loss are that it's all about counting calories, that you have",
+            "time_taken": 340.02
+        }
+    ],
+    "Qwen/Qwen2.5-3B-Instruct": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: The daily calorie needs of an average 35-year-old woman who weighs 70kg and is 180 cm tall are about 2,400 calories. This is based on the general rule that men and women require different amounts of calories. Women typically need fewer calories than men, and this number decreases as age increases.\nThe answer is 2,400.\n\nQuestion: A train 490 m long running at 108 kmph crosses a platform in 20 sec. What is the length of the platform?\nAnswer: First convert the speed from km/h to m/s: 108 * 5/18 = 30 m/s\nTime taken to cross the platform = 20 sec\nDistance covered in 20 sec = 30 * 20 = 600 m\nThis distance is the sum of the lengths of the train and the platform = 600 m\nLength of the platform = 600 - 490 = 110 m\nTherefore, the answer is 110.\n\nQuestion: A car travels 192 miles on 6 gallons of gas. How far can it travel on 8 gallons of gas?\nAnswer: We first find out how many miles the car can travel per gallon by dividing the total miles traveled by the total gallons used: 192 / 6 = 32 miles/g",
+            "time_taken": 356.11
+        }
+    ],
+    "microsoft/Phi-3-mini-4k-instruct": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: To calculate the daily caloric needs of a 35-year-old woman who weighs 70kg and is 180 cm tall, we can use the Mifflin-St Jeor Equation, which is considered more accurate than the older Harris-Benedict equation. The Mifflin-St Jeor Equation for women is:\n\nCalories/day = (10 * weight in kg) + (6.25 * height in cm) - (5 * age in years) - 161\n\nPlugging in the given values:\n\nCalories/day = (10 * 70) + (6.25 * 180) - (5 * 35) - 161\nCalories/day = 700 + 1125 - 175 - 161\nCalories/day = 1690\n\nSo, an average 35-year-old woman who weighs 70kg and is 180 cm tall needs approximately 1690 calories per day to maintain her current weight. Keep in mind that individual caloric needs may vary based on factors such as activity level, muscle mass, and overall health. It's always best to consult with a healthcare professional or a registered dietitian for",
+            "time_taken": 419.55
+        }
+    ],
+    "stabilityai/stablelm-zephyr-3b": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: The exact number of calories an individual needs per day can vary based on factors such as age, sex, physical activity level, and overall health.\n\nHowever, using a general guideline, the average 35-year-old woman who weighs 70kg (154 lbs) and is 180 cm (5'10\") tall would need around 2,500 to 3,000 calories per day to maintain her weight.\n\nTo calculate the exact number of calories needed, it's best to consult a registered dietitian or use a calorie calculator tailored to your specific needs and goals.\n\nRemember, a healthy diet goes beyond counting calories. It's essential to consume a variety of nutrient-dense foods, focus on whole grains, lean proteins, healthy fats, and plenty of fruits and vegetables. Additionally, staying hydrated and managing stress levels can contribute to overall health and well-being.",
+            "time_taken": 203.91
+        }
+    ],
+    "HuggingFaceH4/zephyr-7b-beta": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: According to the Mifflin-St Jeor equation, which is commonly used to estimate daily caloric requirements, a 35-year-old woman who weighs 70kg and is 180 cm tall needs approximately 2,000 calories per day to maintain her weight. However, this calculation is based on an average level of physical activity, and individual needs may vary depending on factors such as occupation, exercise habits, and metabolism. It's always best to consult a healthcare professional or a registered dietitian for personalized nutrition advice.",
+            "time_taken": 1329.23
+        }
+    ],
+    "NousResearch/Nous-Hermes-2-Mistral-7B-DPO": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: 2000\n\nExplanation:\n\nThe average woman needs about 2000 calories per day to maintain her weight. This number can vary depending on factors such as activity level, metabolism, and genetics. However, for a woman who weighs 70kg and is 180 cm tall, 2000 calories is a reasonable estimate.\n\nIt\u2019s important to note that this is just an estimate and individual needs may vary. It\u2019s always a good idea to consult with a healthcare professional or a registered dietitian to determine your specific calorie needs.",
+            "time_taken": 621.26
+        }
+    ],
+    "tiiuae/falcon-7b-instruct": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: A 35-year-old woman who weighs 70kg and is 180 cm tall needs approximately 1,800-2,000 calories per day to maintain her weight.",
+            "time_taken": 163.22
+        }
+    ],
+    "01-ai/Yi-1.5-9B-Chat": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35 -year-old woman who weighs 70 kg and is 180  cm tall need per day?\n Answer: The average daily energy requirement for a 35-year-old woman who weighs 70 kg and is 180 cm tall is approximately 2,000 to 2,200 calories per day. This range can vary based on factors such as activity level, metabolism, and overall health.\n\nIt's important to note that the \"average\" requirement can be a broad estimate, and individual needs can vary. A more personalized approach might involve calculating the Basal Metabolic Rate (BMR) and adjusting for activity levels. The BMR is the number of calories the body needs to maintain basic functions at rest. For a 35-year-old woman, the BMR can be estimated using the Mifflin-St Jeor equation:\n\n\\[ \\text{BMR} = \\left(10 \\times \\text{weight in kg} \\right) + \\left(6.25 \\times \\text{height in cm} \\right) - \\left(5 \\times \\text{age in years} \\right) - 161 \\]\n\nPlugging in the given values:\n\n\\[ \\text{BMR} = \\left(10 \\times 70 \\right) + \\left(6.25 \\times 180 \\right) - \\left(5 \\times 35 \\right) - 16",
+            "time_taken": 1434.6
+        }
+    ],
+    "upstage/SOLAR-10.7B-Instruct-v1.0": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: To calculate the daily caloric needs of an individual, we can use the Harris-Benedict equation.\nFor a woman, the equation is:\nBasal Metabolic Rate (BMR) = 655 + (9.6 * weight in kg) + (1.8 * height in cm) - (4.7 * age in years)\nA 35-year-old woman with a weight of 70 kg and a height of 180 cm would have a BMR of:\nBMR = 655 + (9.6 * 70) + (1.8 * 180) - (4.7 * 35)\nBMR = 655 + 672 + 324 - 159\nBMR = 1302\nTo find the total daily caloric needs, we need to multiply the BMR by an activity factor.\nFor a sedentary lifestyle (little or no exercise), the activity factor is 1.2.\nSo, the total daily caloric needs would be:\nTotal Calories = BMR * Activity Factor\nTotal Calories = 1302 * 1.2\nTotal Calories = 1562.4\nRounding to the nearest whole number, a 35-year-old woman with the given information",
+            "time_taken": 3142.94
+        }
+    ],
+    "lmsys/vicuna-7b-v1.5": [
+        {
+            "prompt": "How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?",
+            "response": "Question: How many calories does a average 35-year-old woman who weighs 70kg and is 180 cm tall need per day?\nAnswer: To determine how many calories a 35-year-old woman who weighs 70kg and is 180cm tall needs per day, we need to consider her age, weight, height, and activity level.\n\nAccording to the USDA's MyPlate guidelines, a woman in this age group who weighs 70kg and is 180cm tall needs around 2000-2500 calories per day to maintain her weight. However, this can vary depending on her activity level and other factors.\n\nIf the woman is sedentary (little to no exercise), she may need closer to 2000 calories per day. If she is moderately active, she may need around 2200-2500 calories per day.\n\nIt's important to note that everyone's calorie needs are different, and it's best to consult with a healthcare professional or a registered dietitian to determine the appropriate calorie intake for your individual needs.",
+            "time_taken": 520.88
+        }
+    ]
+}
