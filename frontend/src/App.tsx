@@ -13,6 +13,7 @@ import Login from "./components/Login";
 import Register from "./components/Register";
 import GGLogin from "./components/GGLogin";
 import Showcase from "./pages/Showcase";
+import { HallMonitor } from "./pages/HallMonitor";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
             <Route path="register" element={<Register />}></Route>
             <Route path="gglogin" element={<GGLogin />}></Route>
             <Route path="*" element={<NotFound />}></Route>
+            <Route path="/monitor" element={<HallMonitor />} />
           </Route>
         </Routes>
       </BrowserRouter>
