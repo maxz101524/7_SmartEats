@@ -1,4 +1,11 @@
 
+# Model weights — do NOT push to GitHub
+*.bin
+*.safetensors
+*.pt
+*.onnx
+*.h5
+
 # AI / local tooling — kept local, not for teammates
 CLAUDE.md
 DESIGN_SYSTEM_SMARTEATS.md

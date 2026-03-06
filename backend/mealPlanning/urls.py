@@ -46,5 +46,6 @@ urlpatterns = [
 
     path("google-login/", views.GoogleLogin.as_view(), name='api-google-login'),
 
+    path("nutrition-estimate/", views.NutritionEstimateView.as_view(), name="nutrition_estimate"),
 
 ]

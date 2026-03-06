@@ -27,6 +27,21 @@ interface ChatHistoryItem {
   content: string;
 }
 
+interface NutritionResult {
+  bmr: number;
+  tdee: number;
+  recommended_calories: number;
+  macros: { protein_g: number; carbs_g: number; fat_g: number };
+  activity_level: string;
+  goal: string;
+  model: string;
+  used_fallback: boolean;
+}
+
+// ─── Tab type ─────────────────────────────────────────────────────────────────
+
+type ActiveTab = "chat" | "estimator";
+
 // ─── Prompt suggestions ───────────────────────────────────────────────────────
 
 const ALL_PROMPTS = [
@@ -137,10 +152,387 @@ function TypingDots() {
   );
 }
 
+// ─── Nutrition Estimator form ─────────────────────────────────────────────────
+
+function NutritionEstimator() {
+  const [form, setForm] = useState({
+    age: "",
+    sex: "",
+    weight_kg: "",
+    height_cm: "",
+    activity_level: "",
+    goal: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<NutritionResult | null>(null);
+  const [error, setError] = useState("");
+
+  const handleChange = (field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setResult(null);
+    setError("");
+
+    try {
+      const payload = {
+        age: parseInt(form.age),
+        sex: form.sex,
+        weight_kg: parseFloat(form.weight_kg),
+        height_cm: parseFloat(form.height_cm),
+        activity_level: form.activity_level,
+        goal: form.goal,
+      };
+
+      const res = await axios.post(`${API_BASE}/nutrition-estimate/`, payload);
+      setResult(res.data);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { errors?: string[]; error?: string } } };
+      if (axiosErr.response?.data?.errors) {
+        setError(axiosErr.response.data.errors.join(", "));
+      } else if (axiosErr.response?.data?.error) {
+        setError(axiosErr.response.data.error);
+      } else {
+        setError("Failed to reach the server. Make sure the backend is running.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isValid =
+    form.age && form.sex && form.weight_kg && form.height_cm && form.activity_level && form.goal;
+
+  const selectStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1.5px solid var(--se-border)",
+    background: "var(--se-bg-surface)",
+    color: "var(--se-text-main)",
+    fontSize: 14,
+    outline: "none",
+    appearance: "none",
+    WebkitAppearance: "none",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    ...selectStyle,
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--se-text-muted)",
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 6,
+    display: "block",
+  };
+
+  const goalLabels: Record<string, string> = {
+    fat_loss: "Fat Loss (−500 cal deficit)",
+    muscle_gain: "Muscle Gain (+300 cal surplus)",
+    maintain: "Maintain Weight",
+  };
+
+  const activityLabels: Record<string, string> = {
+    sedentary: "Sedentary (little/no exercise)",
+    light: "Light (1–3 days/week)",
+    moderate: "Moderate (3–5 days/week)",
+    active: "Active (6–7 days/week)",
+    very_active: "Very Active (2× daily)",
+  };
+
+  return (
+    <div style={{ maxWidth: 520, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: "50%",
+            background: "var(--se-primary-dim)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 22,
+            margin: "0 auto 16px",
+            color: "var(--se-primary)",
+            fontWeight: 900,
+          }}
+        >
+          ⚡
+        </div>
+        <h2
+          style={{
+            fontSize: "var(--se-text-h3)",
+            fontWeight: "var(--se-weight-extrabold)",
+            color: "var(--se-text-main)",
+            margin: "0 0 6px",
+          }}
+        >
+          Nutrition Estimator
+        </h2>
+        <p style={{ fontSize: 14, color: "var(--se-text-muted)", margin: 0, maxWidth: 360, marginLeft: "auto", marginRight: "auto" }}>
+          Enter your details and our AI will estimate your daily calorie and macro needs.
+        </p>
+      </div>
+
+      {/* Form */}
+      <form onSubmit={handleSubmit}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          <div>
+            <label style={labelStyle}>Age</label>
+            <input
+              type="number"
+              placeholder="25"
+              value={form.age}
+              onChange={(e) => handleChange("age", e.target.value)}
+              style={inputStyle}
+              min={10}
+              max={120}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Sex</label>
+            <select
+              value={form.sex}
+              onChange={(e) => handleChange("sex", e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Select…</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Weight (kg)</label>
+            <input
+              type="number"
+              placeholder="70"
+              value={form.weight_kg}
+              onChange={(e) => handleChange("weight_kg", e.target.value)}
+              style={inputStyle}
+              min={20}
+              max={500}
+              step="0.1"
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Height (cm)</label>
+            <input
+              type="number"
+              placeholder="175"
+              value={form.height_cm}
+              onChange={(e) => handleChange("height_cm", e.target.value)}
+              style={inputStyle}
+              min={50}
+              max={300}
+              step="0.1"
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Activity Level</label>
+          <select
+            value={form.activity_level}
+            onChange={(e) => handleChange("activity_level", e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">Select…</option>
+            {Object.entries(activityLabels).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <label style={labelStyle}>Goal</label>
+          <select
+            value={form.goal}
+            onChange={(e) => handleChange("goal", e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">Select…</option>
+            {Object.entries(goalLabels).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          disabled={!isValid || loading}
+          style={{
+            width: "100%",
+            padding: "12px 24px",
+            borderRadius: 12,
+            border: "none",
+            background: isValid && !loading ? "var(--se-primary)" : "var(--se-bg-subtle)",
+            color: isValid && !loading ? "white" : "var(--se-text-faint)",
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: isValid && !loading ? "pointer" : "default",
+            transition: "background 0.15s",
+          }}
+        >
+          {loading ? "Analyzing…" : "Estimate My Nutrition"}
+        </button>
+      </form>
+
+      {/* Error */}
+      {error && (
+        <div
+          style={{
+            marginTop: 20,
+            padding: "12px 16px",
+            borderRadius: 12,
+            background: "var(--se-error-dim, #fef2f2)",
+            border: "1px solid var(--se-error, #ef4444)",
+            color: "var(--se-error, #ef4444)",
+            fontSize: 14,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* Results */}
+      {result && (
+        <div style={{ marginTop: 28 }}>
+          {/* Main calorie card */}
+          <div
+            style={{
+              background: "var(--se-bg-surface)",
+              border: "1.5px solid var(--se-border)",
+              borderRadius: 16,
+              padding: "24px 20px",
+              textAlign: "center",
+              marginBottom: 16,
+              boxShadow: "var(--se-shadow-sm)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--se-text-faint)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                margin: "0 0 4px",
+              }}
+            >
+              Recommended Daily Intake
+            </p>
+            <p
+              style={{
+                fontSize: 40,
+                fontWeight: 900,
+                color: "var(--se-primary)",
+                margin: "0 0 4px",
+                lineHeight: 1.1,
+              }}
+            >
+              {result.recommended_calories.toLocaleString()}
+            </p>
+            <p style={{ fontSize: 14, color: "var(--se-text-muted)", margin: 0 }}>
+              kcal / day
+            </p>
+          </div>
+
+          {/* BMR + TDEE */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div
+              style={{
+                background: "var(--se-bg-subtle)",
+                borderRadius: 12,
+                padding: "14px 16px",
+                textAlign: "center",
+              }}
+            >
+              <p style={{ fontSize: 11, fontWeight: 600, color: "var(--se-text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 4px" }}>
+                BMR
+              </p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: "var(--se-text-main)", margin: 0 }}>
+                {result.bmr.toLocaleString()}
+              </p>
+              <p style={{ fontSize: 12, color: "var(--se-text-muted)", margin: "2px 0 0" }}>kcal</p>
+            </div>
+            <div
+              style={{
+                background: "var(--se-bg-subtle)",
+                borderRadius: 12,
+                padding: "14px 16px",
+                textAlign: "center",
+              }}
+            >
+              <p style={{ fontSize: 11, fontWeight: 600, color: "var(--se-text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 4px" }}>
+                TDEE
+              </p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: "var(--se-text-main)", margin: 0 }}>
+                {result.tdee.toLocaleString()}
+              </p>
+              <p style={{ fontSize: 12, color: "var(--se-text-muted)", margin: "2px 0 0" }}>kcal</p>
+            </div>
+          </div>
+
+          {/* Macros */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+            {[
+              { label: "Protein", value: result.macros.protein_g, color: "#ef4444" },
+              { label: "Carbs", value: result.macros.carbs_g, color: "#f59e0b" },
+              { label: "Fat", value: result.macros.fat_g, color: "#3b82f6" },
+            ].map(({ label, value, color }) => (
+              <div
+                key={label}
+                style={{
+                  background: "var(--se-bg-surface)",
+                  border: "1.5px solid var(--se-border)",
+                  borderRadius: 12,
+                  padding: "14px 12px",
+                  textAlign: "center",
+                  boxShadow: "var(--se-shadow-sm)",
+                }}
+              >
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: color,
+                    margin: "0 auto 8px",
+                  }}
+                />
+                <p style={{ fontSize: 20, fontWeight: 800, color: "var(--se-text-main)", margin: "0 0 2px" }}>
+                  {value}g
+                </p>
+                <p style={{ fontSize: 12, color: "var(--se-text-muted)", margin: 0 }}>{label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Model info */}
+          <p style={{ fontSize: 11, color: "var(--se-text-faint)", textAlign: "center", margin: "12px 0 0" }}>
+            Powered by {result.model}
+            {result.used_fallback && " (Mifflin-St Jeor fallback)"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AIMeals() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -273,6 +665,21 @@ export default function AIMeals() {
 
   const isEmpty = messages.length === 0;
 
+  // ── Tab styles ──────────────────────────────────────────────────
+
+  const tabBtnStyle = (isActive: boolean): React.CSSProperties => ({
+    padding: "8px 20px",
+    borderRadius: 9999,
+    border: "1.5px solid",
+    borderColor: isActive ? "var(--se-primary)" : "var(--se-border)",
+    background: isActive ? "var(--se-primary)" : "var(--se-bg-surface)",
+    color: isActive ? "white" : "var(--se-text-secondary)",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+    transition: "all 0.15s",
+  });
+
   return (
     <>
       <style>{`
@@ -291,327 +698,352 @@ export default function AIMeals() {
           margin: "0 auto",
         }}
       >
-        {/* ── Messages area ─────────────────────────────────────── */}
+        {/* ── Tab bar ──────────────────────────────────────── */}
         <div
-          ref={messagesContainerRef}
           style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: isEmpty ? "0" : "8px 0 16px",
+            display: "flex",
+            gap: 8,
+            justifyContent: "center",
+            paddingBottom: 16,
+            flexShrink: 0,
           }}
         >
-          {isEmpty ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab("chat")}
+            style={tabBtnStyle(activeTab === "chat")}
+          >
+            AI Chat
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("estimator")}
+            style={tabBtnStyle(activeTab === "estimator")}
+          >
+            Nutrition Estimator
+          </button>
+        </div>
+
+        {/* ── Estimator tab ──────────────────────────────────── */}
+        {activeTab === "estimator" ? (
+          <div style={{ flex: 1, overflowY: "auto", padding: "8px 0 16px" }}>
+            <NutritionEstimator />
+          </div>
+        ) : (
+          <>
+            {/* ── Chat messages area ──────────────────────────── */}
             <div
+              ref={messagesContainerRef}
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
-                padding: "0 16px",
-                textAlign: "center",
+                flex: 1,
+                overflowY: "auto",
+                padding: isEmpty ? "0" : "8px 0 16px",
               }}
             >
-              <div
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: "50%",
-                  background: "var(--se-primary-dim)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 22,
-                  marginBottom: 16,
-                  color: "var(--se-primary)",
-                  fontWeight: 900,
-                }}
-              >
-                ✦
-              </div>
-              <h1
-                style={{
-                  fontSize: "var(--se-text-h2)",
-                  fontWeight: "var(--se-weight-extrabold)",
-                  color: "var(--se-text-main)",
-                  margin: "0 0 6px",
-                }}
-              >
-                <span className="text-gradient-vivid">SmartEats AI</span>
-              </h1>
-              <p
-                style={{
-                  fontSize: 14,
-                  color: "var(--se-text-muted)",
-                  marginBottom: 32,
-                  maxWidth: 320,
-                }}
-              >
-                Ask about dining options, nutrition, or meal ideas across all UIUC dining halls.
-              </p>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                  width: "100%",
-                  maxWidth: 480,
-                }}
-              >
-                {suggestions.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => sendMessage(s)}
-                    style={{
-                      padding: "12px 18px",
-                      borderRadius: 12,
-                      border: "1.5px solid var(--se-border)",
-                      background: "var(--se-bg-surface)",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      fontSize: 14,
-                      color: "var(--se-text-secondary)",
-                      fontWeight: 500,
-                      boxShadow: "var(--se-shadow-sm)",
-                      transition: "border-color 0.1s, box-shadow 0.1s",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--se-primary)";
-                      e.currentTarget.style.color = "var(--se-text-main)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = "var(--se-border)";
-                      e.currentTarget.style.color = "var(--se-text-secondary)";
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {messages.map((msg) => (
+              {isEmpty ? (
                 <div
-                  key={msg.id}
                   style={{
                     display: "flex",
-                    flexDirection: msg.role === "user" ? "row-reverse" : "row",
-                    alignItems: "flex-end",
-                    gap: 10,
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "100%",
+                    padding: "0 16px",
+                    textAlign: "center",
                   }}
                 >
-                  {msg.role === "ai" && (
-                    <div
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: "var(--se-primary-dim)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 13,
-                        flexShrink: 0,
-                        color: "var(--se-primary)",
-                        fontWeight: 900,
-                      }}
-                    >
-                      ✦
-                    </div>
-                  )}
+                  <div
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: "50%",
+                      background: "var(--se-primary-dim)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 22,
+                      marginBottom: 16,
+                      color: "var(--se-primary)",
+                      fontWeight: 900,
+                    }}
+                  >
+                    ✦
+                  </div>
+                  <h1
+                    style={{
+                      fontSize: "var(--se-text-h2)",
+                      fontWeight: "var(--se-weight-extrabold)",
+                      color: "var(--se-text-main)",
+                      margin: "0 0 6px",
+                    }}
+                  >
+                    <span className="text-gradient-vivid">SmartEats AI</span>
+                  </h1>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      color: "var(--se-text-muted)",
+                      marginBottom: 32,
+                      maxWidth: 320,
+                    }}
+                  >
+                    Ask about dining options, nutrition, or meal ideas across all UIUC dining halls.
+                  </p>
 
                   <div
                     style={{
-                      maxWidth: "75%",
-                      padding: "11px 15px",
-                      borderRadius:
-                        msg.role === "user"
-                          ? "18px 18px 4px 18px"
-                          : "18px 18px 18px 4px",
-                      background:
-                        msg.role === "user"
-                          ? "var(--se-primary)"
-                          : msg.error
-                          ? "var(--se-error-dim)"
-                          : "var(--se-bg-surface)",
-                      border:
-                        msg.role === "user"
-                          ? "none"
-                          : `1px solid ${msg.error ? "var(--se-error)" : "var(--se-border)"}`,
-                      boxShadow:
-                        msg.role === "ai" ? "var(--se-shadow-sm)" : "none",
-                      color:
-                        msg.role === "user"
-                          ? "white"
-                          : msg.error
-                          ? "var(--se-error)"
-                          : "var(--se-text-main)",
-                      fontSize: 14,
-                      lineHeight: 1.5,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      width: "100%",
+                      maxWidth: 480,
                     }}
                   >
-                    <p style={{ margin: 0 }}>{msg.text}</p>
-                    {msg.recommendedDishes?.map((dish) => (
-                      <DishRecommendationCard
-                        key={dish.dish_id}
-                        dish={dish}
-                        onClick={() =>
-                          navigate(`/dishes/${dish.dish_id}`, {
-                            state: { from: "/aimeals" },
-                          })
-                        }
-                      />
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => sendMessage(s)}
+                        style={{
+                          padding: "12px 18px",
+                          borderRadius: 12,
+                          border: "1.5px solid var(--se-border)",
+                          background: "var(--se-bg-surface)",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          fontSize: 14,
+                          color: "var(--se-text-secondary)",
+                          fontWeight: 500,
+                          boxShadow: "var(--se-shadow-sm)",
+                          transition: "border-color 0.1s, box-shadow 0.1s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = "var(--se-primary)";
+                          e.currentTarget.style.color = "var(--se-text-main)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = "var(--se-border)";
+                          e.currentTarget.style.color = "var(--se-text-secondary)";
+                        }}
+                      >
+                        {s}
+                      </button>
                     ))}
-                    {msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                        {msg.followUpSuggestions.map((suggestion) => (
-                          <button
-                            key={`${msg.id}-${suggestion}`}
-                            type="button"
-                            disabled={loading}
-                            onClick={() => sendMessage(suggestion)}
-                            style={{
-                              fontSize: 12,
-                              borderRadius: 9999,
-                              border: "1px solid var(--se-border)",
-                              background: "var(--se-bg-elevated)",
-                              color: "var(--se-text-secondary)",
-                              padding: "4px 10px",
-                              cursor: loading ? "default" : "pointer",
-                            }}
-                          >
-                            {suggestion}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
-              ))}
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      style={{
+                        display: "flex",
+                        flexDirection: msg.role === "user" ? "row-reverse" : "row",
+                        alignItems: "flex-end",
+                        gap: 10,
+                      }}
+                    >
+                      {msg.role === "ai" && (
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: "50%",
+                            background: "var(--se-primary-dim)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 13,
+                            flexShrink: 0,
+                            color: "var(--se-primary)",
+                            fontWeight: 900,
+                          }}
+                        >
+                          ✦
+                        </div>
+                      )}
 
-              {loading && <TypingDots />}
-            </div>
-          )}
-        </div>
+                      <div
+                        style={{
+                          maxWidth: "75%",
+                          padding: "11px 15px",
+                          borderRadius:
+                            msg.role === "user"
+                              ? "18px 18px 4px 18px"
+                              : "18px 18px 18px 4px",
+                          background:
+                            msg.role === "user"
+                              ? "var(--se-primary)"
+                              : msg.error
+                                ? "var(--se-error-dim)"
+                                : "var(--se-bg-surface)",
+                          border:
+                            msg.role === "user"
+                              ? "none"
+                              : `1px solid ${msg.error ? "var(--se-error)" : "var(--se-border)"}`,
+                          boxShadow:
+                            msg.role === "ai" ? "var(--se-shadow-sm)" : "none",
+                          color:
+                            msg.role === "user"
+                              ? "white"
+                              : msg.error
+                                ? "var(--se-error)"
+                                : "var(--se-text-main)",
+                          fontSize: 14,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        <p style={{ margin: 0 }}>{msg.text}</p>
+                        {msg.recommendedDishes?.map((dish) => (
+                          <DishRecommendationCard
+                            key={dish.dish_id}
+                            dish={dish}
+                            onClick={() =>
+                              navigate(`/dishes/${dish.dish_id}`, {
+                                state: { from: "/aimeals" },
+                              })
+                            }
+                          />
+                        ))}
+                        {msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                            {msg.followUpSuggestions.map((suggestion) => (
+                              <button
+                                key={`${msg.id}-${suggestion}`}
+                                type="button"
+                                disabled={loading}
+                                onClick={() => sendMessage(suggestion)}
+                                style={{
+                                  fontSize: 12,
+                                  borderRadius: 9999,
+                                  border: "1px solid var(--se-border)",
+                                  background: "var(--se-bg-elevated)",
+                                  color: "var(--se-text-secondary)",
+                                  padding: "4px 10px",
+                                  cursor: loading ? "default" : "pointer",
+                                }}
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
 
-        {/* ── Input bar ─────────────────────────────────────────── */}
-        <div
-          style={{
-            flexShrink: 0,
-            paddingTop: 12,
-            borderTop: "1px solid var(--se-border)",
-          }}
-        >
-          {!isEmpty && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setMessages([]);
-                  nextId.current = 1;
-                  sessionStorage.removeItem(CHAT_STORAGE_KEY);
-                }}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--se-text-faint)",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  padding: "2px 4px",
-                }}
-              >
-                New chat
-              </button>
+                  {loading && <TypingDots />}
+                </div>
+              )}
             </div>
-          )}
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              background: "var(--se-bg-surface)",
-              border: "1.5px solid var(--se-border)",
-              borderRadius: 9999,
-              padding: "6px 6px 6px 18px",
-              boxShadow: "var(--se-shadow-sm)",
-            }}
-            onFocus={(e) => {
-              (e.currentTarget as HTMLFormElement).style.borderColor =
-                "var(--se-primary)";
-            }}
-            onBlur={(e) => {
-              (e.currentTarget as HTMLFormElement).style.borderColor =
-                "var(--se-border)";
-            }}
-          >
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Ask about dining halls, dishes, or nutrition…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={loading}
+
+            {/* ── Input bar ─────────────────────────────────────────── */}
+            <div
               style={{
-                flex: 1,
-                border: "none",
-                outline: "none",
-                background: "transparent",
-                fontSize: 14,
-                color: "var(--se-text-main)",
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || loading}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background:
-                  input.trim() && !loading
-                    ? "var(--se-primary)"
-                    : "var(--se-bg-subtle)",
-                border: "none",
-                cursor: input.trim() && !loading ? "pointer" : "default",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
                 flexShrink: 0,
-                transition: "background 0.15s",
+                paddingTop: 12,
+                borderTop: "1px solid var(--se-border)",
               }}
-              aria-label="Send"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
+              {!isEmpty && (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMessages([]);
+                      nextId.current = 1;
+                      sessionStorage.removeItem(CHAT_STORAGE_KEY);
+                    }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--se-text-faint)",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      padding: "2px 4px",
+                    }}
+                  >
+                    New chat
+                  </button>
+                </div>
+              )}
+              <form
+                onSubmit={handleSubmit}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center",
+                  background: "var(--se-bg-surface)",
+                  border: "1.5px solid var(--se-border)",
+                  borderRadius: 9999,
+                  padding: "6px 6px 6px 18px",
+                  boxShadow: "var(--se-shadow-sm)",
+                }}
+                onFocus={(e) => {
+                  (e.currentTarget as HTMLFormElement).style.borderColor =
+                    "var(--se-primary)";
+                }}
+                onBlur={(e) => {
+                  (e.currentTarget as HTMLFormElement).style.borderColor =
+                    "var(--se-border)";
+                }}
               >
-                <path
-                  d="M3 8h10M9 4l4 4-4 4"
-                  stroke={input.trim() && !loading ? "white" : "var(--se-text-faint)"}
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                <input
+                  ref={inputRef}
+                  type="text"
+                  placeholder="Ask about dining halls, dishes, or nutrition…"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={loading}
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    fontSize: 14,
+                    color: "var(--se-text-main)",
+                  }}
                 />
-              </svg>
-            </button>
-          </form>
-          <p
-            style={{
-              textAlign: "center",
-              fontSize: 11,
-              color: "var(--se-text-faint)",
-              marginTop: 8,
-              marginBottom: 0,
-            }}
-          >
-            Powered by Gemini AI · UIUC Dining
-          </p>
-        </div>
+                <button
+                  type="submit"
+                  disabled={!input.trim() || loading}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    background:
+                      input.trim() && !loading
+                        ? "var(--se-primary)"
+                        : "var(--se-bg-subtle)",
+                    border: "none",
+                    cursor: input.trim() && !loading ? "pointer" : "default",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    transition: "background 0.15s",
+                  }}
+                  aria-label="Send"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                  >
+                    <path
+                      d="M3 8h10M9 4l4 4-4 4"
+                      stroke={input.trim() && !loading ? "white" : "var(--se-text-faint)"}
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </form>
+
+            </div>
+          </>
+        )}
       </div>
     </>
   );

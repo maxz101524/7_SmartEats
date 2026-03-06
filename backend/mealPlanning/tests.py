@@ -527,3 +527,80 @@ class AIChatServiceTest(TestCase):
             "Show me lower-carb options",
             "What if I need vegetarian?",
         ])
+
+
+class NutritionEstimateViewTest(TestCase):
+    """Tests for the local-LLM nutrition estimation endpoint."""
+
+    @patch("mealPlanning.services.local_llm.estimate_daily_nutrition")
+    def test_valid_request_returns_200(self, mock_estimate):
+        mock_estimate.return_value = {
+            "bmr": 1800,
+            "tdee": 2790,
+            "recommended_calories": 3090,
+            "macros": {"protein_g": 232, "carbs_g": 347, "fat_g": 86},
+            "activity_level": "moderate",
+            "goal": "muscle_gain",
+            "model": "stabilityai/stablelm-2-zephyr-1_6b",
+            "used_fallback": False,
+        }
+
+        payload = {
+            "age": 25,
+            "sex": "male",
+            "weight_kg": 80,
+            "height_cm": 175,
+            "activity_level": "moderate",
+            "goal": "muscle_gain",
+        }
+        response = self.client.post(
+            "/api/nutrition-estimate/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("bmr", data)
+        self.assertIn("tdee", data)
+        self.assertIn("recommended_calories", data)
+        self.assertIn("macros", data)
+        self.assertIn("protein_g", data["macros"])
+        mock_estimate.assert_called_once()
+
+    def test_missing_fields_returns_400(self):
+        payload = {"age": 25}  # missing sex, weight_kg, height_cm, activity_level, goal
+        response = self.client.post(
+            "/api/nutrition-estimate/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn("errors", data)
+        self.assertTrue(len(data["errors"]) >= 4)
+
+    def test_invalid_ranges_returns_400(self):
+        payload = {
+            "age": 300,
+            "sex": "male",
+            "weight_kg": 80,
+            "height_cm": 175,
+            "activity_level": "moderate",
+            "goal": "muscle_gain",
+        }
+        response = self.client.post(
+            "/api/nutrition-estimate/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertTrue(any("age" in e for e in data["errors"]))
+
+    def test_invalid_json_returns_400(self):
+        response = self.client.post(
+            "/api/nutrition-estimate/",
+            data="not json",
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)

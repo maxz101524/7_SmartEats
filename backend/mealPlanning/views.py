@@ -1144,3 +1144,115 @@ class AIChatView(View):
             )
 
         return JsonResponse(result)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class NutritionEstimateView(View):
+    """
+    Local LLM-powered calorie and macro estimation.
+
+    Uses stabilityai/stablelm-2-zephyr-1_6b loaded via transformers.
+    Accepts user body metrics and returns personalised daily nutrition targets.
+    """
+
+    # ── Validation constants ────────────────────────────────────────
+    VALID_SEX = {"male", "female"}
+    VALID_ACTIVITY = {"sedentary", "light", "moderate", "active", "very_active"}
+    VALID_GOAL = {"fat_loss", "muscle_gain", "maintain"}
+
+    BOUNDS = {
+        "age": (10, 120),
+        "weight_kg": (20, 500),
+        "height_cm": (50, 300),
+    }
+
+    def post(self, request, *args, **kwargs):
+        from mealPlanning.services import local_llm
+
+        # ── Parse JSON body ─────────────────────────────────────────
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        # ── Extract and validate required fields ────────────────────
+        errors = []
+
+        # Age
+        age = body.get("age")
+        if age is None:
+            errors.append("'age' is required")
+        else:
+            try:
+                age = int(age)
+                lo, hi = self.BOUNDS["age"]
+                if not (lo <= age <= hi):
+                    errors.append(f"'age' must be between {lo} and {hi}")
+            except (TypeError, ValueError):
+                errors.append("'age' must be a number")
+
+        # Sex
+        sex = body.get("sex", "").strip().lower()
+        if not sex:
+            errors.append("'sex' is required")
+        elif sex not in self.VALID_SEX:
+            errors.append(f"'sex' must be one of: {', '.join(sorted(self.VALID_SEX))}")
+
+        # Weight
+        weight_kg = body.get("weight_kg")
+        if weight_kg is None:
+            errors.append("'weight_kg' is required")
+        else:
+            try:
+                weight_kg = float(weight_kg)
+                lo, hi = self.BOUNDS["weight_kg"]
+                if not (lo <= weight_kg <= hi):
+                    errors.append(f"'weight_kg' must be between {lo} and {hi}")
+            except (TypeError, ValueError):
+                errors.append("'weight_kg' must be a number")
+
+        # Height
+        height_cm = body.get("height_cm")
+        if height_cm is None:
+            errors.append("'height_cm' is required")
+        else:
+            try:
+                height_cm = float(height_cm)
+                lo, hi = self.BOUNDS["height_cm"]
+                if not (lo <= height_cm <= hi):
+                    errors.append(f"'height_cm' must be between {lo} and {hi}")
+            except (TypeError, ValueError):
+                errors.append("'height_cm' must be a number")
+
+        # Activity level
+        activity_level = body.get("activity_level", "").strip().lower()
+        if not activity_level:
+            errors.append("'activity_level' is required")
+        elif activity_level not in self.VALID_ACTIVITY:
+            errors.append(
+                f"'activity_level' must be one of: {', '.join(sorted(self.VALID_ACTIVITY))}"
+            )
+
+        # Goal
+        goal = body.get("goal", "").strip().lower()
+        if not goal:
+            errors.append("'goal' is required")
+        elif goal not in self.VALID_GOAL:
+            errors.append(
+                f"'goal' must be one of: {', '.join(sorted(self.VALID_GOAL))}"
+            )
+
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        # ── Call local LLM service ──────────────────────────────────
+        result = local_llm.estimate_daily_nutrition(
+            age=age,
+            sex=sex,
+            weight_kg=weight_kg,
+            height_cm=height_cm,
+            activity_level=activity_level,
+            goal=goal,
+        )
+
+        return JsonResponse(result)
