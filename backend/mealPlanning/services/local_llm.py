@@ -3,19 +3,28 @@ Local LLM service using stabilityai/stablelm-2-zephyr-1_6b for calorie/macro est
 
 The model is lazy-loaded on first request and kept in memory for subsequent calls.
 Uses zero-shot prompting (fastest, ~2s inference time).
+
+Set USE_LOCAL_LLM=true in your environment to enable the real model.
+On memory-constrained hosts (e.g. Render free tier), omit it to use the
+Mifflin-St Jeor fallback instead.
 """
 
-import gc
 import logging
+import os
 import re
 import time
-
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
 MODEL_ID = "stabilityai/stablelm-2-zephyr-1_6b"
+
+# Load real model by default (instructor testing). Set USE_LOCAL_LLM=false on Render.
+USE_LOCAL_LLM = os.environ.get("USE_LOCAL_LLM", "true").lower() not in ("false", "0", "no")
+
+# Conditional imports — only pull in torch/transformers when actually needed
+if USE_LOCAL_LLM:
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Singleton model + tokenizer (lazy-loaded)
 _model = None
@@ -150,35 +159,40 @@ def estimate_daily_nutrition(age, sex, weight_kg, height_cm, activity_level, goa
     """
     used_fallback = False
 
-    try:
-        model, tokenizer = _load_model()
-
-        prompt = _build_zero_shot_prompt(age, sex, weight_kg, height_cm)
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-
-        start = time.time()
-        with torch.no_grad():
-            outputs = model.generate(**inputs, max_new_tokens=200)
-        inference_time = round(time.time() - start, 2)
-
-        response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        logger.info("LLM response (%.2fs): %s", inference_time, response_text[:300])
-
-        parsed = _parse_llm_response(response_text)
-
-        # Validate parsed output — need at least BMR and one TDEE
-        if "bmr" not in parsed or not any(
-            k in parsed for k in ("tdee_sedentary", "tdee_moderate", "tdee_active")
-        ):
-            logger.warning("LLM output incomplete, falling back to Mifflin-St Jeor")
-            parsed = _fallback_mifflin(age, sex, weight_kg, height_cm)
-            used_fallback = True
-
-    except Exception as exc:
-        logger.error("LLM inference failed: %s", exc)
+    if not USE_LOCAL_LLM:
+        # Skip model loading on memory-constrained hosts (Render free tier)
+        logger.info("USE_LOCAL_LLM is disabled, using Mifflin-St Jeor fallback")
         parsed = _fallback_mifflin(age, sex, weight_kg, height_cm)
         used_fallback = True
-        inference_time = 0
+    else:
+        try:
+            model, tokenizer = _load_model()
+
+            prompt = _build_zero_shot_prompt(age, sex, weight_kg, height_cm)
+            inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+            start = time.time()
+            with torch.no_grad():
+                outputs = model.generate(**inputs, max_new_tokens=200)
+            inference_time = round(time.time() - start, 2)
+
+            response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            logger.info("LLM response (%.2fs): %s", inference_time, response_text[:300])
+
+            parsed = _parse_llm_response(response_text)
+
+            # Validate parsed output — need at least BMR and one TDEE
+            if "bmr" not in parsed or not any(
+                k in parsed for k in ("tdee_sedentary", "tdee_moderate", "tdee_active")
+            ):
+                logger.warning("LLM output incomplete, falling back to Mifflin-St Jeor")
+                parsed = _fallback_mifflin(age, sex, weight_kg, height_cm)
+                used_fallback = True
+
+        except Exception as exc:
+            logger.error("LLM inference failed: %s", exc)
+            parsed = _fallback_mifflin(age, sex, weight_kg, height_cm)
+            used_fallback = True
 
     # Select TDEE for the chosen activity level
     tdee = _pick_tdee(parsed, activity_level)
