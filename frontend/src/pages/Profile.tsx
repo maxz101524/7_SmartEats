@@ -139,29 +139,33 @@ function Profile() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const [report, setReport] = useState<ReportData | null>(null);
   const [reportLoading, setReportLoading] = useState(true);
-  const [reportError, setReportError] = useState("");
+  const [reportError, setReportError] = useState<string | null>(null);
 
-  /* ── Auth guard + data fetches ── */
-  useEffect(() => {
+  const fetchProfile = () => {
     const token = localStorage.getItem("authToken");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
-    const authHeaders = { headers: { Authorization: `Token ${token}` } };
-
+    if (!token) return;
+    setProfileError(null);
+    setProfileLoading(true);
     axios
-      .get(`${API_BASE}/profile/`, authHeaders)
+      .get(`${API_BASE}/profile/`, { headers: { Authorization: `Token ${token}` } })
       .then((res) => setProfile(res.data))
-      .catch((err) => console.error("Profile fetch failed:", err))
+      .catch(() => {
+        setProfileError("Could not load profile");
+      })
       .finally(() => setProfileLoading(false));
+  };
 
+  const fetchReport = () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+    setReportError(null);
+    setReportLoading(true);
     axios
-      .get(`${API_BASE}/meal-reports/`, authHeaders)
+      .get(`${API_BASE}/meal-reports/`, { headers: { Authorization: `Token ${token}` } })
       .then((res) => setReport(res.data))
       .catch((err) => {
         const status = err.response?.status;
@@ -171,11 +175,21 @@ function Profile() {
             : status
               ? `Failed to load report data (${status}).`
               : "Failed to load report data. Check your connection.";
-        console.error("Meal reports fetch failed:", err.message, err.response?.data);
         setReportError(message);
       })
       .finally(() => setReportLoading(false));
-  }, [navigate]);
+  };
+
+  /* ── Auth guard + data fetches ── */
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    fetchProfile();
+    fetchReport();
+  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Export handler ── */
   const handleDownload = async (format: "csv" | "json") => {
@@ -235,11 +249,21 @@ function Profile() {
               </div>
             </div>
           </Card>
-        ) : !profile ? (
+        ) : profileError || !profile ? (
           <Card padding="md">
-            <p style={{ color: "var(--se-text-faint)", fontSize: "var(--se-text-sm)" }}>
-              Could not load profile.
-            </p>
+            <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
+              <p style={{ color: "var(--se-error)", fontWeight: 600, fontSize: "var(--se-text-base)", margin: 0 }}>
+                Something went wrong
+              </p>
+              <p style={{ color: "var(--se-text-muted)", fontSize: "var(--se-text-sm)", marginTop: 4, margin: "4px 0 0" }}>
+                {profileError || "Could not load profile."}
+              </p>
+              <div style={{ marginTop: "var(--se-space-4)" }}>
+                <Button variant="secondary" size="sm" onClick={fetchProfile}>
+                  Try Again
+                </Button>
+              </div>
+            </div>
           </Card>
         ) : (
           <Card padding="md">
@@ -385,14 +409,21 @@ function Profile() {
             <Skeleton variant="rect" height={200} />
           </div>
         ) : reportError || !report ? (
-          <p
-            style={{
-              color: "var(--se-error)",
-              fontSize: "var(--se-text-sm)",
-            }}
-          >
-            {reportError || "No report data available."}
-          </p>
+          <Card padding="md">
+            <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
+              <p style={{ color: "var(--se-error)", fontWeight: 600, fontSize: "var(--se-text-base)", margin: 0 }}>
+                Something went wrong
+              </p>
+              <p style={{ color: "var(--se-text-muted)", fontSize: "var(--se-text-sm)", marginTop: 4, margin: "4px 0 0" }}>
+                {reportError || "No report data available."}
+              </p>
+              <div style={{ marginTop: "var(--se-space-4)" }}>
+                <Button variant="secondary" size="sm" onClick={fetchReport}>
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          </Card>
         ) : report.statistics.total_count === 0 ? (
           <p
             style={{

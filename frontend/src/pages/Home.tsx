@@ -15,9 +15,11 @@ export default function Home() {
   const navigate = useNavigate();
   const isLoggedIn = Boolean(localStorage.getItem("authToken"));
   const [stats, setStats] = useState<DishStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchStats = () => {
     if (!isLoggedIn) return;
+    setStatsError(null);
     const token = localStorage.getItem("authToken");
     axios
       .get(`${API_BASE}/dish-stats/`, {
@@ -27,9 +29,13 @@ export default function Home() {
         setStats(res.data);
       })
       .catch(() => {
-        // silently skip
+        setStatsError("Could not load stats");
       });
-  }, [isLoggedIn]);
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const featureCards = [
     {
@@ -122,7 +128,26 @@ export default function Home() {
       </section>
 
       {/* ── Section 2: Quick stats (logged-in only) ── */}
-      {isLoggedIn && !stats && (
+      {isLoggedIn && statsError && (
+        <section style={{ marginBottom: 48 }}>
+          <Card padding="md">
+            <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
+              <p style={{ color: "var(--se-error)", fontWeight: 600, fontSize: "var(--se-text-base)", margin: 0 }}>
+                Something went wrong
+              </p>
+              <p style={{ color: "var(--se-text-muted)", fontSize: "var(--se-text-sm)", marginTop: 4, margin: "4px 0 0" }}>
+                {statsError}
+              </p>
+              <div style={{ marginTop: "var(--se-space-4)" }}>
+                <Button variant="secondary" size="sm" onClick={fetchStats}>
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </section>
+      )}
+      {isLoggedIn && !statsError && !stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5" style={{ marginTop: "var(--se-space-6)" }}>
           {[1, 2, 3].map((i) => (
             <Card key={i} padding="md">

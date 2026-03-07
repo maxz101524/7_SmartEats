@@ -5,6 +5,7 @@ import { API_BASE } from "../config";
 import { FoodListItem } from "../components/FoodListItem";
 import { FilterChip } from "../components/FilterChip";
 import { Card } from "../components/Card";
+import { Button } from "../components/Button";
 import AddDish from "../components/AddDish";
 import Skeleton from "../components/Skeleton";
 
@@ -92,6 +93,7 @@ export default function Menu() {
   const [halls, setHalls] = useState<DiningHall[]>([]);
   const [selectedHall, setSelectedHall] = useState<DiningHall | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hallsError, setHallsError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [stats, setStats] = useState<DishStats | null>(null);
 
@@ -101,7 +103,9 @@ export default function Menu() {
   const [excludedAllergens, setExcludedAllergens] = useState<Set<string>>(new Set());
 
   // ── Fetch halls ───────────────────────────────────────────────────────────
-  useEffect(() => {
+  const fetchHalls = () => {
+    setHallsError(null);
+    setLoading(true);
     axios
       .get(`${API_BASE}/halls/`)
       .then((res) => {
@@ -114,8 +118,14 @@ export default function Menu() {
           if (found) setSelectedHall(found);
         }
       })
-      .catch((err) => console.error("Failed to load halls:", err))
+      .catch(() => {
+        setHallsError("Could not load dining halls");
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchHalls();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch dish stats ──────────────────────────────────────────────────────
@@ -289,6 +299,24 @@ export default function Menu() {
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} variant="rect" height={52} />
             ))}
+          </div>
+        ) : hallsError ? (
+          <div style={{ padding: "16px" }}>
+            <Card padding="md">
+              <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
+                <p style={{ color: "var(--se-error)", fontWeight: 600, fontSize: "var(--se-text-base)", margin: 0 }}>
+                  Something went wrong
+                </p>
+                <p style={{ color: "var(--se-text-muted)", fontSize: "var(--se-text-sm)", marginTop: 4, margin: "4px 0 0" }}>
+                  {hallsError}
+                </p>
+                <div style={{ marginTop: "var(--se-space-4)" }}>
+                  <Button variant="secondary" size="sm" onClick={fetchHalls}>
+                    Try Again
+                  </Button>
+                </div>
+              </div>
+            </Card>
           </div>
         ) : (
           halls.map((hall) => {
