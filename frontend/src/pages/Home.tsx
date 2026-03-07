@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
+import Skeleton from "../components/Skeleton";
 import { API_BASE } from "../config";
 
 interface DishStats {
@@ -121,6 +122,16 @@ export default function Home() {
       </section>
 
       {/* ── Section 2: Quick stats (logged-in only) ── */}
+      {isLoggedIn && !stats && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5" style={{ marginTop: "var(--se-space-6)" }}>
+          {[1, 2, 3].map((i) => (
+            <Card key={i} padding="md">
+              <Skeleton variant="rect" height={24} width="40%" />
+              <div style={{ marginTop: 8 }}><Skeleton variant="text" lines={1} /></div>
+            </Card>
+          ))}
+        </div>
+      )}
       {isLoggedIn && stats && (
         <section style={{ marginBottom: 48 }}>
           <div

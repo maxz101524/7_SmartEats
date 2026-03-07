@@ -6,6 +6,7 @@ import { FoodListItem } from "../components/FoodListItem";
 import { FilterChip } from "../components/FilterChip";
 import { Card } from "../components/Card";
 import AddDish from "../components/AddDish";
+import Skeleton from "../components/Skeleton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -284,9 +285,11 @@ export default function Menu() {
 
         {/* Hall rows */}
         {loading ? (
-          <p style={{ padding: "20px 16px", color: "var(--se-text-faint)", fontSize: 13 }}>
-            Loading…
-          </p>
+          <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} variant="rect" height={52} />
+            ))}
+          </div>
         ) : (
           halls.map((hall) => {
             const active = selectedHall?.Dining_Hall_ID === hall.Dining_Hall_ID;

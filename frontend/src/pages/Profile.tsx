@@ -5,6 +5,7 @@ import embed from "vega-embed";
 import { API_BASE } from "../config";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
+import Skeleton from "../components/Skeleton";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 
@@ -226,9 +227,13 @@ function Profile() {
       <section style={sectionStyle}>
         {profileLoading ? (
           <Card padding="md">
-            <p style={{ color: "var(--se-text-faint)", fontSize: "var(--se-text-sm)" }}>
-              Loading profile…
-            </p>
+            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <Skeleton variant="circle" width={64} />
+              <div style={{ flex: 1 }}>
+                <Skeleton variant="rect" height={24} width="50%" />
+                <div style={{ marginTop: 8 }}><Skeleton variant="text" lines={2} /></div>
+              </div>
+            </div>
           </Card>
         ) : !profile ? (
           <Card padding="md">
@@ -375,14 +380,10 @@ function Profile() {
         </div>
 
         {reportLoading ? (
-          <p
-            style={{
-              color: "var(--se-text-faint)",
-              fontSize: "var(--se-text-sm)",
-            }}
-          >
-            Loading meal history…
-          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Skeleton variant="rect" height={120} />
+            <Skeleton variant="rect" height={200} />
+          </div>
         ) : reportError || !report ? (
           <p
             style={{

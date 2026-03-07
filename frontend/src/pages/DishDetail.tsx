@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { API_BASE, BACKEND_BASE } from "../config";
 import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
+import Skeleton from "../components/Skeleton";
 
 interface Dish {
   dish_id: number;
@@ -88,8 +89,12 @@ function DishDetail() {
 
   if (!dish) {
     return (
-      <div style={{ display: "flex", justifyContent: "center", padding: 64 }}>
-        <p style={{ color: "var(--se-text-muted)", fontSize: 14 }}>Loading…</p>
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "var(--se-space-8)" }}>
+        <Skeleton variant="rect" height={32} width="60%" />
+        <div style={{ marginTop: 16 }}><Skeleton variant="text" lines={2} /></div>
+        <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} variant="rect" height={80} />)}
+        </div>
       </div>
     );
   }
