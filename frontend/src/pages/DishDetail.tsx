@@ -4,6 +4,8 @@ import axios from "axios";
 import { API_BASE, BACKEND_BASE } from "../config";
 import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 import Skeleton from "../components/Skeleton";
+import { useToast } from "../components/Toast";
+import { Button } from "../components/Button";
 
 interface Dish {
   dish_id: number;
@@ -82,6 +84,29 @@ function DishDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const [dish, setDish] = useState<Dish | null>(null);
+  const token = localStorage.getItem("authToken");
+  const toast = useToast();
+  const [adding, setAdding] = useState(false);
+
+  async function handleAddToMeal() {
+    if (!token || !dish) {
+      navigate("/login");
+      return;
+    }
+    setAdding(true);
+    try {
+      await axios.post(
+        `${API_BASE}/meals/`,
+        { dish_ids: [dish.dish_id] },
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      toast.success(`${dish.dish_name} added to today's meal!`);
+    } catch {
+      toast.error("Failed to add dish to meal. Please try again.");
+    } finally {
+      setAdding(false);
+    }
+  }
 
   useEffect(() => {
     axios.get(`${API_BASE}/dishes/${id}`).then((res) => setDish(res.data));
@@ -295,6 +320,19 @@ function DishDetail() {
           alt="Macro Breakdown Chart"
           style={{ maxWidth: "100%", height: "auto" }}
         />
+      </div>
+
+      {/* Add to Meal CTA */}
+      <div style={{ marginTop: "var(--se-space-6)", textAlign: "center" }}>
+        {token ? (
+          <Button variant="primary" size="lg" loading={adding} onClick={handleAddToMeal}>
+            Add to Today's Meal
+          </Button>
+        ) : (
+          <Button variant="secondary" size="lg" onClick={() => navigate("/login")}>
+            Sign in to track meals
+          </Button>
+        )}
       </div>
     </div>
   );
