@@ -2,6 +2,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { API_BASE, BACKEND_BASE } from "../config";
+import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 
 interface Dish {
   dish_id: number;
@@ -23,13 +24,6 @@ interface Dish {
   nutrition_source?: string;
   ai_confidence?: string;
 }
-
-const FLAG_COLORS: Record<string, { bg: string; text: string }> = {
-  Vegetarian: { bg: "#dcfce7", text: "#16a34a" },
-  Vegan: { bg: "#d1fae5", text: "#059669" },
-  Halal: { bg: "#dbeafe", text: "#2563eb" },
-  Jain: { bg: "#fef9c3", text: "#a16207" },
-};
 
 function MacroCard({
   label,
@@ -161,7 +155,7 @@ function DishDetail() {
       {dish.dietary_flags && dish.dietary_flags.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
           {dish.dietary_flags.map((flag) => {
-            const colors = FLAG_COLORS[flag] || { bg: "var(--se-bg-subtle)", text: "var(--se-text-muted)" };
+            const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
             return (
               <span
                 key={flag}

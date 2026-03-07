@@ -7,6 +7,7 @@
 
 import { FoodIcon } from "./FoodIcon";
 import type { FoodCategory } from "./FoodIcon";
+import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 
 interface FoodListItemProps {
   dishName: string;
@@ -25,13 +26,6 @@ interface FoodListItemProps {
   onAdd?: () => void;
   added?: boolean;
 }
-
-const FLAG_COLORS: Record<string, { bg: string; text: string }> = {
-  Vegetarian: { bg: "#dcfce7", text: "#16a34a" },
-  Vegan: { bg: "#d1fae5", text: "#059669" },
-  Halal: { bg: "#dbeafe", text: "#2563eb" },
-  Jain: { bg: "#fef9c3", text: "#a16207" },
-};
 
 export function FoodListItem({
   dishName,
@@ -80,7 +74,7 @@ export function FoodListItem({
         {dietaryFlags && dietaryFlags.length > 0 && (
           <div className="flex gap-1 mt-1 flex-wrap">
             {dietaryFlags.map((flag) => {
-              const colors = FLAG_COLORS[flag] || { bg: "var(--se-bg-subtle)", text: "var(--se-text-muted)" };
+              const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
               return (
                 <span
                   key={flag}
@@ -134,7 +128,7 @@ export function FoodListItem({
           <span
             className="px-1.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap hidden sm:inline"
             style={{
-              background: "#fff1eb",
+              background: "var(--se-primary-dim)",
               color: "var(--se-macro-fat)",
             }}
           >
