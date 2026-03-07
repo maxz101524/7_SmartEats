@@ -77,3 +77,8 @@ body {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Button press micro-interaction */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}

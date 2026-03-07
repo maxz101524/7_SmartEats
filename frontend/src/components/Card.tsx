@@ -41,12 +41,13 @@ export function Card({
         .join(" ")}
       style={{
         boxShadow: "var(--se-shadow-sm)",
-        ...(hover ? undefined : {}),
+        transition: "transform 150ms ease, box-shadow 150ms ease",
       }}
       onMouseEnter={
         hover
           ? (e) => {
               e.currentTarget.style.boxShadow = "var(--se-shadow-md)";
+              e.currentTarget.style.transform = "translateY(-2px)";
             }
           : undefined
       }
@@ -54,6 +55,7 @@ export function Card({
         hover
           ? (e) => {
               e.currentTarget.style.boxShadow = "var(--se-shadow-sm)";
+              e.currentTarget.style.transform = "translateY(0)";
             }
           : undefined
       }
