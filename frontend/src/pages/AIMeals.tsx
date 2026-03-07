@@ -393,9 +393,9 @@ function NutritionEstimator() {
             marginTop: 20,
             padding: "12px 16px",
             borderRadius: 12,
-            background: "var(--se-error-dim, #fef2f2)",
-            border: "1px solid var(--se-error, #ef4444)",
-            color: "var(--se-error, #ef4444)",
+            background: "var(--se-error-dim)",
+            border: "1px solid var(--se-error)",
+            color: "var(--se-error)",
             fontSize: 14,
           }}
         >
@@ -485,9 +485,9 @@ function NutritionEstimator() {
           {/* Macros */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
             {[
-              { label: "Protein", value: result.macros.protein_g, color: "#ef4444" },
-              { label: "Carbs", value: result.macros.carbs_g, color: "#f59e0b" },
-              { label: "Fat", value: result.macros.fat_g, color: "#3b82f6" },
+              { label: "Protein", value: result.macros.protein_g, color: "var(--se-macro-protein)" },
+              { label: "Carbs", value: result.macros.carbs_g, color: "var(--se-macro-carbs)" },
+              { label: "Fat", value: result.macros.fat_g, color: "var(--se-macro-fat)" },
             ].map(({ label, value, color }) => (
               <div
                 key={label}
