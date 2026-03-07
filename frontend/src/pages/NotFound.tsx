@@ -1,27 +1,53 @@
 import { Link } from "react-router-dom";
+import Button from "../components/Button";
 
-function NotFound() {
+export default function NotFound() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-      <h1 className="text-9xl font-black text-gray-200">404</h1>
-
-      <div className="absolute">
-        <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mt-4">
-          Lost in the Dining Hall?
-        </h2>
-        <p className="text-gray-500 mt-2 mb-8">
-          We couldn't find the page you're looking for.
-        </p>
-
-        <Link
-          to="/"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-full transition-colors shadow-lg shadow-blue-200"
-        >
-          Back to Dishes
-        </Link>
-      </div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "60vh",
+        textAlign: "center",
+        padding: "var(--se-space-8)",
+      }}
+    >
+      <p
+        style={{
+          fontSize: "8rem",
+          fontWeight: 800,
+          color: "var(--se-border-muted)",
+          lineHeight: 1,
+          margin: 0,
+        }}
+      >
+        404
+      </p>
+      <h1
+        style={{
+          fontSize: "var(--se-text-h2)",
+          fontWeight: 700,
+          color: "var(--se-text-main)",
+          marginTop: "var(--se-space-4)",
+        }}
+      >
+        Lost in the Dining Hall?
+      </h1>
+      <p
+        style={{
+          fontSize: "var(--se-text-base)",
+          color: "var(--se-text-muted)",
+          marginTop: "var(--se-space-2)",
+          marginBottom: "var(--se-space-8)",
+        }}
+      >
+        The page you're looking for doesn't exist.
+      </p>
+      <Link to="/">
+        <Button variant="primary" size="lg">Back to Home</Button>
+      </Link>
     </div>
   );
 }
-
-export default NotFound;
