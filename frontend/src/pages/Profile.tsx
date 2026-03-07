@@ -88,7 +88,7 @@ function VegaChart({ spec, id }: { spec: object; id: string }) {
     };
   }, [spec]);
 
-  return <div id={id} ref={containerRef} className="w-full" />;
+  return <div id={id} ref={containerRef} className="w-full" style={{ maxWidth: "100%", overflow: "hidden" }} />;
 }
 
 /* ─── Stat tile helper ───────────────────────────────────────────────── */
@@ -519,56 +519,58 @@ function Profile() {
                 >
                   Macronutrient Breakdown
                 </p>
-                <table style={{ width: "100%", fontSize: "var(--se-text-sm)", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr
-                      style={{
-                        borderBottom: `1px solid var(--se-border)`,
-                      }}
-                    >
-                      <th
-                        style={{
-                          textAlign: "left",
-                          padding: "6px 0",
-                          fontWeight: "var(--se-weight-semibold)",
-                          color: "var(--se-text-secondary)",
-                        }}
-                      >
-                        Nutrient
-                      </th>
-                      <th
-                        style={{
-                          textAlign: "right",
-                          padding: "6px 0",
-                          fontWeight: "var(--se-weight-semibold)",
-                          color: "var(--se-text-secondary)",
-                        }}
-                      >
-                        Total (g)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.statistics.macros.labels.map((label, i) => (
+                <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                  <table style={{ minWidth: 400, width: "100%", fontSize: "var(--se-text-sm)", borderCollapse: "collapse" }}>
+                    <thead>
                       <tr
-                        key={label}
-                        style={{ borderBottom: `1px solid var(--se-border-muted)` }}
+                        style={{
+                          borderBottom: `1px solid var(--se-border)`,
+                        }}
                       >
-                        <td style={{ padding: "8px 0", color: "var(--se-text-main)" }}>{label}</td>
-                        <td
+                        <th
                           style={{
-                            padding: "8px 0",
-                            textAlign: "right",
+                            textAlign: "left",
+                            padding: "6px 0",
                             fontWeight: "var(--se-weight-semibold)",
-                            color: "var(--se-text-main)",
+                            color: "var(--se-text-secondary)",
                           }}
                         >
-                          {report.statistics.macros.values[i]}
-                        </td>
+                          Nutrient
+                        </th>
+                        <th
+                          style={{
+                            textAlign: "right",
+                            padding: "6px 0",
+                            fontWeight: "var(--se-weight-semibold)",
+                            color: "var(--se-text-secondary)",
+                          }}
+                        >
+                          Total (g)
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {report.statistics.macros.labels.map((label, i) => (
+                        <tr
+                          key={label}
+                          style={{ borderBottom: `1px solid var(--se-border-muted)` }}
+                        >
+                          <td style={{ padding: "8px 0", color: "var(--se-text-main)" }}>{label}</td>
+                          <td
+                            style={{
+                              padding: "8px 0",
+                              textAlign: "right",
+                              fontWeight: "var(--se-weight-semibold)",
+                              color: "var(--se-text-main)",
+                            }}
+                          >
+                            {report.statistics.macros.values[i]}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </Card>
 
               {/* Meals by Category */}
@@ -586,52 +588,54 @@ function Profile() {
                 >
                   Meals by Category
                 </p>
-                <table style={{ width: "100%", fontSize: "var(--se-text-sm)", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid var(--se-border)` }}>
-                      <th
-                        style={{
-                          textAlign: "left",
-                          padding: "6px 0",
-                          fontWeight: "var(--se-weight-semibold)",
-                          color: "var(--se-text-secondary)",
-                        }}
-                      >
-                        Category
-                      </th>
-                      <th
-                        style={{
-                          textAlign: "right",
-                          padding: "6px 0",
-                          fontWeight: "var(--se-weight-semibold)",
-                          color: "var(--se-text-secondary)",
-                        }}
-                      >
-                        Count
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.statistics.categories.labels.map((label, i) => (
-                      <tr
-                        key={label}
-                        style={{ borderBottom: `1px solid var(--se-border-muted)` }}
-                      >
-                        <td style={{ padding: "8px 0", color: "var(--se-text-main)" }}>{label}</td>
-                        <td
+                <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                  <table style={{ minWidth: 400, width: "100%", fontSize: "var(--se-text-sm)", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid var(--se-border)` }}>
+                        <th
                           style={{
-                            padding: "8px 0",
-                            textAlign: "right",
+                            textAlign: "left",
+                            padding: "6px 0",
                             fontWeight: "var(--se-weight-semibold)",
-                            color: "var(--se-macro-cal)",
+                            color: "var(--se-text-secondary)",
                           }}
                         >
-                          {report.statistics.categories.values[i]}
-                        </td>
+                          Category
+                        </th>
+                        <th
+                          style={{
+                            textAlign: "right",
+                            padding: "6px 0",
+                            fontWeight: "var(--se-weight-semibold)",
+                            color: "var(--se-text-secondary)",
+                          }}
+                        >
+                          Count
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {report.statistics.categories.labels.map((label, i) => (
+                        <tr
+                          key={label}
+                          style={{ borderBottom: `1px solid var(--se-border-muted)` }}
+                        >
+                          <td style={{ padding: "8px 0", color: "var(--se-text-main)" }}>{label}</td>
+                          <td
+                            style={{
+                              padding: "8px 0",
+                              textAlign: "right",
+                              fontWeight: "var(--se-weight-semibold)",
+                              color: "var(--se-macro-cal)",
+                            }}
+                          >
+                            {report.statistics.categories.values[i]}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </Card>
             </div>
 
@@ -654,7 +658,7 @@ function Profile() {
                 <img
                   src={report.chart_base64}
                   alt="Meal distribution chart"
-                  style={{ width: "100%", maxWidth: 600, display: "block", margin: "0 auto" }}
+                  style={{ width: "100%", maxWidth: 600, height: "auto", display: "block", margin: "0 auto" }}
                 />
               </Card>
             )}
