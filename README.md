@@ -1,6 +1,6 @@
 # SmartEats
 
-React frontend + Django REST API for UIUC dining discovery and meal tracking. Built for INFO 490; current deployment (A5): Render (backend) + Vercel (frontend), with authentication and Google OAuth.
+React frontend + Django REST API for UIUC dining discovery and meal tracking. Built for INFO 490; deployed on Render (backend) + Vercel (frontend).
 
 ---
 
@@ -18,70 +18,84 @@ SmartEats/
 │   │   ├── urls.py                   # /admin/, /api/...
 │   │   └── secrets_environment.py   # Loads .env via django-environ
 │   ├── mealPlanning/
-│   │   ├── models.py                 # DiningHall, Dish, UserProfile, Meal, TempMeal, TempMealItem
-│   │   ├── views.py                  # API views, auth endpoints, charts, export, reports
-│   │   ├── api_views.py              # Public chart-ready JSON: dishes-by-category, meals-per-day
+│   │   ├── models.py                 # DiningHall, Dish, UserProfile, Meal
+│   │   ├── views.py                  # API views, auth, charts, NutritionEstimateView
+│   │   ├── api_views.py              # Public chart-ready JSON
 │   │   ├── urls.py                   # All /api/ routes
+│   │   ├── services/
+│   │   │   ├── local_llm.py          # Local LLM (StableLM 1.6B) nutrition estimator
+│   │   │   ├── ai_chat.py            # Gemini-powered AI chat service
+│   │   │   └── gemini_client.py      # Gemini dish nutrition estimation
 │   │   └── migrations/
 │   ├── docs/
-│   │   ├── 01_project_documents/
-│   │   ├── 02_wireframes/
-│   │   ├── 03_data_model/
-│   │   ├── 04_branching_strategy/    # branching_strategy.md
 │   │   ├── 05_notes/                 # notes.txt (per-week implementation notes)
-│   │   ├── 06_screenshots/           # Week2–Week5 screenshots and deliverables
+│   │   ├── 06_screenshots/           # Week2–Week6 screenshots and deliverables
 │   │   └── archive/                  # Archived README sections (prior weeks)
 │   ├── build.sh                      # Render build: pip, migrate, collectstatic
 │   ├── requirements.txt
-│   ├── .env.example
 │   └── db.sqlite3                    # Committed for course deliverables
 │
 ├── frontend/                         # React + TypeScript + Vite (deployed on Vercel)
 │   ├── src/
-│   │   ├── config.ts                 # API_BASE / BACKEND_BASE from VITE_BACKEND_BASE_URL
+│   │   ├── config.ts                 # API_BASE / BACKEND_BASE
 │   │   ├── main.tsx                  # Entry point
 │   │   ├── App.tsx                   # Router
 │   │   ├── Base.tsx                  # Layout (Navbar + Outlet)
-│   │   ├── components/               # Navbar, Login, Register, GGLogin, logout,
-│   │   │                             # AddDish, ShowData, Empty, Button, Card, FoodIcon, FoodListItem
-│   │   ├── pages/                    # Dishes, DishDetail, DiningHalls, Profiles,
-│   │   │                             # AIMeals, Charts, Reports, NotFound, Showcase
-│   │   └── static/css/custom.css     # Tailwind v4 dark theme overrides
-│   ├── index.html
+│   │   ├── components/               # Navbar, Login, Register, GGLogin, AddDish, etc.
+│   │   ├── pages/                    # Dishes, DishDetail, DiningHalls, AIMeals,
+│   │   │                             # Charts, Reports, NotFound, Showcase
+│   │   └── static/css/custom.css     # Theme overrides
 │   └── package.json
 │
+├── llm-test/                         # A6 Part 1 — Hugging Face Leaderboard Lab
+│   ├── ai_prototype.ipynb            # 15-model benchmark + prompt engineering + evaluation
+│   └── model_matrix_results.json     # Raw matrix test results (15 models)
+│
+├── README_AI.md                      # A6 Part 2 §1 — Data Input, Preprocessing, Safety Guardrails
 ├── A5-part3-deliverables/            # Public API alternative use case demos
-├── group-7-vega-lite-API-demo.txt    # Vega-Lite spec (submission artifact)
+├── group-7-vega-lite-API-demo.txt    # Vega-Lite spec (A5 submission artifact)
 └── README.md
 ```
 
 ---
 
-## A5 scope (Authentication, Google OAuth, Public API, Deployment)
+## A6 scope (Text Intelligence — Local LLM + API Integration)
 
-### Authentication (Part 1 & 2)
+### Part 1: Hugging Face Leaderboard Lab (`llm-test/`)
 
-- **Token auth:** DRF `TokenAuthentication` + `dj-rest-auth`. Login returns a token stored in `localStorage`.
-- **Endpoints:** `POST /api/login/`, `POST /api/register/`, `POST /api/google-login/`
-- **Google OAuth:** `django-allauth` on backend + `@react-oauth/google` on frontend. "Continue with Google" button on the login page (`GGLogin.tsx`).
-- **Protected APIs:** `UserProfileView` and `MealReportsView` require `IsAuthenticated`.
-- **Nav:** Shows Login button when logged out, Logout button when logged in (token from `localStorage`).
+- **15 models** tested across 5 size categories: Ultra-Light (<1B), Small (1B–3B), Medium (3B–5B), Large (5B–7B), Extra-Large (7B–10B+).
+- **Prompt engineering:** Zero-shot, one-shot, few-shot, and many-shot prompting evaluated.
+- **Evaluation criteria:** Instruction adherence, reasoning accuracy, prompt stability, inference speed.
+- **Selected model:** `stabilityai/stablelm-2-zephyr-1_6b` — best balance of accuracy, speed (~1.5s), and structured output formatting.
 
-### Public API + Vega-Lite (Part 3)
+### Part 2: Django Integration
 
-- **Public endpoints** (no auth required):
-  - `GET /api/dishes-by-category/` → `[{ "category", "count" }]`
-  - `GET /api/meals-per-day/` → `[{ "date", "count" }]`
-- **Vega-Lite spec:** `group-7-vega-lite-API-demo.txt` — bar chart of dishes by category, `data.url` points to production API.
-- **Alternative uses:** `A5-part3-deliverables/` — Python script, Google Sheets import, Jupyter notebook analysis (each with screenshots).
+#### §1 — System Description (`README_AI.md`)
+Documents Data Input, Preprocessing, and Safety Guardrails for both the local LLM and Gemini API features.
 
-### Deployment
+#### §2 — Local LLM in Django (`services/local_llm.py`)
+- **Model:** `stabilityai/stablelm-2-zephyr-1_6b` via `transformers` — auto-downloads weights on first run.
+- **Endpoint:** `POST /api/nutrition-estimate/` — accepts age, sex, weight, height, activity level, and goal.
+- Input validation (type, range, enum whitelisting) → zero-shot prompt → regex parsing → Mifflin-St Jeor fallback.
+- Returns BMR, TDEE, recommended daily calories, and macro breakdown (protein/carbs/fat).
+- **Environment toggle:** `USE_LOCAL_LLM=true` (default) loads the real model. Set `USE_LOCAL_LLM=false` on Render to use Mifflin-St Jeor fallback within 512MB memory.
 
-- **Backend (Render):** Auto-deploys from `main`. Build via `build.sh`. Start: `gunicorn SmartEats_config.wsgi:application`.
-  - Env: `SECRET_KEY`, `DJANGO_SETTINGS_MODULE=SmartEats_config.settings.production`
-- **Frontend (Vercel):** Auto-deploys from `main`. Root dir: `frontend`. Build: `npm run build`.
-  - Env: `VITE_BACKEND_BASE_URL=https://smarteats-backend.onrender.com` (no trailing slash)
-- **Live:** Frontend https://smarteats7.vercel.app — Backend https://smarteats-backend.onrender.com
+#### §3 — External API Integration (Gemini)
+- `gemini_client.py` — AI-powered dish nutrition estimation.
+- `ai_chat.py` — Conversational AI chatbot with dining hall menu context, dish recommendations, and follow-up suggestions.
+- API key stored in `.env`, excluded from Git.
+
+### Part 3: Reflection (`backend/docs/05_notes/notes.txt`)
+Answers to all four production reflection questions:
+1. Size vs. Quality Trade-off
+2. Cost & Scaling (10,000 daily users)
+3. Hybrid Potential (local + API)
+4. Cost Comparison (pre-trained vs. paid API)
+
+### Frontend: AI Nutrition Hub (`AIMeals.tsx`)
+Tabbed interface with two features:
+- **AI Chat** — Gemini-powered chatbot for dining recommendations.
+- **Nutrition Estimator** — Form that calls the local LLM endpoint and displays BMR, TDEE, recommended calories, and macros.
 
 ---
 
@@ -90,8 +104,10 @@ SmartEats/
 **Backend:**
 ```bash
 cd backend
+pip install -r requirements.txt
 python manage.py runserver --settings=SmartEats_config.settings.development
 ```
+> First request to `/api/nutrition-estimate/` will download the model (~3GB). Subsequent requests use the cached model.
 
 **Frontend:**
 ```bash
@@ -104,6 +120,14 @@ npm run dev
 
 ---
 
+## Deployment
+
+- **Backend (Render):** Auto-deploys from `main`. Env: `USE_LOCAL_LLM=false` (memory constraint), `GEMINI_API_KEY`, `SECRET_KEY`.
+- **Frontend (Vercel):** Auto-deploys from `main`. Env: `VITE_BACKEND_BASE_URL`.
+- **Live:** Frontend https://smarteats7.vercel.app — Backend https://smarteats-backend.onrender.com
+
+---
+
 ## API reference
 
 | Endpoint | Auth | Description |
@@ -112,20 +136,19 @@ npm run dev
 | `GET /api/dishes/` | No | Dish catalog (`?search=`) |
 | `GET /api/dishes/<id>` | No | Dish detail |
 | `GET /api/dish-stats/` | No | Aggregation stats |
-| `GET /api/dishes-by-category/` | No | **Public** — dishes per category (Vega-Lite) |
-| `GET /api/meals-per-day/` | No | **Public** — meals per day (Vega-Lite) |
-| `GET /api/nutrition-lookup/?q=` | No | External Wger nutrition lookup |
+| `GET /api/dishes-by-category/` | No | Public — dishes per category |
+| `GET /api/meals-per-day/` | No | Public — meals per day |
+| `GET /api/nutrition-lookup/?q=` | No | Wger nutrition lookup |
+| `POST /api/nutrition-estimate/` | No | **A6** — Local LLM calorie/macro estimation |
+| `POST /api/ai-chat/` | No | **A6** — Gemini AI chat |
 | `POST /api/login/` | No | Token login |
 | `POST /api/register/` | No | Registration |
 | `POST /api/google-login/` | No | Google OAuth login |
 | `GET/PUT /api/profile/` | Yes | Authenticated user profile |
-| `GET /api/profiles/` | No | All profiles (admin) |
-| `GET /api/meals/` | No | Meal history |
-| `POST /api/aimeals/` | No | AI meal search |
-| `GET /api/meal-reports/` | Yes | Reports JSON (totals, macros, chart) |
+| `GET /api/meal-reports/` | Yes | Reports JSON |
 | `GET /api/export-meals/?format=csv\|json` | No | Meal export |
 | `GET /api/charts/*.png` | No | Matplotlib chart images |
 
 ---
 
-Archived section docs: `backend/docs/archive/`
+Archived section docs (A2–A5): `backend/docs/archive/`
