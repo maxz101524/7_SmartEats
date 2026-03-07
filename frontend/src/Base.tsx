@@ -1,7 +1,9 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 
 function Base() {
+  const location = useLocation();
+
   return (
     <div
       className="min-h-screen flex flex-col w-full"
@@ -10,7 +12,9 @@ function Base() {
       <Navbar />
 
       <main className="flex-grow w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6" style={{ paddingTop: "76px" }}>
-        <Outlet />
+        <div key={location.pathname} style={{ animation: "fadeIn 200ms ease-out" }}>
+          <Outlet />
+        </div>
       </main>
 
       <footer
