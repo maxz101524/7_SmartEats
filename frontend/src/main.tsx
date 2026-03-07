@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { GoogleOAuthProvider } from "@react-oauth/google"; // 1. Import the provider
+import { ToastProvider } from "./components/Toast.tsx";
 import "./index.css";
 import "./static/css/custom.css";
 import App from "./App.tsx";
@@ -11,7 +12,9 @@ const GOOGLE_CLIENT_ID =
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </GoogleOAuthProvider>
   </StrictMode>,
 );
