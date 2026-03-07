@@ -1,5 +1,24 @@
 import { useState, useEffect } from "react";
 import { API_BASE } from "../config";
+import { Button } from "./Button";
+
+const inputStyle: React.CSSProperties = {
+  background: "var(--se-bg-input)",
+  border: "1px solid var(--se-border)",
+  borderRadius: "var(--se-radius-md)",
+  padding: "10px 14px",
+  fontSize: "var(--se-text-base)",
+  color: "var(--se-text-main)",
+  width: "100%",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: "var(--se-text-sm)",
+  color: "var(--se-text-secondary)",
+  fontWeight: 500,
+  marginBottom: "8px",
+};
 
 function AddDish() {
   const [name, setName] = useState("");
@@ -71,17 +90,17 @@ function AddDish() {
 
     // Validate form
     if (!name.trim()) {
-      setMessage("❌ Dish name is required");
+      setMessage("error:Dish name is required");
       setLoading(false);
       return;
     }
     if (!category.trim()) {
-      setMessage("❌ Category is required");
+      setMessage("error:Category is required");
       setLoading(false);
       return;
     }
     if (!diningHall) {
-      setMessage("❌ Dining hall is required");
+      setMessage("error:Dining hall is required");
       setLoading(false);
       return;
     }
@@ -110,7 +129,6 @@ function AddDish() {
       });
 
       if (response.ok) {
-        setMessage("✅ Dish added successfully!");
         setName("");
         setCategory("");
         setCalories("");
@@ -118,69 +136,95 @@ function AddDish() {
         setCarbs("");
         setFat("");
         setDiningHall("");
-        // Refresh page after 1.5 seconds to show success message
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
+        setMessage("success:Dish added successfully!");
       } else {
         const errorData = await response.json();
         console.error("Backend error:", errorData);
-        setMessage(`❌ Error: ${errorData.error || "Failed to add dish"}`);
+        setMessage(
+          `error:${errorData.error || "Failed to add dish"}`,
+        );
       }
     } catch (error) {
       console.error("Fetch error:", error);
-      setMessage(`❌ Error: ${error}`);
+      setMessage(`error:${error}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const isSuccess = message.startsWith("success:");
+  const isError = message.startsWith("error:");
+  const messageText = message.replace(/^(success|error):/, "");
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="p-6 border-2 border-blue-300 rounded-lg shadow-lg bg-white mt-8"
+      style={{
+        background: "var(--se-bg-surface)",
+        border: "1.5px solid var(--se-border)",
+        borderRadius: "var(--se-radius-lg)",
+        boxShadow: "var(--se-shadow-md)",
+        padding: "var(--se-space-6)",
+        marginTop: "var(--se-space-8)",
+      }}
     >
-      <h2 className="text-2xl font-bold mb-6 text-gray-800 border-b pb-3">
-        ➕ Add New Dish
+      <h2
+        style={{
+          fontSize: "var(--se-text-h2)",
+          fontWeight: "var(--se-weight-bold)" as any,
+          marginBottom: "var(--se-space-6)",
+          color: "var(--se-text-main)",
+          borderBottom: "1px solid var(--se-border)",
+          paddingBottom: "var(--se-space-3)",
+        }}
+      >
+        Add New Dish
       </h2>
 
       {message && (
         <p
-          className={`mb-4 p-3 rounded ${
-            message.includes("✅")
-              ? "bg-green-100 text-green-700 border border-green-300"
-              : "bg-red-100 text-red-700 border border-red-300"
-          }`}
+          style={{
+            marginBottom: "var(--se-space-4)",
+            padding: "var(--se-space-3)",
+            borderRadius: "var(--se-radius-md)",
+            ...(isSuccess
+              ? {
+                  background: "var(--se-success-dim)",
+                  color: "var(--se-success)",
+                  border: "1px solid var(--se-success)",
+                }
+              : {
+                  background: "var(--se-error-dim)",
+                  color: "var(--se-error)",
+                  border: "1px solid var(--se-error)",
+                }),
+          }}
         >
-          {message}
+          {messageText}
         </p>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Dish Name *
-          </label>
+          <label style={labelStyle}>Dish Name *</label>
           <input
             type="text"
             placeholder="Enter dish name..."
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            style={inputStyle}
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Category *
-          </label>
+          <label style={labelStyle}>Category *</label>
           <input
             type="text"
             placeholder="e.g., Salad, Pasta, Main..."
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            style={inputStyle}
             required
           />
         </div>
@@ -188,91 +232,116 @@ function AddDish() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Calories
-          </label>
+          <label style={labelStyle}>Calories</label>
           <input
             type="number"
             placeholder="0"
             value={calories}
             onChange={(e) => setCalories(e.target.value)}
             min="0"
-            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            style={inputStyle}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Protein (g)
-          </label>
+          <label style={labelStyle}>Protein (g)</label>
           <input
             type="number"
             placeholder="0"
             value={protein}
             onChange={(e) => setProtein(e.target.value)}
             min="0"
-            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            style={inputStyle}
           />
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Carbohydrates (g)
-          </label>
+          <label style={labelStyle}>Carbohydrates (g)</label>
           <input
             type="number"
             placeholder="0"
             value={carbs}
             onChange={(e) => setCarbs(e.target.value)}
             min="0"
-            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            style={inputStyle}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Fat (g)
-          </label>
+          <label style={labelStyle}>Fat (g)</label>
           <input
             type="number"
             placeholder="0"
             value={fat}
             onChange={(e) => setFat(e.target.value)}
             min="0"
-            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            style={inputStyle}
           />
         </div>
       </div>
 
-      <div className="mb-6">
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
-          Dining Hall *
-        </label>
+      <div style={{ marginBottom: "var(--se-space-6)" }}>
+        <label style={labelStyle}>Dining Hall *</label>
 
         {hallsError && (
-          <div className="bg-red-100 text-red-700 p-3 rounded mb-3 border border-red-300">
-            ❌ Error loading dining halls: {hallsError}
+          <div
+            style={{
+              background: "var(--se-error-dim)",
+              color: "var(--se-error)",
+              padding: "var(--se-space-3)",
+              borderRadius: "var(--se-radius-md)",
+              marginBottom: "var(--se-space-3)",
+              border: "1px solid var(--se-error)",
+            }}
+          >
+            Error loading dining halls: {hallsError}
           </div>
         )}
 
         {hallsLoading && (
-          <div className="bg-yellow-100 text-yellow-700 p-3 rounded mb-3 border border-yellow-300">
-            ⏳ Loading dining halls...
+          <div
+            style={{
+              background: "var(--se-warning-dim)",
+              color: "var(--se-warning)",
+              padding: "var(--se-space-3)",
+              borderRadius: "var(--se-radius-md)",
+              marginBottom: "var(--se-space-3)",
+              border: "1px solid var(--se-warning)",
+            }}
+          >
+            Loading dining halls...
           </div>
         )}
 
         {!hallsLoading && diningHalls.length === 0 && !hallsError && (
-          <div className="bg-blue-100 text-blue-700 p-3 rounded mb-3 border border-blue-300">
-            ℹ️ No dining halls available
+          <div
+            style={{
+              background: "var(--se-info-dim)",
+              color: "var(--se-info)",
+              padding: "var(--se-space-3)",
+              borderRadius: "var(--se-radius-md)",
+              marginBottom: "var(--se-space-3)",
+              border: "1px solid var(--se-info)",
+            }}
+          >
+            No dining halls available
           </div>
         )}
 
         <select
           value={diningHall}
           onChange={(e) => setDiningHall(e.target.value)}
-          className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+          style={{
+            ...inputStyle,
+            ...(hallsLoading || hallsError !== null
+              ? {
+                  background: "var(--se-bg-subtle)",
+                  cursor: "not-allowed",
+                }
+              : {}),
+          }}
           disabled={hallsLoading || hallsError !== null}
           required
         >
@@ -290,13 +359,16 @@ function AddDish() {
         </select>
       </div>
 
-      <button
+      <Button
         type="submit"
+        variant="primary"
+        size="lg"
+        loading={loading}
         disabled={loading}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-lg transition-all"
+        className="w-full"
       >
-        {loading ? "Adding..." : "➕ Add Dish"}
-      </button>
+        {loading ? "Adding..." : "Add Dish"}
+      </Button>
     </form>
   );
 }
