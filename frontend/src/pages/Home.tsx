@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import Skeleton from "../components/Skeleton";
+import { IconUtensils, IconSparkle, IconChartPie } from "../components/Icons";
 import { API_BASE } from "../config";
 
 interface DishStats {
@@ -37,21 +38,26 @@ export default function Home() {
     fetchStats();
   }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const featureCards = [
+  const featureCards: {
+    icon: ComponentType<{ size?: number; color?: string }>;
+    title: string;
+    desc: string;
+    route: string;
+  }[] = [
     {
-      icon: "🍽",
+      icon: IconUtensils,
       title: "Browse Menu",
       desc: "Search dishes across all UIUC dining halls by category, calories, and nutrition.",
       route: "/menu",
     },
     {
-      icon: "✦",
+      icon: IconSparkle,
       title: "AI Meal Planner",
       desc: "Generate personalized meal plans based on your dietary goals and nutrition targets.",
       route: "/aimeals",
     },
     {
-      icon: "◎",
+      icon: IconChartPie,
       title: "My Profile",
       desc: "Track your meals, view nutrition charts, and export your dining history.",
       route: "/profile",
@@ -61,9 +67,17 @@ export default function Home() {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px" }}>
       {/* ── Section 1: Hero ── */}
+      <div
+        style={{
+          background:
+            "linear-gradient(180deg, var(--se-bg-base) 0%, #f0ece4 50%, var(--se-bg-base) 100%)",
+          margin: "0 -24px",
+          padding: "0 24px",
+        }}
+      >
       <section
         style={{
-          padding: "80px 24px 60px",
+          padding: "80px 24px 72px",
           textAlign: "center",
         }}
       >
@@ -86,6 +100,7 @@ export default function Home() {
             fontWeight: "var(--se-weight-extrabold)",
             color: "var(--se-text-main)",
             lineHeight: 1.1,
+            letterSpacing: "-0.02em",
             margin: 0,
           }}
         >
@@ -112,9 +127,11 @@ export default function Home() {
             flexWrap: "wrap",
           }}
         >
-          <Button variant="primary" size="lg" onClick={() => navigate("/menu")}>
-            Browse Menu →
-          </Button>
+          <span style={{ boxShadow: "0 4px 14px rgba(232, 74, 39, 0.25)", borderRadius: 12, display: "inline-block" }}>
+            <Button variant="primary" size="lg" onClick={() => navigate("/menu")}>
+              Browse Menu →
+            </Button>
+          </span>
           {isLoggedIn ? (
             <Button variant="ghost" size="lg" onClick={() => navigate("/profile")}>
               My Profile
@@ -126,6 +143,7 @@ export default function Home() {
           )}
         </div>
       </section>
+      </div>
 
       {/* ── Section 2: Quick stats (logged-in only) ── */}
       {isLoggedIn && statsError && (
@@ -163,74 +181,80 @@ export default function Home() {
             className="grid grid-cols-3 gap-4"
             style={{ maxWidth: "32rem", margin: "0 auto" }}
           >
-            <Card padding="md">
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-display)",
-                    fontWeight: "var(--se-weight-extrabold)",
-                    color: "var(--se-text-main)",
-                  }}
-                >
-                  {stats.total_dishes ?? "—"}
+            <div style={{ borderLeft: "3px solid var(--se-primary)", borderRadius: "var(--se-radius-lg)" }}>
+              <Card padding="md">
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "var(--se-text-display)",
+                      fontWeight: "var(--se-weight-extrabold)",
+                      color: "var(--se-text-main)",
+                    }}
+                  >
+                    {stats.total_dishes ?? "—"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "var(--se-text-xs)",
+                      color: "var(--se-text-muted)",
+                      marginTop: 4,
+                    }}
+                  >
+                    dishes in database
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-xs)",
-                    color: "var(--se-text-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  dishes in database
-                </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
 
-            <Card padding="md">
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-display)",
-                    fontWeight: "var(--se-weight-extrabold)",
-                    color: "var(--se-text-main)",
-                  }}
-                >
-                  {stats.total_halls ?? "—"}
+            <div style={{ borderLeft: "3px solid var(--se-primary)", borderRadius: "var(--se-radius-lg)" }}>
+              <Card padding="md">
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "var(--se-text-display)",
+                      fontWeight: "var(--se-weight-extrabold)",
+                      color: "var(--se-text-main)",
+                    }}
+                  >
+                    {stats.total_halls ?? "—"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "var(--se-text-xs)",
+                      color: "var(--se-text-muted)",
+                      marginTop: 4,
+                    }}
+                  >
+                    dining halls
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-xs)",
-                    color: "var(--se-text-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  dining halls
-                </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
 
-            <Card padding="md">
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-display)",
-                    fontWeight: "var(--se-weight-extrabold)",
-                    color: "var(--se-text-main)",
-                  }}
-                >
-                  ✦
+            <div style={{ borderLeft: "3px solid var(--se-primary)", borderRadius: "var(--se-radius-lg)" }}>
+              <Card padding="md">
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "var(--se-text-display)",
+                      fontWeight: "var(--se-weight-extrabold)",
+                      color: "var(--se-text-main)",
+                    }}
+                  >
+                    ✦
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "var(--se-text-xs)",
+                      color: "var(--se-text-muted)",
+                      marginTop: 4,
+                    }}
+                  >
+                    AI meal planner available
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-xs)",
-                    color: "var(--se-text-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  AI meal planner available
-                </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
           </div>
         </section>
       )}
@@ -250,15 +274,16 @@ export default function Home() {
             >
               <div
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  background: "var(--se-primary-dim)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 24,
                 }}
               >
-                {card.icon}
+                <card.icon size={24} color="var(--se-primary)" />
               </div>
               <h3
                 style={{
