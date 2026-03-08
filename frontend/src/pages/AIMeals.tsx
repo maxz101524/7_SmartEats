@@ -285,6 +285,9 @@ function NutritionEstimator() {
 
       {/* Form */}
       <form onSubmit={handleSubmit}>
+        <p style={{ fontSize: "var(--se-text-xs)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--se-text-faint)", margin: "0 0 8px" }}>
+          Body Metrics
+        </p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
           <div>
             <label style={labelStyle}>Age</label>
@@ -338,6 +341,9 @@ function NutritionEstimator() {
           </div>
         </div>
 
+        <p style={{ fontSize: "var(--se-text-xs)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--se-text-faint)", margin: "16px 0 8px" }}>
+          Goals
+        </p>
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>Activity Level</label>
           <select
@@ -500,15 +506,21 @@ function NutritionEstimator() {
                   boxShadow: "var(--se-shadow-sm)",
                 }}
               >
-                <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
+                <div style={{
+                  width: "100%",
+                  height: 4,
+                  borderRadius: 2,
+                  background: "var(--se-bg-subtle)",
+                  margin: "0 0 8px",
+                  overflow: "hidden",
+                }}>
+                  <div style={{
+                    width: `${Math.min((value / (result.macros.protein_g + result.macros.carbs_g + result.macros.fat_g)) * 100, 100)}%`,
+                    height: "100%",
+                    borderRadius: 2,
                     background: color,
-                    margin: "0 auto 8px",
-                  }}
-                />
+                  }} />
+                </div>
                 <p style={{ fontSize: 20, fontWeight: 800, color: "var(--se-text-main)", margin: "0 0 2px" }}>
                   {value}g
                 </p>
@@ -665,21 +677,6 @@ export default function AIMeals() {
 
   const isEmpty = messages.length === 0;
 
-  // ── Tab styles ──────────────────────────────────────────────────
-
-  const tabBtnStyle = (isActive: boolean): React.CSSProperties => ({
-    padding: "8px 20px",
-    borderRadius: 9999,
-    border: "1.5px solid",
-    borderColor: isActive ? "var(--se-primary)" : "var(--se-border)",
-    background: isActive ? "var(--se-primary)" : "var(--se-bg-surface)",
-    color: isActive ? "white" : "var(--se-text-secondary)",
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: "pointer",
-    transition: "all 0.15s",
-  });
-
   return (
     <>
       <style>{`
@@ -702,26 +699,40 @@ export default function AIMeals() {
         <div
           style={{
             display: "flex",
-            gap: 8,
             justifyContent: "center",
             paddingBottom: 16,
             flexShrink: 0,
           }}
         >
-          <button
-            type="button"
-            onClick={() => setActiveTab("chat")}
-            style={tabBtnStyle(activeTab === "chat")}
-          >
-            AI Chat
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("estimator")}
-            style={tabBtnStyle(activeTab === "estimator")}
-          >
-            Nutrition Estimator
-          </button>
+          <div style={{
+            display: "inline-flex",
+            background: "var(--se-bg-subtle)",
+            borderRadius: "var(--se-radius-full)",
+            padding: 3,
+            gap: 2,
+          }}>
+            {[{ key: "chat", label: "AI Chat" }, { key: "estimator", label: "Nutrition Estimator" }].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key as ActiveTab)}
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: "var(--se-radius-full)",
+                  border: "none",
+                  fontSize: "var(--se-text-sm)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 150ms ease",
+                  background: activeTab === tab.key ? "var(--se-bg-surface)" : "transparent",
+                  color: activeTab === tab.key ? "var(--se-text-main)" : "var(--se-text-muted)",
+                  boxShadow: activeTab === tab.key ? "var(--se-shadow-sm)" : "none",
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── Estimator tab ──────────────────────────────────── */}
@@ -807,6 +818,7 @@ export default function AIMeals() {
                           padding: "12px 18px",
                           borderRadius: 12,
                           border: "1.5px solid var(--se-border)",
+                          borderLeft: "3px solid var(--se-primary)",
                           background: "var(--se-bg-surface)",
                           textAlign: "left",
                           cursor: "pointer",
@@ -814,15 +826,20 @@ export default function AIMeals() {
                           color: "var(--se-text-secondary)",
                           fontWeight: 500,
                           boxShadow: "var(--se-shadow-sm)",
-                          transition: "border-color 0.1s, box-shadow 0.1s",
+                          transition: "border-color 0.1s, box-shadow 0.1s, transform 0.1s, background 0.1s",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.borderColor = "var(--se-primary)";
                           e.currentTarget.style.color = "var(--se-text-main)";
+                          e.currentTarget.style.transform = "translateY(-1px)";
+                          e.currentTarget.style.background = "var(--se-bg-elevated)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.borderColor = "var(--se-border)";
+                          e.currentTarget.style.borderLeft = "3px solid var(--se-primary)";
                           e.currentTarget.style.color = "var(--se-text-secondary)";
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.background = "var(--se-bg-surface)";
                         }}
                       >
                         {s}
@@ -868,7 +885,7 @@ export default function AIMeals() {
                           padding: "11px 15px",
                           borderRadius:
                             msg.role === "user"
-                              ? "18px 18px 4px 18px"
+                              ? "var(--se-radius-xl) var(--se-radius-xl) var(--se-radius-sm) var(--se-radius-xl)"
                               : "18px 18px 18px 4px",
                           background:
                             msg.role === "user"
@@ -880,6 +897,12 @@ export default function AIMeals() {
                             msg.role === "user"
                               ? "none"
                               : `1px solid ${msg.error ? "var(--se-error)" : "var(--se-border)"}`,
+                          borderLeft:
+                            msg.role === "ai" && !msg.error
+                              ? "3px solid var(--se-primary-dim)"
+                              : msg.role === "ai" && msg.error
+                                ? "3px solid var(--se-error)"
+                                : undefined,
                           boxShadow:
                             msg.role === "ai" ? "var(--se-shadow-sm)" : "none",
                           color:
@@ -913,12 +936,12 @@ export default function AIMeals() {
                                 disabled={loading}
                                 onClick={() => sendMessage(suggestion)}
                                 style={{
-                                  fontSize: 12,
-                                  borderRadius: 9999,
+                                  fontSize: "var(--se-text-sm)",
+                                  borderRadius: "var(--se-radius-full)",
                                   border: "1px solid var(--se-border)",
                                   background: "var(--se-bg-elevated)",
                                   color: "var(--se-text-secondary)",
-                                  padding: "4px 10px",
+                                  padding: "6px 14px",
                                   cursor: loading ? "default" : "pointer",
                                 }}
                               >
@@ -1021,6 +1044,7 @@ export default function AIMeals() {
                     justifyContent: "center",
                     flexShrink: 0,
                     transition: "background 0.15s",
+                    boxShadow: "var(--se-shadow-sm)",
                   }}
                   aria-label="Send"
                 >
