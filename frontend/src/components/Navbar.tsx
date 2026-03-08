@@ -1,14 +1,20 @@
 import { useLocation, Link } from "react-router-dom";
+import { IconHome, IconUtensils, IconSparkle } from "./Icons";
 
 function Navbar() {
   const location = useLocation();
   const token = localStorage.getItem("authToken");
 
   const leftLinks = [
-    { to: "/", label: "Home", isActive: () => location.pathname === "/" },
-    { to: "/menu", label: "Menu", isActive: () => location.pathname.startsWith("/menu") },
-    { to: "/aimeals", label: "AI Meals", isActive: () => location.pathname.startsWith("/aimeals") },
+    { to: "/", label: "Home", icon: IconHome, isActive: () => location.pathname === "/" },
+    { to: "/menu", label: "Menu", icon: IconUtensils, isActive: () => location.pathname.startsWith("/menu") },
+    { to: "/aimeals", label: "AI Meals", icon: IconSparkle, isActive: () => location.pathname.startsWith("/aimeals") },
   ];
+
+  const userInitial = (() => {
+    const name = localStorage.getItem("userFirstName");
+    return name && name.length > 0 ? name.charAt(0).toUpperCase() : "U";
+  })();
 
   return (
     <nav
@@ -37,13 +43,16 @@ function Navbar() {
               key={link.to}
               to={link.to}
               style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
                 padding: "6px 12px",
                 borderRadius: "9999px",
                 fontSize: "0.875rem",
                 fontWeight: 500,
                 textDecoration: "none",
-                color: active ? "var(--se-primary)" : "var(--se-text-secondary)",
-                background: active ? "var(--se-primary-dim)" : "transparent",
+                color: active ? "var(--se-text-inverted)" : "var(--se-text-secondary)",
+                background: active ? "var(--se-primary)" : "transparent",
                 transition: "color 0.15s, background 0.15s",
               }}
               onMouseEnter={(e) => {
@@ -59,6 +68,7 @@ function Navbar() {
                 }
               }}
             >
+              <link.icon size={15} />
               {link.label}
             </Link>
           );
@@ -72,7 +82,8 @@ function Navbar() {
             style={{
               color: "var(--se-primary)",
               fontWeight: 900,
-              fontSize: "1rem",
+              fontSize: "1.1rem",
+              letterSpacing: "-0.02em",
             }}
           >
             Smart
@@ -81,7 +92,8 @@ function Navbar() {
             style={{
               color: "var(--se-text-main)",
               fontWeight: 900,
-              fontSize: "1rem",
+              fontSize: "1.1rem",
+              letterSpacing: "-0.02em",
             }}
           >
             Eats
@@ -147,9 +159,10 @@ function Navbar() {
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
+                border: "2px solid var(--se-primary)",
               }}
             >
-              U
+              {userInitial}
             </span>
             <span
               style={{
