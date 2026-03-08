@@ -1,4 +1,5 @@
-import { useState, useEffect, ComponentType } from "react";
+import { useState, useEffect } from "react";
+import type { ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Button } from "../components/Button";
