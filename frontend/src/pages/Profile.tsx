@@ -5,6 +5,7 @@ import embed from "vega-embed";
 import { API_BASE } from "../config";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
+import { IconDownload } from "../components/Icons";
 import Skeleton from "../components/Skeleton";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
@@ -105,6 +106,7 @@ function StatTile({ label, value }: { label: string; value: string | number | nu
         background: "var(--se-bg-subtle)",
         borderRadius: "var(--se-radius-md)",
         padding: "10px 14px",
+        borderTop: "3px solid var(--se-primary)",
       }}
     >
       <p
@@ -231,6 +233,9 @@ function Profile() {
     color: "var(--se-text-main)",
     marginBottom: 16,
     marginTop: 0,
+    borderBottom: "2px solid var(--se-primary)",
+    display: "inline-block",
+    paddingBottom: 4,
   };
 
   /* ── Render ── */
@@ -275,8 +280,8 @@ function Profile() {
                   width: 56,
                   height: 56,
                   borderRadius: "var(--se-radius-full)",
-                  background: "var(--se-primary-dim)",
-                  color: "var(--se-primary)",
+                  background: "linear-gradient(135deg, var(--se-primary), #f59e0b)",
+                  color: "white",
                   fontSize: 22,
                   fontWeight: 900,
                   display: "flex",
@@ -346,19 +351,6 @@ function Profile() {
               <StatTile label="Goal" value={profile.goal} />
             </div>
 
-            {/* Logout */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  localStorage.removeItem("authToken");
-                  navigate("/login");
-                }}
-              >
-                Log out
-              </Button>
-            </div>
           </Card>
         )}
       </section>
@@ -368,15 +360,21 @@ function Profile() {
         <h2 style={sectionHeadingStyle}>Nutrition Overview</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card padding="md">
+            <p style={{ fontSize: "var(--se-text-sm)", fontWeight: 600, color: "var(--se-text-secondary)", margin: "0 0 8px" }}>
+              Dishes by Category
+            </p>
             <VegaChart spec={barSpec} id="profile-bar-chart" />
           </Card>
           <Card padding="md">
+            <p style={{ fontSize: "var(--se-text-sm)", fontWeight: 600, color: "var(--se-text-secondary)", margin: "0 0 8px" }}>
+              Meals Logged Per Day
+            </p>
             <VegaChart spec={lineSpec} id="profile-line-chart" />
           </Card>
         </div>
       </section>
 
-      {/* ════ Section 3 — Meal Reports ════ */}
+      {/* ════ Section 3 — Meal History ════ */}
       <section style={sectionStyle}>
         <div
           style={{
@@ -394,10 +392,14 @@ function Profile() {
           {report && (
             <div style={{ display: "flex", gap: 8 }}>
               <Button variant="secondary" size="sm" onClick={() => handleDownload("csv")}>
-                Export CSV
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <IconDownload size={16} /> Export CSV
+                </span>
               </Button>
               <Button variant="secondary" size="sm" onClick={() => handleDownload("json")}>
-                Export JSON
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <IconDownload size={16} /> Export JSON
+                </span>
               </Button>
             </div>
           )}
@@ -525,12 +527,13 @@ function Profile() {
                       <tr
                         style={{
                           borderBottom: `1px solid var(--se-border)`,
+                          background: "var(--se-bg-elevated)",
                         }}
                       >
                         <th
                           style={{
                             textAlign: "left",
-                            padding: "6px 0",
+                            padding: "8px 12px",
                             fontWeight: "var(--se-weight-semibold)",
                             color: "var(--se-text-secondary)",
                           }}
@@ -540,7 +543,7 @@ function Profile() {
                         <th
                           style={{
                             textAlign: "right",
-                            padding: "6px 0",
+                            padding: "8px 12px",
                             fontWeight: "var(--se-weight-semibold)",
                             color: "var(--se-text-secondary)",
                           }}
@@ -553,12 +556,15 @@ function Profile() {
                       {report.statistics.macros.labels.map((label, i) => (
                         <tr
                           key={label}
-                          style={{ borderBottom: `1px solid var(--se-border-muted)` }}
+                          style={{
+                            borderBottom: `1px solid var(--se-border-muted)`,
+                            background: i % 2 === 0 ? "var(--se-bg-subtle)" : undefined,
+                          }}
                         >
-                          <td style={{ padding: "8px 0", color: "var(--se-text-main)" }}>{label}</td>
+                          <td style={{ padding: "8px 12px", color: "var(--se-text-main)" }}>{label}</td>
                           <td
                             style={{
-                              padding: "8px 0",
+                              padding: "8px 12px",
                               textAlign: "right",
                               fontWeight: "var(--se-weight-semibold)",
                               color: "var(--se-text-main)",
@@ -591,11 +597,11 @@ function Profile() {
                 <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   <table style={{ minWidth: 400, width: "100%", fontSize: "var(--se-text-sm)", borderCollapse: "collapse" }}>
                     <thead>
-                      <tr style={{ borderBottom: `1px solid var(--se-border)` }}>
+                      <tr style={{ borderBottom: `1px solid var(--se-border)`, background: "var(--se-bg-elevated)" }}>
                         <th
                           style={{
                             textAlign: "left",
-                            padding: "6px 0",
+                            padding: "8px 12px",
                             fontWeight: "var(--se-weight-semibold)",
                             color: "var(--se-text-secondary)",
                           }}
@@ -605,7 +611,7 @@ function Profile() {
                         <th
                           style={{
                             textAlign: "right",
-                            padding: "6px 0",
+                            padding: "8px 12px",
                             fontWeight: "var(--se-weight-semibold)",
                             color: "var(--se-text-secondary)",
                           }}
@@ -618,12 +624,15 @@ function Profile() {
                       {report.statistics.categories.labels.map((label, i) => (
                         <tr
                           key={label}
-                          style={{ borderBottom: `1px solid var(--se-border-muted)` }}
+                          style={{
+                            borderBottom: `1px solid var(--se-border-muted)`,
+                            background: i % 2 === 0 ? "var(--se-bg-subtle)" : undefined,
+                          }}
                         >
-                          <td style={{ padding: "8px 0", color: "var(--se-text-main)" }}>{label}</td>
+                          <td style={{ padding: "8px 12px", color: "var(--se-text-main)" }}>{label}</td>
                           <td
                             style={{
-                              padding: "8px 0",
+                              padding: "8px 12px",
                               textAlign: "right",
                               fontWeight: "var(--se-weight-semibold)",
                               color: "var(--se-macro-cal)",
@@ -664,6 +673,20 @@ function Profile() {
             )}
           </>
         )}
+      </section>
+
+      {/* ════ Logout ════ */}
+      <section style={{ ...sectionStyle, textAlign: "center" }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            localStorage.removeItem("authToken");
+            navigate("/login");
+          }}
+        >
+          Log out
+        </Button>
       </section>
     </div>
   );
