@@ -1,11 +1,13 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
-import { API_BASE, BACKEND_BASE } from "../config";
+import vegaEmbed from "vega-embed";
+import { API_BASE } from "../config";
 import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 import Skeleton from "../components/Skeleton";
 import { useToast } from "../components/Toast";
 import { Button } from "../components/Button";
+import { IconArrowLeft, IconSparkle, IconDatabase, IconPlus } from "../components/Icons";
 
 interface Dish {
   dish_id: number;
@@ -46,6 +48,7 @@ function MacroCard({
         minWidth: 80,
         background: "var(--se-bg-surface)",
         border: "1px solid var(--se-border)",
+        borderTop: `3px solid ${color}`,
         borderRadius: "var(--se-radius-lg)",
         padding: "14px 8px",
         textAlign: "center",
@@ -65,7 +68,7 @@ function MacroCard({
       </p>
       <p
         style={{
-          fontSize: 22,
+          fontSize: 28,
           fontWeight: 800,
           color,
           margin: "0 0 2px",
@@ -87,6 +90,7 @@ function DishDetail() {
   const token = localStorage.getItem("authToken");
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const chartRef = useRef<HTMLDivElement>(null);
 
   async function handleAddToMeal() {
     if (!token || !dish) {
@@ -112,6 +116,42 @@ function DishDetail() {
     axios.get(`${API_BASE}/dishes/${id}`).then((res) => setDish(res.data));
   }, [id]);
 
+  useEffect(() => {
+    if (!dish || !chartRef.current) return;
+    const spec = {
+      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+      width: "container",
+      height: 200,
+      data: {
+        values: [
+          { macro: "Protein", grams: dish.protein },
+          { macro: "Carbs", grams: dish.carbohydrates },
+          { macro: "Fat", grams: dish.fat },
+        ].filter(d => d.grams > 0),
+      },
+      mark: { type: "arc", innerRadius: 50, cornerRadius: 4 },
+      encoding: {
+        theta: { field: "grams", type: "quantitative", stack: true },
+        color: {
+          field: "macro",
+          type: "nominal",
+          scale: { domain: ["Protein", "Carbs", "Fat"], range: ["#3b82f6", "#d97706", "#f0784a"] },
+          legend: { orient: "bottom", title: null },
+        },
+        tooltip: [
+          { field: "macro", type: "nominal", title: "Macro" },
+          { field: "grams", type: "quantitative", title: "Grams" },
+        ],
+      },
+      config: {
+        view: { stroke: null },
+        background: "transparent",
+        font: "DM Sans",
+      },
+    };
+    vegaEmbed(chartRef.current, spec as any, { actions: false, renderer: "svg" });
+  }, [dish]);
+
   if (!dish) {
     return (
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "var(--se-space-8)" }}>
@@ -123,6 +163,10 @@ function DishDetail() {
       </div>
     );
   }
+
+  const hasDietaryInfo =
+    (dish.dietary_flags && dish.dietary_flags.length > 0) ||
+    (dish.allergens && dish.allergens.length > 0);
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "24px 16px 48px" }}>
@@ -143,17 +187,16 @@ function DishDetail() {
           fontSize: 13,
           fontWeight: 600,
           color: "var(--se-text-muted)",
-          background: "none",
+          background: "var(--se-bg-subtle)",
+          borderRadius: "var(--se-radius-full)",
+          padding: "6px 14px 6px 10px",
           border: "none",
           cursor: "pointer",
-          padding: 0,
           marginBottom: 20,
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        Back
+        <IconArrowLeft size={16} />
+        Back to Menu
       </button>
 
       {/* Dish name */}
@@ -181,54 +224,66 @@ function DishDetail() {
         </p>
       )}
 
-      {/* Dietary flags */}
-      {dish.dietary_flags && dish.dietary_flags.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-          {dish.dietary_flags.map((flag) => {
-            const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
-            return (
-              <span
-                key={flag}
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  padding: "3px 10px",
-                  borderRadius: 9999,
-                  background: colors.bg,
-                  color: colors.text,
-                }}
-              >
-                {flag}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Allergen warnings */}
-      {dish.allergens && dish.allergens.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
-          {dish.allergens.map((allergen) => (
-            <span
-              key={allergen}
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                padding: "2px 8px",
-                borderRadius: 9999,
-                border: "1.5px solid var(--se-error)",
-                color: "var(--se-error)",
-                background: "var(--se-error-dim)",
-              }}
-            >
-              {allergen}
-            </span>
-          ))}
+      {/* Dietary info panel */}
+      {hasDietaryInfo && (
+        <div style={{
+          background: "var(--se-bg-subtle)",
+          borderRadius: "var(--se-radius-lg)",
+          padding: "12px 16px",
+          marginBottom: 20,
+        }}>
+          <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--se-text-faint)", margin: "0 0 8px" }}>
+            Dietary Info
+          </p>
+          {/* Dietary flags */}
+          {dish.dietary_flags && dish.dietary_flags.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: dish.allergens && dish.allergens.length > 0 ? 8 : 0 }}>
+              {dish.dietary_flags.map((flag) => {
+                const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
+                return (
+                  <span
+                    key={flag}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "3px 10px",
+                      borderRadius: 9999,
+                      background: colors.bg,
+                      color: colors.text,
+                    }}
+                  >
+                    {flag}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {/* Allergen warnings */}
+          {dish.allergens && dish.allergens.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {dish.allergens.map((allergen) => (
+                <span
+                  key={allergen}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: 9999,
+                    border: "1.5px solid var(--se-error)",
+                    color: "var(--se-error)",
+                    background: "var(--se-error-dim)",
+                  }}
+                >
+                  {allergen}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Primary macros — 4 cards */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginBottom: 16 }}>
         <MacroCard label="Calories" value={dish.calories} unit="kcal" color="var(--se-macro-cal)" />
         <MacroCard label="Protein" value={dish.protein} unit="g" color="var(--se-macro-protein)" />
         <MacroCard label="Carbs" value={dish.carbohydrates} unit="g" color="var(--se-macro-carbs)" />
@@ -290,11 +345,12 @@ function DishDetail() {
             fontWeight: 600,
             padding: "4px 12px",
             borderRadius: 9999,
-            background: dish.nutrition_source === "ai_generated" ? "var(--se-info-dim)" : "var(--se-bg-subtle)",
-            color: dish.nutrition_source === "ai_generated" ? "var(--se-info)" : "var(--se-text-muted)",
+            background: dish.nutrition_source === "ai_generated" ? "var(--se-warning-dim)" : "var(--se-bg-subtle)",
+            color: dish.nutrition_source === "ai_generated" ? "var(--se-warning)" : "var(--se-text-muted)",
             marginBottom: 20,
           }}
         >
+          {dish.nutrition_source === "ai_generated" ? <IconSparkle size={14} /> : <IconDatabase size={14} />}
           {dish.nutrition_source === "ai_generated" ? "AI Estimated" : "Database"}
           {dish.ai_confidence && (
             <span style={{ opacity: 0.7 }}>
@@ -304,32 +360,19 @@ function DishDetail() {
         </div>
       )}
 
-      {/* Pie chart */}
-      <div
-        style={{
-          background: "var(--se-bg-surface)",
-          border: "1px solid var(--se-border)",
-          borderRadius: "var(--se-radius-lg)",
-          padding: 16,
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
-        <img
-          src={`${BACKEND_BASE}/api/dish-summary-img/${id}/`}
-          alt="Macro Breakdown Chart"
-          style={{ maxWidth: "100%", height: "auto" }}
-        />
-      </div>
+      {/* Donut chart */}
+      <div ref={chartRef} style={{ background: "var(--se-bg-surface)", border: "1px solid var(--se-border)", borderRadius: "var(--se-radius-lg)", padding: 16 }} />
 
       {/* Add to Meal CTA */}
-      <div style={{ marginTop: "var(--se-space-6)", textAlign: "center" }}>
+      <div style={{ marginTop: "var(--se-space-6)" }}>
         {token ? (
-          <Button variant="primary" size="lg" loading={adding} onClick={handleAddToMeal}>
-            Add to Today's Meal
+          <Button variant="primary" size="lg" loading={adding} onClick={handleAddToMeal} className="w-full">
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <IconPlus size={18} /> Add to Today's Meal
+            </span>
           </Button>
         ) : (
-          <Button variant="secondary" size="lg" onClick={() => navigate("/login")}>
+          <Button variant="secondary" size="lg" onClick={() => navigate("/login")} className="w-full">
             Sign in to track meals
           </Button>
         )}
