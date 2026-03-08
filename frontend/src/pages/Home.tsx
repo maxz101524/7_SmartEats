@@ -68,15 +68,9 @@ export default function Home() {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px" }}>
       {/* ── Section 1: Hero ── */}
-      <div
-        style={{
-          background:
-            "linear-gradient(180deg, var(--se-bg-base) 0%, #f0ece4 50%, var(--se-bg-base) 100%)",
-          margin: "0 -24px",
-          padding: "0 24px",
-        }}
-      >
+      <div style={{ margin: "0 -24px", padding: "0 24px", background: "var(--se-bg-base)" }}>
       <section
+        className="hero-stagger"
         style={{
           padding: "80px 24px 72px",
           textAlign: "center",
@@ -90,6 +84,8 @@ export default function Home() {
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             marginBottom: 16,
+            animation: "fadeIn 300ms ease-out both",
+            animationDelay: "0ms",
           }}
         >
           UIUC · Illinois Street · PAR · Allen · FAR
@@ -103,6 +99,8 @@ export default function Home() {
             lineHeight: 1.1,
             letterSpacing: "-0.02em",
             margin: 0,
+            animation: "fadeIn 300ms ease-out both",
+            animationDelay: "80ms",
           }}
         >
           Eat Smarter at <span className="text-gradient-vivid">UIUC</span>
@@ -115,6 +113,8 @@ export default function Home() {
             textAlign: "center",
             maxWidth: 480,
             margin: "16px auto 32px",
+            animation: "fadeIn 300ms ease-out both",
+            animationDelay: "160ms",
           }}
         >
           Explore dining hall menus, log meals, and plan your nutrition with AI.
@@ -126,6 +126,8 @@ export default function Home() {
             justifyContent: "center",
             gap: 12,
             flexWrap: "wrap",
+            animation: "fadeIn 300ms ease-out both",
+            animationDelay: "240ms",
           }}
         >
           <span style={{ boxShadow: "0 4px 14px rgba(232, 74, 39, 0.25)", borderRadius: 12, display: "inline-block" }}>
@@ -182,80 +184,74 @@ export default function Home() {
             className="grid grid-cols-3 gap-4"
             style={{ maxWidth: "32rem", margin: "0 auto" }}
           >
-            <div style={{ borderLeft: "3px solid var(--se-primary)", borderRadius: "var(--se-radius-lg)" }}>
-              <Card padding="md">
-                <div style={{ textAlign: "center" }}>
-                  <div
-                    style={{
-                      fontSize: "var(--se-text-display)",
-                      fontWeight: "var(--se-weight-extrabold)",
-                      color: "var(--se-text-main)",
-                    }}
-                  >
-                    {stats.total_dishes ?? "—"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "var(--se-text-xs)",
-                      color: "var(--se-text-muted)",
-                      marginTop: 4,
-                    }}
-                  >
-                    dishes in database
-                  </div>
+            <Card padding="md">
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: "var(--se-text-display)",
+                    fontWeight: "var(--se-weight-extrabold)",
+                    color: "var(--se-text-main)",
+                  }}
+                >
+                  {stats.total_dishes ?? "—"}
                 </div>
-              </Card>
-            </div>
+                <div
+                  style={{
+                    fontSize: "var(--se-text-xs)",
+                    color: "var(--se-text-muted)",
+                    marginTop: 4,
+                  }}
+                >
+                  dishes in database
+                </div>
+              </div>
+            </Card>
 
-            <div style={{ borderLeft: "3px solid var(--se-primary)", borderRadius: "var(--se-radius-lg)" }}>
-              <Card padding="md">
-                <div style={{ textAlign: "center" }}>
-                  <div
-                    style={{
-                      fontSize: "var(--se-text-display)",
-                      fontWeight: "var(--se-weight-extrabold)",
-                      color: "var(--se-text-main)",
-                    }}
-                  >
-                    {stats.total_halls ?? "—"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "var(--se-text-xs)",
-                      color: "var(--se-text-muted)",
-                      marginTop: 4,
-                    }}
-                  >
-                    dining halls
-                  </div>
+            <Card padding="md">
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: "var(--se-text-display)",
+                    fontWeight: "var(--se-weight-extrabold)",
+                    color: "var(--se-text-main)",
+                  }}
+                >
+                  {stats.total_halls ?? "—"}
                 </div>
-              </Card>
-            </div>
+                <div
+                  style={{
+                    fontSize: "var(--se-text-xs)",
+                    color: "var(--se-text-muted)",
+                    marginTop: 4,
+                  }}
+                >
+                  dining halls
+                </div>
+              </div>
+            </Card>
 
-            <div style={{ borderLeft: "3px solid var(--se-primary)", borderRadius: "var(--se-radius-lg)" }}>
-              <Card padding="md">
-                <div style={{ textAlign: "center" }}>
-                  <div
-                    style={{
-                      fontSize: "var(--se-text-display)",
-                      fontWeight: "var(--se-weight-extrabold)",
-                      color: "var(--se-text-main)",
-                    }}
-                  >
-                    ✦
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "var(--se-text-xs)",
-                      color: "var(--se-text-muted)",
-                      marginTop: 4,
-                    }}
-                  >
-                    AI meal planner available
-                  </div>
+            <Card padding="md">
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: "var(--se-text-display)",
+                    fontWeight: "var(--se-weight-extrabold)",
+                    color: "var(--se-text-main)",
+                  }}
+                >
+                  ✦
                 </div>
-              </Card>
-            </div>
+                <div
+                  style={{
+                    fontSize: "var(--se-text-xs)",
+                    color: "var(--se-text-muted)",
+                    marginTop: 4,
+                  }}
+                >
+                  AI meal planner available
+                </div>
+              </div>
+            </Card>
           </div>
         </section>
       )}

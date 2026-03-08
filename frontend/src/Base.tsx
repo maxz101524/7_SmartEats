@@ -12,7 +12,7 @@ function Base() {
       <Navbar />
 
       <main className="flex-grow w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6" style={{ paddingTop: "76px" }}>
-        <div key={location.pathname} style={{ animation: "fadeIn 200ms ease-out" }}>
+        <div key={location.pathname} className="page-enter" style={{ animation: "fadeIn 200ms ease-out" }}>
           <Outlet />
         </div>
       </main>

@@ -5,6 +5,7 @@ import embed from "vega-embed";
 import { API_BASE } from "../config";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
+import { EmptyState } from "../components/EmptyState";
 import { IconDownload } from "../components/Icons";
 import Skeleton from "../components/Skeleton";
 
@@ -106,7 +107,7 @@ function StatTile({ label, value }: { label: string; value: string | number | nu
         background: "var(--se-bg-subtle)",
         borderRadius: "var(--se-radius-md)",
         padding: "10px 14px",
-        borderTop: "3px solid var(--se-primary)",
+        border: "1px solid var(--se-border)",
       }}
     >
       <p
@@ -233,9 +234,7 @@ function Profile() {
     color: "var(--se-text-main)",
     marginBottom: 16,
     marginTop: 0,
-    borderBottom: "2px solid var(--se-primary)",
     display: "inline-block",
-    paddingBottom: 4,
   };
 
   /* ── Render ── */
@@ -412,29 +411,17 @@ function Profile() {
           </div>
         ) : reportError || !report ? (
           <Card padding="md">
-            <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
-              <p style={{ color: "var(--se-error)", fontWeight: 600, fontSize: "var(--se-text-base)", margin: 0 }}>
-                Something went wrong
-              </p>
-              <p style={{ color: "var(--se-text-muted)", fontSize: "var(--se-text-sm)", marginTop: 4, margin: "4px 0 0" }}>
-                {reportError || "No report data available."}
-              </p>
-              <div style={{ marginTop: "var(--se-space-4)" }}>
-                <Button variant="secondary" size="sm" onClick={fetchReport}>
-                  Try Again
-                </Button>
-              </div>
-            </div>
+            <EmptyState
+              message="Something went wrong"
+              sub={reportError || "No report data available."}
+              action={<Button variant="secondary" size="sm" onClick={fetchReport}>Try Again</Button>}
+            />
           </Card>
         ) : report.statistics.total_count === 0 ? (
-          <p
-            style={{
-              color: "var(--se-text-faint)",
-              fontSize: "var(--se-text-sm)",
-            }}
-          >
-            No meals logged yet. Start tracking to see your history here.
-          </p>
+          <EmptyState
+            message="No meals logged yet"
+            sub="Start tracking from the Menu or Dish pages to see your history here."
+          />
         ) : (
           <>
             {/* Summary stats */}

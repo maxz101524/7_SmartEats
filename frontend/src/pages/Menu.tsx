@@ -8,7 +8,8 @@ import { Card } from "../components/Card";
 import { Button } from "../components/Button";
 import AddDish from "../components/AddDish";
 import Skeleton from "../components/Skeleton";
-import { IconMapPin, IconSearch } from "../components/Icons";
+import { EmptyState } from "../components/EmptyState";
+import { IconMapPin, IconSearch, IconClose } from "../components/Icons";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,40 +51,6 @@ interface DishStats {
 
 const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Halal", "Jain"];
 const ALLERGEN_FILTERS = ["Gluten", "Milk", "Eggs", "Soy", "Corn", "Wheat", "Fish"];
-
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-function EmptyState({ message, sub }: { message: string; sub?: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "64px 24px",
-        textAlign: "center",
-      }}
-    >
-      <p style={{ fontSize: 32, marginBottom: 12, lineHeight: 1 }}>🍽</p>
-      <p
-        style={{
-          fontSize: 15,
-          fontWeight: 600,
-          color: "var(--se-text-main)",
-          marginBottom: 4,
-        }}
-      >
-        {message}
-      </p>
-      {sub && (
-        <p style={{ fontSize: 13, color: "var(--se-text-faint)", maxWidth: 280 }}>
-          {sub}
-        </p>
-      )}
-    </div>
-  );
-}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -446,11 +413,12 @@ export default function Menu() {
                 placeholder="Search dishes…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search dishes"
                 style={{
                   width: "100%",
                   height: 40,
                   paddingLeft: 36,
-                  paddingRight: 14,
+                  paddingRight: search ? 40 : 14,
                   paddingTop: 0,
                   paddingBottom: 0,
                   borderRadius: "var(--se-radius-lg)",
@@ -468,6 +436,39 @@ export default function Menu() {
                   (e.currentTarget.style.borderColor = "var(--se-border)")
                 }
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 28,
+                    height: 28,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "var(--se-radius-full)",
+                    border: "none",
+                    background: "var(--se-bg-subtle)",
+                    color: "var(--se-text-muted)",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--se-border-muted)";
+                    e.currentTarget.style.color = "var(--se-text-main)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "var(--se-bg-subtle)";
+                    e.currentTarget.style.color = "var(--se-text-muted)";
+                  }}
+                >
+                  <IconClose size={14} />
+                </button>
+              )}
             </div>
 
             {/* Meal period tabs */}

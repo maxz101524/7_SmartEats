@@ -71,6 +71,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           gap: 8,
           zIndex: 9999,
           pointerEvents: "none",
+          maxHeight: "min(80vh, 400px)",
+          overflowY: "auto",
         }}
       >
         {toasts.map((t) => (

@@ -818,7 +818,6 @@ export default function AIMeals() {
                           padding: "12px 18px",
                           borderRadius: 12,
                           border: "1.5px solid var(--se-border)",
-                          borderLeft: "3px solid var(--se-primary)",
                           background: "var(--se-bg-surface)",
                           textAlign: "left",
                           cursor: "pointer",
@@ -836,7 +835,6 @@ export default function AIMeals() {
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.borderColor = "var(--se-border)";
-                          e.currentTarget.style.borderLeft = "3px solid var(--se-primary)";
                           e.currentTarget.style.color = "var(--se-text-secondary)";
                           e.currentTarget.style.transform = "translateY(0)";
                           e.currentTarget.style.background = "var(--se-bg-surface)";
@@ -897,12 +895,6 @@ export default function AIMeals() {
                             msg.role === "user"
                               ? "none"
                               : `1px solid ${msg.error ? "var(--se-error)" : "var(--se-border)"}`,
-                          borderLeft:
-                            msg.role === "ai" && !msg.error
-                              ? "3px solid var(--se-primary-dim)"
-                              : msg.role === "ai" && msg.error
-                                ? "3px solid var(--se-error)"
-                                : undefined,
                           boxShadow:
                             msg.role === "ai" ? "var(--se-shadow-sm)" : "none",
                           color:

@@ -7,7 +7,8 @@ import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 import Skeleton from "../components/Skeleton";
 import { useToast } from "../components/Toast";
 import { Button } from "../components/Button";
-import { IconArrowLeft, IconSparkle, IconDatabase, IconPlus } from "../components/Icons";
+import { EmptyState } from "../components/EmptyState";
+import { IconArrowLeft, IconSparkle, IconDatabase, IconPlus, IconChartPie } from "../components/Icons";
 
 interface Dish {
   dish_id: number;
@@ -48,7 +49,6 @@ function MacroCard({
         minWidth: 80,
         background: "var(--se-bg-surface)",
         border: "1px solid var(--se-border)",
-        borderTop: `3px solid ${color}`,
         borderRadius: "var(--se-radius-lg)",
         padding: "14px 8px",
         textAlign: "center",
@@ -112,52 +112,68 @@ function DishDetail() {
     }
   }
 
+  const hasMacros = dish ? (dish.protein ?? 0) + (dish.carbohydrates ?? 0) + (dish.fat ?? 0) > 0 : false;
+
   useEffect(() => {
     axios.get(`${API_BASE}/dishes/${id}`).then((res) => setDish(res.data));
   }, [id]);
 
   useEffect(() => {
-    if (!dish || !chartRef.current) return;
-    const spec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: "container",
-      height: 200,
-      data: {
-        values: [
-          { macro: "Protein", grams: dish.protein },
-          { macro: "Carbs", grams: dish.carbohydrates },
-          { macro: "Fat", grams: dish.fat },
-        ].filter(d => d.grams > 0),
-      },
-      mark: { type: "arc", innerRadius: 50, cornerRadius: 4 },
-      encoding: {
-        theta: { field: "grams", type: "quantitative", stack: true },
-        color: {
-          field: "macro",
-          type: "nominal",
-          scale: { domain: ["Protein", "Carbs", "Fat"], range: ["#3b82f6", "#d97706", "#f0784a"] },
-          legend: { orient: "bottom", title: null },
+    if (!dish || !chartRef.current || !hasMacros) return;
+    const el = chartRef.current;
+    let cancelled = false;
+    const run = () => {
+      if (cancelled || !el.isConnected) return;
+      const w = el.offsetWidth;
+      const width = Math.min(w > 0 ? w : 400, 560);
+      const spec = {
+        $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+        width,
+        height: 200,
+        data: {
+          values: [
+            { macro: "Protein", grams: dish.protein },
+            { macro: "Carbs", grams: dish.carbohydrates },
+            { macro: "Fat", grams: dish.fat },
+          ].filter(d => d.grams > 0),
         },
-        tooltip: [
-          { field: "macro", type: "nominal", title: "Macro" },
-          { field: "grams", type: "quantitative", title: "Grams" },
-        ],
-      },
-      config: {
-        view: { stroke: null },
-        background: "transparent",
-        font: "DM Sans",
-      },
+        mark: { type: "arc", innerRadius: 50, cornerRadius: 4 },
+        encoding: {
+          theta: { field: "grams", type: "quantitative", stack: true },
+          color: {
+            field: "macro",
+            type: "nominal",
+            scale: { domain: ["Protein", "Carbs", "Fat"], range: ["#3b82f6", "#d97706", "#f0784a"] },
+            legend: { orient: "bottom", title: null },
+          },
+          tooltip: [
+            { field: "macro", type: "nominal", title: "Macro" },
+            { field: "grams", type: "quantitative", title: "Grams" },
+          ],
+        },
+        config: {
+          view: { stroke: null },
+          background: "transparent",
+          font: "DM Sans",
+        },
+      };
+      el.innerHTML = "";
+      vegaEmbed(el, spec as any, { actions: false, renderer: "svg" });
     };
-    vegaEmbed(chartRef.current, spec as any, { actions: false, renderer: "svg" });
-  }, [dish]);
+    requestAnimationFrame(() => requestAnimationFrame(run));
+    return () => {
+      cancelled = true;
+      el.innerHTML = "";
+    };
+  }, [dish, hasMacros]);
 
   if (!dish) {
     return (
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "var(--se-space-8)" }}>
         <Skeleton variant="rect" height={32} width="60%" />
-        <div style={{ marginTop: 16 }}><Skeleton variant="text" lines={2} /></div>
-        <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+        <div style={{ marginTop: 8 }}><Skeleton variant="rect" height={14} width="80%" /></div>
+        <div style={{ marginTop: 4 }}><Skeleton variant="rect" height={14} width="50%" /></div>
+        <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} variant="rect" height={80} />)}
         </div>
       </div>
@@ -360,8 +376,29 @@ function DishDetail() {
         </div>
       )}
 
-      {/* Donut chart */}
-      <div ref={chartRef} style={{ background: "var(--se-bg-surface)", border: "1px solid var(--se-border)", borderRadius: "var(--se-radius-lg)", padding: 16 }} />
+      {/* Donut chart or empty state */}
+      <div
+        ref={chartRef}
+        style={{
+          width: "100%",
+          minHeight: 200,
+          background: "var(--se-bg-surface)",
+          border: "1px solid var(--se-border)",
+          borderRadius: "var(--se-radius-lg)",
+          padding: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {!hasMacros && (
+          <EmptyState
+            message="No macro breakdown"
+            sub="Protein, carbs, and fat data are missing for this dish."
+            icon={<IconChartPie size={40} color="var(--se-text-faint)" />}
+          />
+        )}
+      </div>
 
       {/* Add to Meal CTA */}
       <div style={{ marginTop: "var(--se-space-6)" }}>

@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useCallback } from "react";
 interface CardProps {
   children: ReactNode;
   className?: string;
@@ -25,9 +25,22 @@ export function Card({
     lg: "p-6 md:p-8",
   }[padding];
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (onClick && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        onClick();
+      }
+    },
+    [onClick]
+  );
+
   return (
     <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
+      onKeyDown={handleKeyDown}
       className={[
         "rounded-[var(--se-radius-lg)] border border-[var(--se-border)]",
         hero ? "bg-[var(--se-primary-dim)]" : "bg-[var(--se-bg-surface)]",

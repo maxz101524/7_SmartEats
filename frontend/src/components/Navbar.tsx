@@ -51,6 +51,7 @@ function Navbar() {
                 fontSize: "0.875rem",
                 fontWeight: 500,
                 textDecoration: "none",
+                whiteSpace: "nowrap",
                 color: active ? "var(--se-text-inverted)" : "var(--se-text-secondary)",
                 background: active ? "var(--se-primary)" : "transparent",
                 transition: "color 0.15s, background 0.15s",
