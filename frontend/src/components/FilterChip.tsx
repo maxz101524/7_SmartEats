@@ -4,15 +4,39 @@ interface FilterChipProps {
   label: string;
   active: boolean;
   onClick: () => void;
+  tint?: "primary" | "success" | "error";
 }
 
-export function FilterChip({ label, active, onClick }: FilterChipProps) {
+const tintMap: Record<
+  "primary" | "success" | "error",
+  { bg: string; color: string; border: string }
+> = {
+  primary: {
+    bg: "var(--se-primary-dim)",
+    color: "var(--se-primary)",
+    border: "1px solid var(--se-primary)",
+  },
+  success: {
+    bg: "var(--se-success-dim)",
+    color: "var(--se-success)",
+    border: "1px solid var(--se-success)",
+  },
+  error: {
+    bg: "var(--se-error-dim)",
+    color: "var(--se-error)",
+    border: "1px solid var(--se-error)",
+  },
+};
+
+export function FilterChip({ label, active, onClick, tint = "primary" }: FilterChipProps) {
   const [hovered, setHovered] = useState(false);
 
+  const colors = tintMap[tint];
+
   const activeStyle: React.CSSProperties = {
-    background: "var(--se-primary-dim)",
-    color: "var(--se-primary)",
-    border: "1.5px solid var(--se-primary)",
+    background: colors.bg,
+    color: colors.color,
+    border: colors.border,
   };
 
   const inactiveStyle: React.CSSProperties = {

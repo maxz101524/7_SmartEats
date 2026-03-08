@@ -8,6 +8,7 @@ import { Card } from "../components/Card";
 import { Button } from "../components/Button";
 import AddDish from "../components/AddDish";
 import Skeleton from "../components/Skeleton";
+import { IconMapPin, IconSearch } from "../components/Icons";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -319,52 +320,56 @@ export default function Menu() {
             </Card>
           </div>
         ) : (
-          halls.map((hall) => {
-            const active = selectedHall?.Dining_Hall_ID === hall.Dining_Hall_ID;
-            return (
-              <button
-                key={hall.Dining_Hall_ID}
-                onClick={() => selectHall(hall)}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "12px 16px 12px 13px",
-                  borderTop: "none",
-                  borderRight: "none",
-                  borderBottom: "none",
-                  borderLeft: active
-                    ? "3px solid var(--se-primary)"
-                    : "3px solid transparent",
-                  background: active ? "var(--se-primary-dim)" : "transparent",
-                  cursor: "pointer",
-                  transition: "background 0.1s",
-                }}
-                onMouseEnter={(e) => {
-                  if (!active)
-                    e.currentTarget.style.background = "var(--se-bg-subtle)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!active)
-                    e.currentTarget.style.background = "transparent";
-                }}
-              >
-                <p
+          <div style={{ padding: "12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+            {halls.map((hall) => {
+              const active = selectedHall?.Dining_Hall_ID === hall.Dining_Hall_ID;
+              return (
+                <button
+                  key={hall.Dining_Hall_ID}
+                  onClick={() => selectHall(hall)}
                   style={{
-                    fontSize: 13,
-                    fontWeight: active ? 700 : 500,
-                    color: active ? "var(--se-primary)" : "var(--se-text-main)",
-                    margin: "0 0 2px",
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "10px 14px",
+                    borderRadius: "var(--se-radius-md)",
+                    border: active
+                      ? "1px solid var(--se-primary)"
+                      : "1px solid var(--se-border)",
+                    borderLeft: active
+                      ? "3px solid var(--se-primary)"
+                      : "1px solid var(--se-border)",
+                    background: active ? "var(--se-primary-dim)" : "var(--se-bg-surface)",
+                    cursor: "pointer",
+                    transition: "background 0.1s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active)
+                      e.currentTarget.style.background = "var(--se-bg-subtle)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active)
+                      e.currentTarget.style.background = active ? "var(--se-primary-dim)" : "var(--se-bg-surface)";
                   }}
                 >
-                  {hall.name}
-                </p>
-                <p style={{ fontSize: 11, color: "var(--se-text-faint)", margin: 0 }}>
-                  {hall.location}
-                </p>
-              </button>
-            );
-          })
+                  <p
+                    style={{
+                      fontSize: 13,
+                      fontWeight: active ? 700 : 500,
+                      color: active ? "var(--se-primary)" : "var(--se-text-main)",
+                      margin: "0 0 2px",
+                    }}
+                  >
+                    {hall.name}
+                  </p>
+                  <p style={{ fontSize: 11, color: "var(--se-text-faint)", margin: 0, display: "flex", alignItems: "center", gap: 4 }}>
+                    <IconMapPin size={14} color="var(--se-text-faint)" />
+                    {hall.location}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -432,31 +437,38 @@ export default function Menu() {
             </div>
 
             {/* Search input */}
-            <input
-              type="text"
-              placeholder="Search dishes…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: "100%",
-                height: 40,
-                padding: "0 14px",
-                borderRadius: "var(--se-radius-md)",
-                border: "1.5px solid var(--se-border)",
-                background: "var(--se-bg-input)",
-                fontSize: 14,
-                color: "var(--se-text-main)",
-                outline: "none",
-                marginBottom: 12,
-                boxSizing: "border-box",
-              }}
-              onFocus={(e) =>
-                (e.currentTarget.style.borderColor = "var(--se-primary)")
-              }
-              onBlur={(e) =>
-                (e.currentTarget.style.borderColor = "var(--se-border)")
-              }
-            />
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                <IconSearch size={16} color="var(--se-text-faint)" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search dishes…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                  width: "100%",
+                  height: 40,
+                  paddingLeft: 36,
+                  paddingRight: 14,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  borderRadius: "var(--se-radius-lg)",
+                  border: "1.5px solid var(--se-border)",
+                  background: "var(--se-bg-input)",
+                  fontSize: 14,
+                  color: "var(--se-text-main)",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+                onFocus={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--se-primary)")
+                }
+                onBlur={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--se-border)")
+                }
+              />
+            </div>
 
             {/* Meal period tabs */}
             {mealPeriods.length > 1 && (
@@ -467,6 +479,7 @@ export default function Menu() {
                     label={period}
                     active={activeMealPeriod === period}
                     onClick={() => setActiveMealPeriod(period)}
+                    tint="primary"
                   />
                 ))}
               </div>
@@ -484,6 +497,7 @@ export default function Menu() {
                     label={flag}
                     active={activeDietary.has(flag)}
                     onClick={() => toggleDietary(flag)}
+                    tint="success"
                   />
                 ))}
               </div>
@@ -501,6 +515,7 @@ export default function Menu() {
                     label={allergen}
                     active={excludedAllergens.has(allergen)}
                     onClick={() => toggleAllergen(allergen)}
+                    tint="error"
                   />
                 ))}
               </div>
@@ -523,10 +538,13 @@ export default function Menu() {
                     {/* Station header */}
                     <div
                       style={{
+                        background: "var(--se-bg-subtle)",
+                        borderRadius: "var(--se-radius-sm)",
+                        padding: "6px 12px",
+                        marginBottom: 12,
                         display: "flex",
                         alignItems: "center",
-                        gap: 10,
-                        marginBottom: 8,
+                        justifyContent: "space-between",
                       }}
                     >
                       <p
@@ -542,13 +560,6 @@ export default function Menu() {
                       >
                         {station}
                       </p>
-                      <div
-                        style={{
-                          flex: 1,
-                          height: 1,
-                          background: "var(--se-border)",
-                        }}
-                      />
                       <span
                         style={{
                           fontSize: 11,
