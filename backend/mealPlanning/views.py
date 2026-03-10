@@ -1361,3 +1361,93 @@ class NutritionEstimateView(View):
         )
 
         return JsonResponse(result)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AIRecommendView(View):
+    def post(self, request):
+        from mealPlanning.models import Dish
+        from mealPlanning.services.gemini_client import _get_client
+
+        try:
+            body = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            body = {}
+
+        user_context = {}
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Token "):
+            token_key = auth_header.split(" ", 1)[1].strip()
+            token = Token.objects.select_related("user__profile").filter(key=token_key).first()
+            if token:
+                profile = token.user.profile
+                user_context = {
+                    "goal": profile.goal or "maintain",
+                    "dietary_flags": body.get("dietary_flags", []),
+                }
+
+        today = timezone.localdate()
+        dishes = Dish.objects.filter(last_seen=today).select_related("dining_hall")
+        if not dishes.exists():
+            dishes = Dish.objects.all().select_related("dining_hall")[:50]
+
+        dish_list = [
+            {
+                "dish_id": d.dish_id,
+                "name": d.dish_name,
+                "hall": d.dining_hall.name,
+                "calories": d.calories,
+                "protein": d.protein,
+                "carbs": d.carbohydrates,
+                "fat": d.fat,
+                "meal_period": d.meal_period,
+                "dietary_flags": d.dietary_flags,
+            }
+            for d in dishes[:30]
+        ]
+
+        goal = user_context.get("goal", "maintain")
+        prompt = (
+            f"You are a university dining nutrition advisor. "
+            f"The student's goal is: {goal}. "
+            f"Here are today's available dishes:\n"
+            f"{json.dumps(dish_list, indent=2)}\n\n"
+            f"Recommend exactly 3 dishes and explain why in one sentence each. "
+            f"Also provide one short pro-tip about their nutrition today. "
+            f"Respond ONLY with valid JSON in this exact format:\n"
+            f'{{"recommendations": [{{"dish_id": N, "dish_name": "...", "hall_name": "...", '
+            f'"reason": "...", "calories": N, "meal_period": "..."}}, ...], '
+            f'"tip": "..."}}'
+        )
+
+        try:
+            client = _get_client()
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+            text = response.text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            if text.startswith("json"):
+                text = text[4:]
+            result = json.loads(text.strip())
+            return JsonResponse(result)
+        except Exception:
+            fallback = sorted(dish_list, key=lambda d: d["protein"], reverse=True)[:3]
+            return JsonResponse({
+                "recommendations": [
+                    {
+                        "dish_id": d["dish_id"],
+                        "dish_name": d["name"],
+                        "hall_name": d["hall"],
+                        "reason": "High in protein",
+                        "calories": d["calories"],
+                        "meal_period": d["meal_period"],
+                    }
+                    for d in fallback
+                ],
+                "tip": "Try to hit your protein goal today — it helps with recovery and focus.",
+            })

@@ -50,5 +50,6 @@ urlpatterns = [
 
     path("daily-intake/", views.DailyIntakeView.as_view(), name="daily-intake"),
     path("daily-history/", views.DailyHistoryView.as_view(), name="daily-history"),
+    path("ai-recommend/", views.AIRecommendView.as_view(), name="ai-recommend"),
 
 ]
