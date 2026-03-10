@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
-import { FoodListItem } from "../components/FoodListItem";
+import { FoodIcon } from "../components/FoodIcon";
+import type { FoodCategory } from "../components/FoodIcon";
 import { FilterChip } from "../components/FilterChip";
 import { Card } from "../components/Card";
 import { Button } from "../components/Button";
@@ -10,6 +11,7 @@ import AddDish from "../components/AddDish";
 import Skeleton from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
 import { IconMapPin, IconSearch, IconClose } from "../components/Icons";
+import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,17 +42,175 @@ interface DiningHall {
   dishes: Dish[];
 }
 
-interface DishStats {
-  total_dishes: number;
-  total_halls: number;
-  dishes_by_category: { category: string; count: number }[];
-  dishes_by_hall: { dining_hall__name: string; count: number }[];
-}
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Halal", "Jain"];
 const ALLERGEN_FILTERS = ["Gluten", "Milk", "Eggs", "Soy", "Corn", "Wheat", "Fish"];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function ChevronRight() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
+
+// ─── DishCard ─────────────────────────────────────────────────────────────────
+
+function DishCard({
+  dish,
+  station,
+  onClick,
+}: {
+  dish: Dish;
+  station: string;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        background: "var(--se-bg-surface)",
+        border: `1px solid ${hovered ? "var(--se-border-strong)" : "var(--se-border)"}`,
+        borderRadius: "var(--se-radius-lg)",
+        overflow: "hidden",
+        cursor: "pointer",
+        boxShadow: hovered ? "var(--se-shadow-md)" : "var(--se-shadow-sm)",
+        transform: hovered ? "translateY(-2px)" : "none",
+        transition: "all 150ms ease",
+        padding: 0,
+      }}
+    >
+      {/* Icon zone */}
+      <div
+        style={{
+          height: 84,
+          background: "var(--se-bg-subtle)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderBottom: `1px solid ${hovered ? "var(--se-border)" : "var(--se-border-muted)"}`,
+        }}
+      >
+        <FoodIcon
+          dishName={dish.dish_name}
+          category={dish.category as FoodCategory}
+          size="lg"
+        />
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: "12px 14px 14px" }}>
+        <p
+          style={{
+            fontSize: "var(--se-text-sm)",
+            fontWeight: "var(--se-weight-bold)",
+            color: "var(--se-text-main)",
+            margin: "0 0 2px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {dish.dish_name}
+        </p>
+        <p
+          style={{
+            fontSize: "var(--se-text-xs)",
+            color: "var(--se-text-muted)",
+            margin: "0 0 10px",
+          }}
+        >
+          {station}
+          {dish.serving_size && (
+            <span style={{ color: "var(--se-text-faint)" }}> · {dish.serving_size}</span>
+          )}
+        </p>
+
+        {/* Macro grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 4,
+            marginBottom: 10,
+          }}
+        >
+          {[
+            { label: "Cal", value: dish.calories, unit: "", bg: "var(--se-primary-dim)", color: "var(--se-macro-cal)" },
+            { label: "Pro", value: dish.protein, unit: "g", bg: "var(--se-info-dim)", color: "var(--se-macro-protein)" },
+            { label: "Carb", value: dish.carbohydrates, unit: "g", bg: "var(--se-warning-dim)", color: "var(--se-macro-carbs)" },
+            { label: "Fat", value: dish.fat, unit: "g", bg: "var(--se-primary-dim)", color: "var(--se-macro-fat)" },
+          ].map(({ label, value, unit, bg, color }) =>
+            value !== undefined ? (
+              <div
+                key={label}
+                style={{
+                  background: bg,
+                  borderRadius: "var(--se-radius-sm)",
+                  padding: "5px 4px",
+                  textAlign: "center",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color,
+                    textTransform: "uppercase",
+                    margin: "0 0 1px",
+                    opacity: 0.65,
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {label}
+                </p>
+                <p style={{ fontSize: 11, fontWeight: 700, color, margin: 0 }}>
+                  {value}{unit}
+                </p>
+              </div>
+            ) : null
+          )}
+        </div>
+
+        {/* Dietary flags */}
+        {dish.dietary_flags && dish.dietary_flags.length > 0 && (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {dish.dietary_flags.map((flag) => {
+              const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
+              return (
+                <span
+                  key={flag}
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: "2px 6px",
+                    borderRadius: "var(--se-radius-full)",
+                    background: colors.bg,
+                    color: colors.text,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {flag}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -63,7 +223,6 @@ export default function Menu() {
   const [loading, setLoading] = useState(true);
   const [hallsError, setHallsError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [stats, setStats] = useState<DishStats | null>(null);
 
   // Filter state
   const [activeMealPeriod, setActiveMealPeriod] = useState("All");
@@ -95,14 +254,6 @@ export default function Menu() {
   useEffect(() => {
     fetchHalls();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Fetch dish stats ──────────────────────────────────────────────────────
-  useEffect(() => {
-    axios
-      .get(`${API_BASE}/dish-stats/`)
-      .then((res) => setStats(res.data))
-      .catch((err) => console.error("Failed to load stats:", err));
-  }, []);
 
   // ── URL param → selected hall (back/forward) ──────────────────────────────
   useEffect(() => {
@@ -156,11 +307,8 @@ export default function Menu() {
   const filteredDishes = useMemo(() => {
     if (!selectedHall) return [];
     return selectedHall.dishes.filter((d) => {
-      // Text search
       if (search && !d.dish_name.toLowerCase().includes(search.toLowerCase())) return false;
-      // Meal period
       if (activeMealPeriod !== "All" && d.meal_period !== activeMealPeriod) return false;
-      // Dietary flags: dish must have ALL selected flags
       for (const flag of activeDietary) {
         if (flag === "Gluten-Free") {
           if (d.allergens?.includes("Gluten")) return false;
@@ -168,7 +316,6 @@ export default function Menu() {
           if (!d.dietary_flags?.includes(flag)) return false;
         }
       }
-      // Allergen exclusions: dish must NOT have any excluded allergen
       for (const allergen of excludedAllergens) {
         if (d.allergens?.includes(allergen)) return false;
       }
@@ -243,29 +390,40 @@ export default function Menu() {
         {/* Rail header */}
         <div
           style={{
-            padding: "20px 16px 12px",
+            padding: "20px 16px 14px",
             borderBottom: "1px solid var(--se-border)",
           }}
         >
           <p
             style={{
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 700,
-              color: "var(--se-text-faint)",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              margin: 0,
+              color: "var(--se-text-main)",
+              margin: "0 0 2px",
             }}
           >
             Dining Halls
+          </p>
+          <p
+            style={{
+              fontSize: 11,
+              color: "var(--se-text-faint)",
+              margin: 0,
+            }}
+          >
+            {loading
+              ? "Loading…"
+              : halls.length > 0
+              ? `${halls.length} hall${halls.length !== 1 ? "s" : ""} · Today's menu`
+              : "No halls found"}
           </p>
         </div>
 
         {/* Hall rows */}
         {loading ? (
-          <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ padding: "16px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} variant="rect" height={52} />
+              <Skeleton key={i} variant="rect" height={60} />
             ))}
           </div>
         ) : hallsError ? (
@@ -275,7 +433,7 @@ export default function Menu() {
                 <p style={{ color: "var(--se-error)", fontWeight: 600, fontSize: "var(--se-text-base)", margin: 0 }}>
                   Something went wrong
                 </p>
-                <p style={{ color: "var(--se-text-muted)", fontSize: "var(--se-text-sm)", marginTop: 4, margin: "4px 0 0" }}>
+                <p style={{ color: "var(--se-text-muted)", fontSize: "var(--se-text-sm)", margin: "4px 0 0" }}>
                   {hallsError}
                 </p>
                 <div style={{ marginTop: "var(--se-space-4)" }}>
@@ -287,7 +445,7 @@ export default function Menu() {
             </Card>
           </div>
         ) : (
-          <div style={{ padding: "12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: 6 }}>
             {halls.map((hall) => {
               const active = selectedHall?.Dining_Hall_ID === hall.Dining_Hall_ID;
               return (
@@ -298,17 +456,15 @@ export default function Menu() {
                     display: "block",
                     width: "100%",
                     textAlign: "left",
-                    padding: "10px 14px",
+                    padding: "10px 12px",
                     borderRadius: "var(--se-radius-md)",
-                    border: active
-                      ? "1px solid var(--se-primary)"
-                      : "1px solid var(--se-border)",
+                    border: "1px solid transparent",
                     borderLeft: active
                       ? "3px solid var(--se-primary)"
-                      : "1px solid var(--se-border)",
-                    background: active ? "var(--se-primary-dim)" : "var(--se-bg-surface)",
+                      : "3px solid transparent",
+                    background: active ? "var(--se-primary-dim)" : "transparent",
                     cursor: "pointer",
-                    transition: "background 0.1s",
+                    transition: "background 0.12s, border-color 0.12s",
                   }}
                   onMouseEnter={(e) => {
                     if (!active)
@@ -316,21 +472,41 @@ export default function Menu() {
                   }}
                   onMouseLeave={(e) => {
                     if (!active)
-                      e.currentTarget.style.background = active ? "var(--se-primary-dim)" : "var(--se-bg-surface)";
+                      e.currentTarget.style.background = "transparent";
                   }}
                 >
-                  <p
-                    style={{
-                      fontSize: 13,
-                      fontWeight: active ? 700 : 500,
-                      color: active ? "var(--se-primary)" : "var(--se-text-main)",
-                      margin: "0 0 2px",
-                    }}
-                  >
-                    {hall.name}
-                  </p>
-                  <p style={{ fontSize: 11, color: "var(--se-text-faint)", margin: 0, display: "flex", alignItems: "center", gap: 4 }}>
-                    <IconMapPin size={14} color="var(--se-text-faint)" />
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        fontWeight: active ? 700 : 500,
+                        color: active ? "var(--se-primary)" : "var(--se-text-main)",
+                        margin: "0 0 3px",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {hall.name}
+                    </p>
+                    {hall.dishes.length > 0 && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: active ? "var(--se-primary)" : "var(--se-text-faint)",
+                          background: active ? "rgba(232,74,39,0.12)" : "var(--se-bg-subtle)",
+                          padding: "2px 7px",
+                          borderRadius: "var(--se-radius-full)",
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                          marginTop: 1,
+                        }}
+                      >
+                        {hall.dishes.length}
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: 11, color: "var(--se-text-faint)", margin: 0, display: "flex", alignItems: "center", gap: 3 }}>
+                    <IconMapPin size={11} color="var(--se-text-faint)" />
                     {hall.location}
                   </p>
                 </button>
@@ -345,264 +521,409 @@ export default function Menu() {
         {/* Spacer for mobile fixed chip bar */}
         <div className="md:hidden" style={{ height: 52 }} />
 
+        {/* ── No hall selected: rich hall-selection prompt ── */}
         {!selectedHall ? (
-          <div style={{ padding: 24 }}>
-            {stats && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
-                <div style={{ background: "var(--se-bg-surface)", borderRadius: "var(--se-radius-lg)", border: "1px solid var(--se-border)", padding: "16px 20px" }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--se-text-faint)", marginBottom: 8 }}>Totals</p>
-                  <p style={{ fontSize: 28, fontWeight: 800, color: "var(--se-text-main)", margin: 0 }}>{stats.total_dishes} <span style={{ fontSize: 14, fontWeight: 400, color: "var(--se-text-muted)" }}>dishes</span></p>
-                  <p style={{ fontSize: 16, fontWeight: 600, color: "var(--se-text-secondary)", margin: "4px 0 0" }}>{stats.total_halls} <span style={{ fontSize: 12, fontWeight: 400, color: "var(--se-text-faint)" }}>dining halls</span></p>
+          <div style={{ padding: "40px 28px" }}>
+            <div style={{ marginBottom: 28 }}>
+              <h1
+                style={{
+                  fontSize: "var(--se-text-h2)",
+                  fontWeight: "var(--se-weight-extrabold)",
+                  color: "var(--se-text-main)",
+                  margin: "0 0 6px",
+                }}
+              >
+                Where are you eating today?
+              </h1>
+              <p style={{ fontSize: "var(--se-text-sm)", color: "var(--se-text-muted)", margin: 0 }}>
+                Select a dining hall to browse today's menu.
+              </p>
+            </div>
+
+            {loading ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} variant="rect" height={72} />
+                ))}
+              </div>
+            ) : hallsError ? (
+              <Card padding="md">
+                <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
+                  <p style={{ color: "var(--se-error)", fontWeight: 600, margin: 0 }}>Could not load dining halls</p>
+                  <div style={{ marginTop: "var(--se-space-4)" }}>
+                    <Button variant="secondary" size="sm" onClick={fetchHalls}>Try Again</Button>
+                  </div>
                 </div>
-                <div style={{ background: "var(--se-bg-surface)", borderRadius: "var(--se-radius-lg)", border: "1px solid var(--se-border)", padding: "16px 20px" }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--se-text-faint)", marginBottom: 8 }}>By Category</p>
-                  {stats.dishes_by_category.map((cat) => (
-                    <div key={cat.category} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, color: "var(--se-text-main)" }}>{cat.category || "Uncategorized"}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--se-text-main)" }}>{cat.count}</span>
+              </Card>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {halls.map((hall) => (
+                  <button
+                    key={hall.Dining_Hall_ID}
+                    onClick={() => selectHall(hall)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 16,
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "16px 20px",
+                      borderRadius: "var(--se-radius-lg)",
+                      border: "1px solid var(--se-border)",
+                      background: "var(--se-bg-surface)",
+                      cursor: "pointer",
+                      boxShadow: "var(--se-shadow-sm)",
+                      transition: "transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "var(--se-primary)";
+                      e.currentTarget.style.boxShadow = "var(--se-shadow-md)";
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "var(--se-border)";
+                      e.currentTarget.style.boxShadow = "var(--se-shadow-sm)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}
+                  >
+                    {/* Orange dot indicator */}
+                    <div
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        background: "var(--se-success)",
+                        flexShrink: 0,
+                      }}
+                    />
+
+                    {/* Hall info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p
+                        style={{
+                          fontSize: "var(--se-text-base)",
+                          fontWeight: "var(--se-weight-bold)",
+                          color: "var(--se-text-main)",
+                          margin: "0 0 2px",
+                        }}
+                      >
+                        {hall.name}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: "var(--se-text-xs)",
+                          color: "var(--se-text-muted)",
+                          margin: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <IconMapPin size={12} color="var(--se-text-faint)" />
+                        {hall.location}
+                      </p>
                     </div>
-                  ))}
-                </div>
-                <div style={{ background: "var(--se-bg-surface)", borderRadius: "var(--se-radius-lg)", border: "1px solid var(--se-border)", padding: "16px 20px" }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--se-text-faint)", marginBottom: 8 }}>By Dining Hall</p>
-                  {stats.dishes_by_hall.map((hall) => (
-                    <div key={hall.dining_hall__name} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, color: "var(--se-text-main)" }}>{hall.dining_hall__name}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--se-text-main)" }}>{hall.count}</span>
-                    </div>
-                  ))}
-                </div>
+
+                    {/* Dish count */}
+                    <span
+                      style={{
+                        fontSize: "var(--se-text-xs)",
+                        fontWeight: "var(--se-weight-semibold)",
+                        color: "var(--se-text-muted)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {hall.dishes.length} dishes
+                    </span>
+
+                    {/* Arrow */}
+                    <span style={{ color: "var(--se-text-faint)", flexShrink: 0 }}>
+                      <ChevronRight />
+                    </span>
+                  </button>
+                ))}
               </div>
             )}
-            <EmptyState
-              message="Select a dining hall"
-              sub="Choose a hall from the left to browse its menu items."
-            />
           </div>
         ) : (
-          <div style={{ padding: 24 }}>
-            {/* Hall header */}
-            <div style={{ marginBottom: 20 }}>
+          <>
+            {/* ── Hall selected: header zone ── */}
+            <div
+              style={{
+                padding: "24px 24px 20px",
+                background: "var(--se-bg-subtle)",
+                borderBottom: "1px solid var(--se-border)",
+              }}
+            >
+              {/* Orange accent bar */}
+              <div
+                style={{
+                  width: 36,
+                  height: 3,
+                  background: "var(--se-primary)",
+                  borderRadius: 99,
+                  marginBottom: 14,
+                }}
+              />
               <h1
                 style={{
                   fontSize: "var(--se-text-h1)",
                   fontWeight: "var(--se-weight-extrabold)",
                   color: "var(--se-text-main)",
-                  margin: "0 0 4px",
-                  lineHeight: 1.2,
+                  margin: "0 0 5px",
+                  lineHeight: 1.15,
                 }}
               >
                 {selectedHall.name}
               </h1>
-              <p style={{ fontSize: 13, color: "var(--se-text-muted)", margin: 0 }}>
-                {selectedHall.location}
-                {" · "}
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--se-text-muted)",
+                  margin: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <IconMapPin size={13} color="var(--se-text-faint)" />
+                  {selectedHall.location}
+                </span>
+                <span style={{ color: "var(--se-border-strong)" }}>·</span>
                 <span style={{ color: "var(--se-text-secondary)", fontWeight: 600 }}>
-                  {filteredDishes.length} of {selectedHall.dishes.length} dishes
+                  {filteredDishes.length}
+                  {filteredDishes.length !== selectedHall.dishes.length && (
+                    <span style={{ fontWeight: 400, color: "var(--se-text-faint)" }}>
+                      {" "}/ {selectedHall.dishes.length}
+                    </span>
+                  )}{" "}
+                  dishes
                 </span>
               </p>
             </div>
 
-            {/* Search input */}
-            <div style={{ position: "relative", marginBottom: 12 }}>
-              <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", pointerEvents: "none" }}>
-                <IconSearch size={16} color="var(--se-text-faint)" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search dishes…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                aria-label="Search dishes"
-                style={{
-                  width: "100%",
-                  height: 40,
-                  paddingLeft: 36,
-                  paddingRight: search ? 40 : 14,
-                  paddingTop: 0,
-                  paddingBottom: 0,
-                  borderRadius: "var(--se-radius-lg)",
-                  border: "1.5px solid var(--se-border)",
-                  background: "var(--se-bg-input)",
-                  fontSize: 14,
-                  color: "var(--se-text-main)",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-                onFocus={(e) =>
-                  (e.currentTarget.style.borderColor = "var(--se-primary)")
-                }
-                onBlur={(e) =>
-                  (e.currentTarget.style.borderColor = "var(--se-border)")
-                }
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
+            {/* ── Sticky search + meal period bar ── */}
+            <div
+              style={{
+                position: "sticky",
+                top: 0,
+                zIndex: 10,
+                background: "var(--se-bg-surface)",
+                borderBottom: "1px solid var(--se-border)",
+                padding: "10px 24px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              {/* Search */}
+              <div style={{ position: "relative", flex: "1 1 180px", minWidth: 0 }}>
+                <div
                   style={{
                     position: "absolute",
-                    right: 8,
+                    left: 11,
                     top: "50%",
                     transform: "translateY(-50%)",
-                    width: 28,
-                    height: 28,
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: "var(--se-radius-full)",
-                    border: "none",
-                    background: "var(--se-bg-subtle)",
-                    color: "var(--se-text-muted)",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--se-border-muted)";
-                    e.currentTarget.style.color = "var(--se-text-main)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "var(--se-bg-subtle)";
-                    e.currentTarget.style.color = "var(--se-text-muted)";
+                    pointerEvents: "none",
                   }}
                 >
-                  <IconClose size={14} />
-                </button>
+                  <IconSearch size={15} color="var(--se-text-faint)" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search dishes…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search dishes"
+                  style={{
+                    width: "100%",
+                    height: 36,
+                    paddingLeft: 32,
+                    paddingRight: search ? 36 : 12,
+                    borderRadius: "var(--se-radius-full)",
+                    border: "1.5px solid var(--se-border)",
+                    background: "var(--se-bg-subtle)",
+                    fontSize: 13,
+                    color: "var(--se-text-main)",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    transition: "border-color 0.15s",
+                  }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--se-primary)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--se-border)")}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label="Clear search"
+                    style={{
+                      position: "absolute",
+                      right: 6,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: 24,
+                      height: 24,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "var(--se-radius-full)",
+                      border: "none",
+                      background: "var(--se-bg-subtle)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <IconClose size={12} color="var(--se-text-muted)" />
+                  </button>
+                )}
+              </div>
+
+              {/* Meal period tabs */}
+              {mealPeriods.length > 1 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {mealPeriods.map((period) => (
+                    <FilterChip
+                      key={period}
+                      label={period}
+                      active={activeMealPeriod === period}
+                      onClick={() => setActiveMealPeriod(period)}
+                      tint="primary"
+                    />
+                  ))}
+                </div>
               )}
             </div>
 
-            {/* Meal period tabs */}
-            {mealPeriods.length > 1 && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                {mealPeriods.map((period) => (
-                  <FilterChip
-                    key={period}
-                    label={period}
-                    active={activeMealPeriod === period}
-                    onClick={() => setActiveMealPeriod(period)}
-                    tint="primary"
-                  />
-                ))}
+            {/* ── Dietary + allergen chips ── */}
+            <div
+              style={{
+                padding: "10px 24px 12px",
+                borderBottom: "1px solid var(--se-border-muted)",
+                display: "flex",
+                gap: 20,
+                flexWrap: "wrap",
+                alignItems: "flex-start",
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--se-text-faint)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    margin: "0 0 5px",
+                  }}
+                >
+                  Dietary
+                </p>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {DIETARY_FILTERS.map((flag) => (
+                    <FilterChip
+                      key={flag}
+                      label={flag}
+                      active={activeDietary.has(flag)}
+                      onClick={() => toggleDietary(flag)}
+                      tint="success"
+                    />
+                  ))}
+                </div>
               </div>
-            )}
-
-            {/* Dietary preference chips */}
-            <div style={{ marginBottom: 8 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--se-text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 6px" }}>
-                Dietary
-              </p>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {DIETARY_FILTERS.map((flag) => (
-                  <FilterChip
-                    key={flag}
-                    label={flag}
-                    active={activeDietary.has(flag)}
-                    onClick={() => toggleDietary(flag)}
-                    tint="success"
-                  />
-                ))}
+              <div>
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--se-text-faint)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    margin: "0 0 5px",
+                  }}
+                >
+                  Exclude Allergens
+                </p>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {ALLERGEN_FILTERS.map((allergen) => (
+                    <FilterChip
+                      key={allergen}
+                      label={allergen}
+                      active={excludedAllergens.has(allergen)}
+                      onClick={() => toggleAllergen(allergen)}
+                      tint="error"
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Allergen exclusion chips */}
-            <div style={{ marginBottom: 16 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--se-text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 6px" }}>
-                Exclude Allergens
-              </p>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {ALLERGEN_FILTERS.map((allergen) => (
-                  <FilterChip
-                    key={allergen}
-                    label={allergen}
-                    active={excludedAllergens.has(allergen)}
-                    onClick={() => toggleAllergen(allergen)}
-                    tint="error"
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Dish list grouped by station */}
-            {stationGroups.length === 0 ? (
-              <EmptyState
-                message={hasActiveFilters ? "No dishes match" : "No dishes found"}
-                sub={
-                  hasActiveFilters
-                    ? "Try adjusting your filters or search term."
-                    : "This hall has no dishes in the database."
-                }
-              />
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                {stationGroups.map(([station, dishes]) => (
-                  <div key={station}>
-                    {/* Station header */}
-                    <div
-                      style={{
-                        background: "var(--se-bg-subtle)",
-                        borderRadius: "var(--se-radius-sm)",
-                        padding: "6px 12px",
-                        marginBottom: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <p
+            {/* ── Dish list ── */}
+            <div style={{ padding: "20px 24px 48px" }}>
+              {stationGroups.length === 0 ? (
+                <EmptyState
+                  message={hasActiveFilters ? "No dishes match" : "No dishes found"}
+                  sub={
+                    hasActiveFilters
+                      ? "Try adjusting your filters or search term."
+                      : "This hall has no dishes in the database."
+                  }
+                />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+                  {stationGroups.map(([station, dishes]) => (
+                    <div key={station}>
+                      {/* Section header: title + horizontal rule */}
+                      <div
                         style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: "var(--se-text-faint)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                          margin: 0,
-                          whiteSpace: "nowrap",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 14,
+                          marginBottom: 12,
                         }}
                       >
-                        {station}
-                      </p>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: "var(--se-text-faint)",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {dishes.length}
-                      </span>
-                    </div>
-
-                    {/* Dishes in this station */}
-                    <Card padding="none">
-                      {dishes.map((dish) => (
-                        <div
-                          key={dish.dish_id}
-                          onClick={() => navigate(`/dishes/${dish.dish_id}`)}
-                          style={{ cursor: "pointer" }}
+                        <h3
+                          style={{
+                            fontSize: "var(--se-text-base)",
+                            fontWeight: "var(--se-weight-bold)",
+                            color: "var(--se-text-main)",
+                            margin: 0,
+                            whiteSpace: "nowrap",
+                          }}
                         >
-                          <FoodListItem
-                            dishName={dish.dish_name}
-                            category={dish.category}
-                            servingUnit={station}
-                            servingSize={dish.serving_size}
-                            calories={dish.calories}
-                            protein={dish.protein}
-                            carbohydrates={dish.carbohydrates}
-                            fat={dish.fat}
-                            dietaryFlags={dish.dietary_flags}
-                          />
-                        </div>
-                      ))}
-                    </Card>
-                  </div>
-                ))}
-              </div>
-            )}
+                          {station}
+                        </h3>
+                        <div style={{ flex: 1, height: 1, background: "var(--se-border)" }} />
+                        <span style={{ fontSize: 11, color: "var(--se-text-faint)", flexShrink: 0 }}>
+                          {dishes.length}
+                        </span>
+                      </div>
 
-            <div style={{ marginTop: 32 }}>
-              <AddDish />
+                      {/* Card grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {dishes.map((dish) => (
+                          <DishCard
+                            key={dish.dish_id}
+                            dish={dish}
+                            station={station}
+                            onClick={() => navigate(`/dishes/${dish.dish_id}`)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ marginTop: 32 }}>
+                <AddDish />
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
