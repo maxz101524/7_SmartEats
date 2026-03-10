@@ -156,10 +156,41 @@ class UserProfile(models.Model):
         help_text="User fitness goal, e.g., fat loss or muscle gain"
     )
 
-    
-    
-  
-    
+    activity_level = models.CharField(
+        max_length=20,
+        choices=[
+            ("sedentary", "Sedentary"),
+            ("light", "Lightly Active"),
+            ("moderate", "Moderately Active"),
+            ("active", "Active"),
+            ("very_active", "Very Active"),
+        ],
+        blank=True,
+        null=True,
+        help_text="Activity level for TDEE calculation",
+    )
+    daily_cal_goal = models.PositiveIntegerField(
+        blank=True, null=True,
+        help_text="Daily calorie target",
+    )
+    daily_protein_goal = models.PositiveIntegerField(
+        blank=True, null=True,
+        help_text="Daily protein target (grams)",
+    )
+    daily_carbs_goal = models.PositiveIntegerField(
+        blank=True, null=True,
+        help_text="Daily carbohydrate target (grams)",
+    )
+    daily_fat_goal = models.PositiveIntegerField(
+        blank=True, null=True,
+        help_text="Daily fat target (grams)",
+    )
+    goals_source = models.CharField(
+        max_length=10,
+        choices=[("ai", "AI-Calculated"), ("custom", "Custom")],
+        blank=True, null=True,
+        help_text="How daily goals were set",
+    )
 
     class Meta:
 
