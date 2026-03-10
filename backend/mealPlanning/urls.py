@@ -49,5 +49,6 @@ urlpatterns = [
     path("nutrition-estimate/", views.NutritionEstimateView.as_view(), name="nutrition_estimate"),
 
     path("daily-intake/", views.DailyIntakeView.as_view(), name="daily-intake"),
+    path("daily-history/", views.DailyHistoryView.as_view(), name="daily-history"),
 
 ]

@@ -289,6 +289,42 @@ class DailyIntakeView(APIView):
         })
 
 
+class DailyHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        days = int(request.query_params.get("days", 7))
+        days = min(days, 365)
+        user = request.user
+        start_date = timezone.localdate() - timedelta(days=days - 1)
+
+        meals_by_day = (
+            user.meals
+            .filter(date__gte=start_date)
+            .values("date")
+            .annotate(
+                calories=Sum("total_calories"),
+                protein=Sum("total_protein"),
+                carbs=Sum("total_carbohydrates"),
+                fat=Sum("total_fat"),
+            )
+            .order_by("date")
+        )
+
+        result = [
+            {
+                "date": entry["date"].isoformat(),
+                "calories": entry["calories"] or 0,
+                "protein": entry["protein"] or 0,
+                "carbs": entry["carbs"] or 0,
+                "fat": entry["fat"] or 0,
+            }
+            for entry in meals_by_day
+        ]
+
+        return Response(result)
+
+
 def dining_hall_view(request):
 
     halls = DiningHall.objects.prefetch_related('dish').all()
