@@ -250,6 +250,45 @@ class UserProfileView(APIView):
         return Response({"message": "Profile updated"}, status=status.HTTP_200_OK)
 
 
+class DailyIntakeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        profile = user.profile
+        today = timezone.localdate()
+
+        totals = user.meals.filter(date=today).aggregate(
+            calories=Sum("total_calories"),
+            protein=Sum("total_protein"),
+            carbs=Sum("total_carbohydrates"),
+            fat=Sum("total_fat"),
+        )
+
+        consumed = {
+            "calories": totals["calories"] or 0,
+            "protein": totals["protein"] or 0,
+            "carbs": totals["carbs"] or 0,
+            "fat": totals["fat"] or 0,
+        }
+
+        goals_set = profile.daily_cal_goal is not None
+        goals = None
+        if goals_set:
+            goals = {
+                "calories": profile.daily_cal_goal,
+                "protein": profile.daily_protein_goal,
+                "carbs": profile.daily_carbs_goal,
+                "fat": profile.daily_fat_goal,
+            }
+
+        return Response({
+            "consumed": consumed,
+            "goals": goals,
+            "goals_set": goals_set,
+        })
+
+
 def dining_hall_view(request):
 
     halls = DiningHall.objects.prefetch_related('dish').all()
