@@ -299,7 +299,7 @@ function DishDetail() {
       )}
 
       {/* Primary macros — 4 cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginBottom: 12 }}>
         <MacroCard label="Calories" value={dish.calories} unit="kcal" color="var(--se-macro-cal)" />
         <MacroCard label="Protein" value={dish.protein} unit="g" color="var(--se-macro-protein)" />
         <MacroCard label="Carbs" value={dish.carbohydrates} unit="g" color="var(--se-macro-carbs)" />
@@ -314,7 +314,7 @@ function DishDetail() {
             border: "1px solid var(--se-border)",
             borderRadius: "var(--se-radius-lg)",
             padding: "14px 18px",
-            marginBottom: 16,
+            marginBottom: 12,
           }}
         >
           <p
@@ -363,7 +363,7 @@ function DishDetail() {
             borderRadius: 9999,
             background: dish.nutrition_source === "ai_generated" ? "var(--se-warning-dim)" : "var(--se-bg-subtle)",
             color: dish.nutrition_source === "ai_generated" ? "var(--se-warning)" : "var(--se-text-muted)",
-            marginBottom: 20,
+            marginBottom: 16,
           }}
         >
           {dish.nutrition_source === "ai_generated" ? <IconSparkle size={14} /> : <IconDatabase size={14} />}
@@ -382,7 +382,7 @@ function DishDetail() {
         style={{
           width: "100%",
           minHeight: 200,
-          background: "var(--se-bg-surface)",
+          background: "var(--se-bg-elevated)",
           border: "1px solid var(--se-border)",
           borderRadius: "var(--se-radius-lg)",
           padding: 16,

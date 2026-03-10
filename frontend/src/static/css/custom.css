@@ -30,6 +30,14 @@ body {
   outline-offset: 2px;
 }
 
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(232, 74, 39, 0.15);
+  border-color: var(--se-primary);
+}
+
 /* ── Selection highlight ─────────────────────────────────────── */
 ::selection {
   background: rgba(var(--se-primary-rgb), 0.18);
@@ -79,13 +87,22 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Respect reduced motion */
+/* ── Accessibility: Reduced Motion ───────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .hero-stagger *,
-  .page-enter {
-    animation: none !important;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
+
+/* ── Z-Index Scale (reference) ───────────────────────── */
+/* z-10: sticky search bar (Menu)     */
+/* z-40: mobile chip bar (Menu)       */
+/* z-50: navbar                       */
 
 /* Button press micro-interaction */
 button:active:not(:disabled) {

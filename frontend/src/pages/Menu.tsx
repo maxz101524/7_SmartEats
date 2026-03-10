@@ -94,7 +94,7 @@ function DishCard({
       <div
         style={{
           height: 84,
-          background: "var(--se-bg-subtle)",
+          background: "var(--se-primary-dim)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -651,15 +651,15 @@ export default function Menu() {
             <div
               style={{
                 padding: "24px 24px 20px",
-                background: "var(--se-bg-subtle)",
+                background: "linear-gradient(180deg, var(--se-primary-dim) 0%, var(--se-bg-subtle) 100%)",
                 borderBottom: "1px solid var(--se-border)",
               }}
             >
               {/* Orange accent bar */}
               <div
                 style={{
-                  width: 36,
-                  height: 3,
+                  width: 48,
+                  height: 4,
                   background: "var(--se-primary)",
                   borderRadius: 99,
                   marginBottom: 14,
@@ -754,8 +754,14 @@ export default function Menu() {
                     boxSizing: "border-box",
                     transition: "border-color 0.15s",
                   }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--se-primary)")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--se-border)")}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "var(--se-primary)";
+                    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(232, 74, 39, 0.1)";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "var(--se-border)";
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
                 />
                 {search && (
                   <button
@@ -893,11 +899,13 @@ export default function Menu() {
                             color: "var(--se-text-main)",
                             margin: 0,
                             whiteSpace: "nowrap",
+                            paddingLeft: 12,
+                            borderLeft: "3px solid var(--se-primary)",
                           }}
                         >
                           {station}
                         </h3>
-                        <div style={{ flex: 1, height: 1, background: "var(--se-border)" }} />
+                        <div style={{ flex: 1, height: 1, background: "var(--se-border-strong)" }} />
                         <span style={{ fontSize: 11, color: "var(--se-text-faint)", flexShrink: 0 }}>
                           {dishes.length}
                         </span>

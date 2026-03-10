@@ -225,7 +225,7 @@ function Profile() {
   };
 
   const sectionStyle: React.CSSProperties = {
-    marginBottom: 48,
+    marginBottom: 36,
   };
 
   const sectionHeadingStyle: React.CSSProperties = {

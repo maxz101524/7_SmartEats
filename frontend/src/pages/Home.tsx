@@ -132,7 +132,7 @@ export default function Home() {
       <div style={{ margin: "0 -24px", padding: "0 24px", background: "var(--se-bg-base)" }}>
         <section
           className="hero-stagger"
-          style={{ padding: "80px 24px 72px", textAlign: "center" }}
+          style={{ padding: "48px 24px 40px", textAlign: "center" }}
         >
           {/* Animated badge pill */}
           <div
@@ -143,7 +143,7 @@ export default function Home() {
               background: "var(--se-primary-dim)",
               borderRadius: "var(--se-radius-full)",
               padding: "6px 14px",
-              marginBottom: 20,
+              marginBottom: 16,
               animation: "fadeIn 300ms ease-out both",
               animationDelay: "0ms",
             }}
@@ -206,7 +206,7 @@ export default function Home() {
               color: "var(--se-text-secondary)",
               textAlign: "center",
               maxWidth: 480,
-              margin: "16px auto 32px",
+              margin: "12px auto 24px",
               animation: "fadeIn 300ms ease-out both",
               animationDelay: "160ms",
             }}
@@ -250,7 +250,7 @@ export default function Home() {
 
       {/* ── Section 2: Quick stats (logged-in only) ── */}
       {isLoggedIn && statsError && (
-        <section style={{ marginBottom: 48 }}>
+        <section style={{ marginBottom: 32 }}>
           <Card padding="md">
             <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
               <p
@@ -297,11 +297,8 @@ export default function Home() {
         </div>
       )}
       {isLoggedIn && stats && (
-        <section style={{ marginBottom: 48 }}>
-          <div
-            className="grid grid-cols-3 gap-4"
-            style={{ maxWidth: "32rem", margin: "0 auto" }}
-          >
+        <section style={{ marginBottom: 32 }}>
+          <div className="grid grid-cols-3 gap-4">
             <Card padding="md">
               <div style={{ textAlign: "center" }}>
                 <div
@@ -372,16 +369,24 @@ export default function Home() {
         </section>
       )}
 
-      {/* ── Section 3: Feature cards with tinted background ── */}
+      {/* ── Section 3: Feature cards with elevated panel ── */}
       <div
         style={{
-          margin: "0 -24px",
-          background: "var(--se-bg-subtle)",
-          padding: "52px 24px 56px",
+          padding: "32px 0 36px",
         }}
       >
-        <div style={{ maxWidth: 672, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div
+          style={{
+            maxWidth: 720,
+            margin: "0 auto",
+            padding: "32px 24px",
+            borderRadius: "var(--se-radius-xl)",
+            background: "var(--se-bg-surface)",
+            border: "1px solid var(--se-border-muted)",
+            boxShadow: "var(--se-shadow-md)",
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
             <h2
               style={{
                 fontSize: "var(--se-text-h2)",
@@ -461,15 +466,10 @@ export default function Home() {
       </div>
 
       {/* ── Section 4: Dashboard teaser ── */}
-      <section style={{ padding: "64px 0 72px" }}>
+      <section style={{ padding: "36px 0 44px" }}>
         <div
           style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            marginBottom: 20,
-            gap: 12,
-            flexWrap: "wrap",
+            marginBottom: 14,
           }}
         >
           <h2
@@ -482,21 +482,6 @@ export default function Home() {
           >
             Your Personal Dashboard
           </h2>
-          <span
-            style={{
-              fontSize: "var(--se-text-xs)",
-              fontWeight: "var(--se-weight-semibold)",
-              background: "var(--se-warning-dim)",
-              color: "var(--se-warning)",
-              padding: "4px 12px",
-              borderRadius: "var(--se-radius-full)",
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Coming Soon
-          </span>
         </div>
 
         {/* Mock dashboard card */}
@@ -795,31 +780,34 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Gradient fade-out overlay — teases what's coming */}
-          <div
-            style={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 100,
-              background:
-                "linear-gradient(to bottom, transparent, var(--se-bg-base))",
-              pointerEvents: "none",
-            }}
-          />
+          {/* Gradient fade-out overlay (logged out only) */}
+          {!isLoggedIn && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 100,
+                background:
+                  "linear-gradient(to bottom, transparent, var(--se-bg-base))",
+                pointerEvents: "none",
+              }}
+            />
+          )}
         </div>
 
-        <p
-          style={{
-            textAlign: "center",
-            fontSize: "var(--se-text-sm)",
-            color: "var(--se-text-faint)",
-            marginTop: 16,
-          }}
-        >
-          Sign in to unlock your personalized nutrition dashboard.
-        </p>
+        <div style={{ textAlign: "center", marginTop: 16 }}>
+          {isLoggedIn ? (
+            <Button variant="primary" size="lg" onClick={() => navigate("/dashboard")}>
+              Go to Dashboard →
+            </Button>
+          ) : (
+            <Button variant="ghost" size="lg" onClick={() => navigate("/login")}>
+              Sign in to access your dashboard
+            </Button>
+          )}
+        </div>
       </section>
     </div>
   );
