@@ -214,10 +214,40 @@ class UserProfileView(APIView):
             "age": profile.age,
             "height_cm": profile.height_cm,
             "weight_kg": profile.weight_kg,
-            "goal": profile.goal
-
+            "goal": profile.goal,
+            "activity_level": profile.activity_level,
+            "daily_cal_goal": profile.daily_cal_goal,
+            "daily_protein_goal": profile.daily_protein_goal,
+            "daily_carbs_goal": profile.daily_carbs_goal,
+            "daily_fat_goal": profile.daily_fat_goal,
+            "goals_source": profile.goals_source,
+            "date_joined": user.date_joined.isoformat(),
         })
 
+    def put(self, request):
+        user = request.user
+        profile = user.profile
+        data = request.data
+
+        # Update User fields
+        for field in ("first_name", "last_name"):
+            if field in data:
+                setattr(user, field, data[field])
+        if any(f in data for f in ("first_name", "last_name")):
+            user.save()
+
+        # Update Profile fields
+        profile_fields = [
+            "netID", "sex", "age", "height_cm", "weight_kg", "goal",
+            "activity_level", "daily_cal_goal", "daily_protein_goal",
+            "daily_carbs_goal", "daily_fat_goal", "goals_source",
+        ]
+        for field in profile_fields:
+            if field in data:
+                setattr(profile, field, data[field] if data[field] != "" else None)
+        profile.save()
+
+        return Response({"message": "Profile updated"}, status=status.HTTP_200_OK)
 
 
 def dining_hall_view(request):
