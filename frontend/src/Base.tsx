@@ -42,6 +42,7 @@ function Base() {
             <div style={{ display: "flex", gap: 20 }}>
               {[
                 { to: "/menu", label: "Menu" },
+                { to: "/dashboard", label: "Dashboard" },
                 { to: "/aimeals", label: "AI Meals" },
                 { to: "/profile", label: "Profile" },
               ].map((link) => (

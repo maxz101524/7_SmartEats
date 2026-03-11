@@ -1,12 +1,17 @@
 import { useLocation, Link } from "react-router-dom";
-import { IconHome, IconUtensils, IconSparkle } from "./Icons";
+import { IconHome, IconUtensils, IconSparkle, IconGrid } from "./Icons";
 
 function Navbar() {
   const location = useLocation();
   const token = localStorage.getItem("authToken");
 
+  const isLoggedIn = Boolean(token);
+
   const leftLinks = [
     { to: "/", label: "Home", icon: IconHome, isActive: () => location.pathname === "/" },
+    ...(isLoggedIn
+      ? [{ to: "/dashboard", label: "Dashboard", icon: IconGrid, isActive: () => location.pathname === "/dashboard" }]
+      : []),
     { to: "/menu", label: "Menu", icon: IconUtensils, isActive: () => location.pathname.startsWith("/menu") },
     { to: "/aimeals", label: "AI Meals", icon: IconSparkle, isActive: () => location.pathname.startsWith("/aimeals") },
   ];

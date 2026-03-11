@@ -7,6 +7,7 @@ import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import DishDetail from "./pages/DishDetail";
 import AIMeals from "./pages/AIMeals";
+import Dashboard from "./pages/Dashboard";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import GGLogin from "./components/GGLogin";
@@ -17,6 +18,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Base />}>
             <Route index element={<Home />} />
+            <Route path="dashboard" element={<Dashboard />}></Route>
             <Route path="profile" element={<Profile />}></Route>
             <Route path="aimeals" element={<AIMeals />}></Route>
             <Route path="dishes/:id" element={<DishDetail />}></Route>
