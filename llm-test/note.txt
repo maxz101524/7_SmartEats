@@ -1,0 +1,5 @@
+Extra-Large Models (7B – 10B+ parameters) produced the best outputs
+
+Larger models don't always perform better, 01-ai/Yi-1.5-9B-Chat (Extra-Large Model) performed worse than all large models
+
+stabilityai/stablelm-2-zephyr-1_6b gaves the best balance between speed and output quality
