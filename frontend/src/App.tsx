@@ -1,5 +1,6 @@
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import Base from "./Base";
 import Home from "./pages/Home";
 import Menu from "./pages/Menu";
@@ -31,6 +32,7 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      <Analytics />
     </>
   );
 }
