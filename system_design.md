@@ -122,3 +122,36 @@ The key performance tiers derived from the data:
 | Complex Analysis  | vicuna-7b                                             | Nous-Hermes-2-Mistral-7B | SOLAR-10.7B              | `complexity == high`          | Maximize                | < 10 s           |
 | Cost Optimization | stablelm-2-zephyr-1_6b, stablelm-zephyr-3b, vicuna-7b | —                       | SOLAR-10.7B (≤ 50/day)  | `budget < 20%`                | Good enough             | < 2 s            |
 | Exam-Week Surge   | stablelm-2-zephyr-1_6b                                | stablelm-zephyr-3b       | Nous-Hermes-2-Mistral-7B | `load` tier bands             | Progressive degradation | < 1.5 s (target) |
+
+---
+
+### Step 3.3: Strategy Evaluation
+
+This section evaluates how the multi-model routing strategy described in Step 3.2 achieves three operational goals: improving latency, reducing cost, and maintaining output quality.
+
+How the strategy improves latency
+
+- Targeted model selection: Routes short, high-frequency prompts (classification, structured extraction) to the speed-tier models, ensuring sub-second responses by design. Complex prompts are isolated and only sent to larger models when needed, reducing average and tail latency.
+- Complexity gating and prompt pre-filtering: Lightweight heuristics (token counts, prompt-type tags) prevent expensive models from receiving trivial requests, avoiding long inference times and queue buildup.
+- Load-aware tier switching: The router monitors GPU/CPU utilization and queue depth, progressively shifting traffic to faster models or to cached/generic responses when load is high — preventing large latency spikes during surges.
+- Local-first inference with overflow spill: Running most requests locally eliminates network round-trips; the HF API is used only as an overflow or escalation path, so network-bound latencies affect only a small fraction of traffic.
+- Parallelism and batching where applicable: For multi-step internal workflows (e.g., extraction → classification), the router can pipeline or batch compatible sub-requests to reduce per-request overhead.
+
+How it reduces cost
+
+- Minimize paid API calls: The default local-first policy handles the bulk of traffic using on-prem / self-hosted models, keeping HF Inference API calls to a minimum (overflow, premium, or explicit escalation only).
+- Budget-aware mode and rate-limiting: A budget monitor toggles aggressive cost-saving modes (`api_budget_remaining < 20%`) that block automatic API escalation and reserve paid calls for explicit premium requests, bounding spend predictably.
+- Escalation only on failure or low-confidence: The router uses lightweight quality checks and confidence heuristics to re-send only low-confidence or malformed outputs to premium API models, avoiding blind retries that would increase costs.
+- Caching and reuse: Frequent, similar queries (menu lookups, common recommendations) are cached; serving cached high-quality responses eliminates repeated inference cost.
+- Selective premium opt-in and daily caps: The UI exposes a user-initiated “premium analysis” path which is rate-limited (e.g., ≤ 50 calls/day) so that valuable API calls are purchased deliberately rather than incurred automatically.
+
+How it maintains output quality
+
+- Quality-first routing for high-value prompts: Complex, high-stakes prompts are routed to higher-scoring local models (vicuna-7b, Nous-Hermes) first to preserve quality while still preferring local execution when feasible.
+- Confidence scoring and conditional escalation: Each generated response is validated with format checks and confidence heuristics; when thresholds are not met the same prompt is escalated to the premium API model for a higher-quality result.
+- Post-generation validation and lightweight self-checks: Structural and content validation (e.g., required sections present, numeric totals consistent) catches obvious failures before a response is shown to users, enabling safe automatic retries.
+- Iterative refinement and human-in-the-loop for premium cases: For the highest-value workflows (multi-day meal plans), the system may perform a small iterative refinement loop or route results to a human reviewer when enabled, ensuring the final output meets quality expectations.
+- Continuous monitoring and automated A/B testing: Ongoing offline evaluation and live A/B tests compare local-model outputs to the API baseline; this data informs routing thresholds, confidence cutoffs, and model upgrades so quality is maintained as usage evolves.
+
+Net effect: The combined policy yields low median latency by serving the majority of requests on fast local models, keeps paid API spend tightly controlled through gating and escalation heuristics, and preserves high output quality for the small subset of requests that require it via targeted escalation, validation, and monitoring.
+
