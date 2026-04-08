@@ -1,4 +1,8 @@
 import json
+import pickle
+import numpy as np
+from datetime import date
+from unittest.mock import patch, MagicMock
 
 from django.test import TestCase
 from django.contrib.auth.models import User
@@ -13,6 +17,7 @@ from mealPlanning.models import (
     save_user_profile,
 )
 from mealPlanning.services import ai_chat
+from mealPlanning.services.semantic_search import dish_text, encode_to_bytes, decode_from_bytes, search
 
 
 class DishModelFieldsTest(TestCase):
@@ -604,3 +609,89 @@ class NutritionEstimateViewTest(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+
+
+class SemanticSearchServiceTest(TestCase):
+
+    def test_dish_text_combines_name_category_flags_allergens(self):
+        dish = Dish(
+            dish_name="Grilled Chicken",
+            category="Entrees",
+            dietary_flags=["Gluten-Free"],
+            allergens=["Milk"],
+        )
+        result = dish_text(dish)
+        self.assertEqual(result, "Grilled Chicken Entrees Gluten-Free Milk")
+
+    def test_dish_text_handles_none_and_empty_fields(self):
+        dish = Dish(
+            dish_name="Pasta",
+            category=None,
+            dietary_flags=None,
+            allergens=None,
+        )
+        result = dish_text(dish)
+        self.assertEqual(result, "Pasta")
+
+    def test_dish_text_handles_empty_lists(self):
+        dish = Dish(
+            dish_name="Soup",
+            category="Soups",
+            dietary_flags=[],
+            allergens=[],
+        )
+        result = dish_text(dish)
+        self.assertEqual(result, "Soup Soups")
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_encode_decode_roundtrip(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_model.encode.return_value = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+        mock_get_model.return_value = mock_model
+
+        blob = encode_to_bytes("test dish")
+        result = decode_from_bytes(blob)
+        np.testing.assert_array_almost_equal(result, [0.1, 0.2, 0.3])
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_search_returns_most_similar_dish_first(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_get_model.return_value = mock_model
+
+        hall = DiningHall.objects.create(name="Test Hall", location="Test")
+        # dish1: "protein" direction [1, 0]; dish2: "vegetable" direction [0, 1]
+        vec1 = np.array([1.0, 0.0], dtype=np.float32)
+        vec2 = np.array([0.0, 1.0], dtype=np.float32)
+        dish1 = Dish.objects.create(
+            dish_name="Grilled Chicken", category="Entrees",
+            dining_hall=hall, last_seen=date.today(),
+            embedding=pickle.dumps(vec1),
+        )
+        Dish.objects.create(
+            dish_name="Garden Salad", category="Salads",
+            dining_hall=hall, last_seen=date.today(),
+            embedding=pickle.dumps(vec2),
+        )
+        # Query points toward dish1
+        mock_model.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
+
+        results = search("high protein")
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["dish_name"], "Grilled Chicken")
+        self.assertGreater(results[0]["score"], results[1]["score"])
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_search_returns_empty_list_when_no_embeddings_today(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_model.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
+        mock_get_model.return_value = mock_model
+
+        # No dishes with last_seen=today
+        results = search("anything")
+        self.assertEqual(results, [])
+
+    def test_search_returns_empty_list_for_empty_query(self):
+        results = search("")
+        self.assertEqual(results, [])
+        results = search("   ")
+        self.assertEqual(results, [])
