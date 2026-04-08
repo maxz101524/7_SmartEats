@@ -13,8 +13,8 @@ design/
 .agent/
 .cursor/
 .claude/
+.worktrees/
 *.pptx
-docs/plans
 
 #backend
 .env
