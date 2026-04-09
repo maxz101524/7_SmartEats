@@ -92,7 +92,7 @@ class Dish(models.Model):
     )
     embedding = models.BinaryField(
         null=True, blank=True,
-        help_text="Pickled numpy float32 array (384-dim) from all-MiniLM-L6-v2"
+        help_text="Pickled embedding payload with a normalized 384-dim all-MiniLM-L6-v2 vector"
     )
 
     def get_absolute_url(self):
