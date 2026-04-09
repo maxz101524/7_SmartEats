@@ -114,8 +114,11 @@ class Command(BaseCommand):
             f"Force re-enriched: {stats['force_enriched']}"
         ))
 
-        # Embedding phase — compute for any dish scraped today that lacks an embedding
-        dishes_needing_embedding = [d for d in today_dishes if d.embedding is None]
+        # Embedding phase — compute for dishes scraped today that are missing or stale
+        dishes_needing_embedding = [
+            d for d in today_dishes
+            if semantic_search.embedding_blob_needs_refresh(d.embedding)
+        ]
         self.stdout.write(f"Embedding {len(dishes_needing_embedding)} dishes...")
         for dish in dishes_needing_embedding:
             try:

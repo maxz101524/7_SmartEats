@@ -5,7 +5,7 @@ from mealPlanning.services import semantic_search
 
 
 class Command(BaseCommand):
-    help = "Compute and store embeddings for dishes that are missing them."
+    help = "Compute and store embeddings for dishes that are missing or outdated."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -15,12 +15,19 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        qs = Dish.objects.all() if options["force"] else Dish.objects.filter(embedding=None)
-        total = qs.count()
+        dishes = list(Dish.objects.all())
+        if options["force"]:
+            candidates = dishes
+        else:
+            candidates = [
+                dish for dish in dishes
+                if semantic_search.embedding_blob_needs_refresh(dish.embedding)
+            ]
+        total = len(candidates)
         self.stdout.write(f"Embedding {total} dishes...")
 
         success = 0
-        for i, dish in enumerate(qs, 1):
+        for i, dish in enumerate(candidates, 1):
             try:
                 text = semantic_search.dish_text(dish)
                 dish.embedding = semantic_search.encode_to_bytes(text)

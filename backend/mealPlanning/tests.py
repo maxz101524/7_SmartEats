@@ -16,7 +16,7 @@ from mealPlanning.models import (
     create_user_profile,
     save_user_profile,
 )
-from mealPlanning.services import ai_chat
+from mealPlanning.services import ai_chat, semantic_search
 from mealPlanning.services.semantic_search import dish_text, encode_to_bytes, decode_from_bytes, search
 
 
@@ -69,6 +69,11 @@ class DishModelFieldsTest(TestCase):
         self.assertEqual(dish.serving_size, "")
         self.assertIsNone(dish.uiuc_item_id)
         self.assertIsNone(dish.last_seen)
+
+    def test_embedding_field_help_text_matches_current_model(self):
+        help_text = Dish._meta.get_field("embedding").help_text
+        self.assertIn("384-dim", help_text)
+        self.assertIn("all-MiniLM-L6-v2", help_text)
 
 
 from unittest.mock import patch, MagicMock
@@ -305,6 +310,42 @@ class ScrapeMenuCommandTest(TestCase):
         self.assertEqual(dish.dietary_flags, ["Vegan", "Vegetarian"])
         self.assertEqual(dish.last_seen, date(2026, 3, 1))
         self.assertEqual(bytes(dish.embedding), b"fake_vec")
+
+    @patch("mealPlanning.services.semantic_search.encode_to_bytes")
+    @patch("mealPlanning.services.gemini_client.estimate_nutrition")
+    @patch("mealPlanning.services.uiuc_dining.fetch_menu")
+    def test_refreshes_outdated_embeddings_for_existing_scraped_dishes(self, mock_fetch, mock_gemini, mock_encode):
+        hall = DiningHall.objects.create(name="Ikenberry Dining Center", location="Ikenberry")
+        Dish.objects.create(
+            dish_name="Banana",
+            category="Fruits",
+            dining_hall=hall,
+            nutrition_source="ai_generated",
+            embedding=pickle.dumps(np.zeros(768, dtype=np.float32)),
+        )
+
+        items = [
+            {
+                "formal_name": "Banana",
+                "category": "Fruits",
+                "course": "Fruits",
+                "meal": "Lunch",
+                "serving_unit": "Deli",
+                "item_id": 841,
+                "allergens": [],
+                "dietary_flags": ["Vegan"],
+            },
+        ]
+        mock_fetch.side_effect = lambda option_id, date_str: items if option_id == 1 else []
+        mock_gemini.return_value = None
+        mock_encode.return_value = b"refreshed_embedding"
+
+        out = StringIO()
+        call_command("scrape_menu", "--date=2026-03-01", stdout=out)
+
+        dish = Dish.objects.get(dish_name="Banana", dining_hall=hall)
+        self.assertEqual(bytes(dish.embedding), b"refreshed_embedding")
+        mock_encode.assert_called_once()
 
     @patch("mealPlanning.services.gemini_client.estimate_nutrition")
     @patch("mealPlanning.services.uiuc_dining.fetch_menu")
@@ -656,6 +697,12 @@ class SemanticSearchServiceTest(TestCase):
         result = decode_from_bytes(blob)
         np.testing.assert_array_almost_equal(result, [0.1, 0.2, 0.3])
 
+    def test_model_name_uses_minilm_for_production_memory_budget(self):
+        self.assertEqual(
+            semantic_search.MODEL_NAME,
+            "sentence-transformers/all-MiniLM-L6-v2",
+        )
+
     @patch("mealPlanning.services.semantic_search._get_model")
     def test_search_returns_most_similar_dish_first(self, mock_get_model):
         mock_model = MagicMock()
@@ -663,8 +710,10 @@ class SemanticSearchServiceTest(TestCase):
 
         hall = DiningHall.objects.create(name="Test Hall", location="Test")
         # Both dishes score above MIN_SCORE (0.30); dish1 scores higher
-        vec1 = np.array([1.0, 0.0], dtype=np.float32)   # dot [1,0] = 1.0
-        vec2 = np.array([0.8, 0.6], dtype=np.float32)   # dot [1,0] = 0.8 (both pass threshold)
+        vec1 = np.zeros(384, dtype=np.float32)
+        vec1[:2] = [1.0, 0.0]
+        vec2 = np.zeros(384, dtype=np.float32)
+        vec2[:2] = [0.8, 0.6]
         dish1 = Dish.objects.create(
             dish_name="Grilled Chicken", category="Entrees",
             dining_hall=hall, last_seen=date.today(),
@@ -676,7 +725,9 @@ class SemanticSearchServiceTest(TestCase):
             embedding=pickle.dumps(vec2),
         )
         # Query points toward dish1
-        mock_model.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
+        query_vec = np.zeros(384, dtype=np.float32)
+        query_vec[:2] = [1.0, 0.0]
+        mock_model.encode.return_value = query_vec
 
         results = search("high protein")
         self.assertEqual(len(results), 2)
@@ -689,33 +740,74 @@ class SemanticSearchServiceTest(TestCase):
         mock_get_model.return_value = mock_model
 
         hall = DiningHall.objects.create(name="Threshold Hall", location="Test")
+        strong_match = np.zeros(384, dtype=np.float32)
+        strong_match[0] = 0.31
+        weak_match = np.zeros(384, dtype=np.float32)
+        weak_match[0] = 0.29
         Dish.objects.create(
             dish_name="Strong Match", category="Entrees",
             dining_hall=hall, last_seen=date.today(),
-            embedding=pickle.dumps(np.array([0.31, 0.0], dtype=np.float32)),
+            embedding=pickle.dumps(strong_match),
         )
         Dish.objects.create(
             dish_name="Weak Match", category="Entrees",
             dining_hall=hall, last_seen=date.today(),
-            embedding=pickle.dumps(np.array([0.29, 0.0], dtype=np.float32)),
+            embedding=pickle.dumps(weak_match),
         )
-        mock_model.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
+        query_vec = np.zeros(384, dtype=np.float32)
+        query_vec[0] = 1.0
+        mock_model.encode.return_value = query_vec
 
         results = search("protein")
         self.assertEqual([result["dish_name"] for result in results], ["Strong Match"])
         self.assertGreaterEqual(results[0]["score"], 0.30)
 
     @patch("mealPlanning.services.semantic_search._get_model")
+    def test_search_skips_embeddings_from_old_model_dimensions(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_get_model.return_value = mock_model
+
+        hall = DiningHall.objects.create(name="Mixed Embedding Hall", location="Test")
+        old_embedding = np.ones(768, dtype=np.float32)
+        fresh_embedding = np.zeros(384, dtype=np.float32)
+        fresh_embedding[:2] = [1.0, 0.0]
+        Dish.objects.create(
+            dish_name="Old Embedding Dish",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            embedding=pickle.dumps(old_embedding),
+        )
+        Dish.objects.create(
+            dish_name="Fresh Embedding Dish",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            embedding=pickle.dumps(fresh_embedding),
+        )
+        query_vec = np.zeros(384, dtype=np.float32)
+        query_vec[:2] = [1.0, 0.0]
+        mock_model.encode.return_value = query_vec
+
+        results = search("protein")
+
+        self.assertEqual([result["dish_name"] for result in results], ["Fresh Embedding Dish"])
+
+    @patch("mealPlanning.services.semantic_search._get_model")
     def test_search_falls_back_to_all_embedded_dishes_when_none_seen_today(self, mock_get_model):
         mock_model = MagicMock()
-        mock_model.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
+        query_vec = np.zeros(384, dtype=np.float32)
+        query_vec[:2] = [1.0, 0.0]
+        mock_model.encode.return_value = query_vec
         mock_get_model.return_value = mock_model
 
         hall = DiningHall.objects.create(name="Fallback Hall", location="Test")
+        stale_fallback = np.zeros(384, dtype=np.float32)
+        stale_fallback[:2] = [1.0, 0.0]
         Dish.objects.create(
             dish_name="Yesterday's Chili", category="Soups",
             dining_hall=hall, last_seen=date(2026, 1, 1),
-            embedding=pickle.dumps(np.array([1.0, 0.0], dtype=np.float32)),
+            embedding=pickle.dumps(stale_fallback),
         )
 
         results = search("comfort food")
@@ -762,12 +854,33 @@ class BuildEmbeddingsCommandTest(TestCase):
         mock_encode.assert_called_once()
 
     @patch("mealPlanning.services.semantic_search.encode_to_bytes")
-    def test_skips_dishes_that_already_have_embeddings(self, mock_encode):
+    def test_refreshes_stale_embeddings_without_force_flag(self, mock_encode):
+        mock_encode.return_value = b"fresh_embedding"
+        hall = DiningHall.objects.create(name="ISR", location="ISR")
+        dish = Dish.objects.create(
+            dish_name="Legacy Chili",
+            category="Lunch",
+            dining_hall=hall,
+            last_seen=date.today(),
+            embedding=pickle.dumps(np.zeros(768, dtype=np.float32)),
+        )
+
+        out = io.StringIO()
+        call_command("build_embeddings", stdout=out)
+
+        dish.refresh_from_db()
+        self.assertEqual(bytes(dish.embedding), b"fresh_embedding")
+        mock_encode.assert_called_once()
+
+    @patch("mealPlanning.services.semantic_search.encode_to_bytes")
+    def test_skips_dishes_that_already_have_current_embeddings(self, mock_encode):
         hall = DiningHall.objects.create(name="PAR", location="PAR")
+        current_embedding = np.zeros(384, dtype=np.float32)
+        current_embedding[0] = 1.0
         Dish.objects.create(
             dish_name="Eggs", category="Breakfast",
             dining_hall=hall, last_seen=date.today(),
-            embedding=b"existing",
+            embedding=pickle.dumps(current_embedding),
         )
         out = io.StringIO()
         call_command("build_embeddings", stdout=out)

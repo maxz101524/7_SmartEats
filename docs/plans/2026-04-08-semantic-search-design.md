@@ -4,6 +4,8 @@
 **Assignment:** A9 — Integrated AI Application Deployment
 **Feature:** AI-enhanced natural language search on the Menu page
 
+> **Implementation note (2026-04-09):** The final implementation uses `all-MiniLM-L6-v2` instead of the original `all-mpnet-base-v2` proposal because the smaller model fits the deployed Render memory budget. Historical rationale below should be read in that context.
+
 ---
 
 ## 1. Goal

@@ -2,6 +2,8 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **Implementation note (2026-04-09):** The shipped version was adjusted from `all-mpnet-base-v2` to `all-MiniLM-L6-v2` so semantic search fits the deployed Render memory budget. Historical planning details below reflect the original prototype direction.
+
 **Goal:** Add a natural language semantic search mode to the Menu page, backed by `sentence-transformers/all-mpnet-base-v2` stored per-dish in the database and refreshed daily by `scrape_menu`.
 
 **Architecture:** Each `Dish` record gets a `BinaryField` storing its pickled 768-dim embedding. `scrape_menu` computes embeddings after upserting dishes. A new `SemanticSearchView` embeds the user's query, cosine-compares against today's stored embeddings, and returns ranked results. The Menu page search bar gets a "Filter / AI" mode toggle; AI mode calls the new endpoint instead of doing a client-side name filter.

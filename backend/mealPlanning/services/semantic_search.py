@@ -5,7 +5,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_DIM = 384
+MIN_SCORE = 0.30
 _model = None
 
 
@@ -33,7 +35,7 @@ def dish_text(dish):
 
 
 def encode_to_bytes(text):
-    """Encode text to a normalized 768-dim vector and return as pickled bytes."""
+    """Encode text to a normalized 384-dim vector and return as pickled bytes."""
     model = _get_model()
     vec = model.encode(text, normalize_embeddings=True).astype(np.float32)
     return pickle.dumps(vec)
@@ -42,6 +44,22 @@ def encode_to_bytes(text):
 def decode_from_bytes(blob):
     """Deserialize a stored embedding blob back to a numpy array."""
     return pickle.loads(bytes(blob))
+
+
+def is_current_embedding(vec):
+    """Return True when an embedding matches the active model's vector shape."""
+    return isinstance(vec, np.ndarray) and vec.ndim == 1 and vec.shape[0] == EMBEDDING_DIM
+
+
+def embedding_blob_needs_refresh(blob):
+    """Return True when an embedding is missing, invalid, or from an older model."""
+    if blob is None:
+        return True
+    try:
+        vec = decode_from_bytes(blob)
+    except Exception:
+        return True
+    return not is_current_embedding(vec)
 
 
 def search(query, hall_id=None, top_k=10):
@@ -77,6 +95,13 @@ def search(query, hall_id=None, top_k=10):
     for dish in dishes:
         try:
             vec = decode_from_bytes(dish.embedding)
+            if not is_current_embedding(vec):
+                logger.info(
+                    "Skipping stale embedding for dish %s; expected %s-dim vector",
+                    dish.dish_id,
+                    EMBEDDING_DIM,
+                )
+                continue
             if np.linalg.norm(vec) > 0:
                 vecs.append(vec)
                 valid_dishes.append(dish)
@@ -94,7 +119,6 @@ def search(query, hall_id=None, top_k=10):
     top_indices = np.argsort(scores)[::-1][:top_k]
 
     # Drop results below the relevance threshold — prevents weak matches from flooding results
-    MIN_SCORE = 0.30
     top_indices = [i for i in top_indices if scores[i] >= MIN_SCORE]
 
     results = []
