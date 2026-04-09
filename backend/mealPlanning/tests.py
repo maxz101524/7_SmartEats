@@ -783,12 +783,12 @@ class SemanticSearchServiceTest(TestCase):
         vec2[:2] = [0.8, 0.6]
         dish1 = Dish.objects.create(
             dish_name="Grilled Chicken", category="Entrees",
-            dining_hall=hall, last_seen=date.today(),
+            dining_hall=hall, last_seen=date.today(), protein=30,
             embedding=current_embedding_blob(vec1),
         )
         Dish.objects.create(
             dish_name="Garden Salad", category="Salads",
-            dining_hall=hall, last_seen=date.today(),
+            dining_hall=hall, last_seen=date.today(), protein=24,
             embedding=current_embedding_blob(vec2),
         )
         # Query points toward dish1
@@ -828,6 +828,149 @@ class SemanticSearchServiceTest(TestCase):
         results = search("protein")
         self.assertEqual([result["dish_name"] for result in results], ["Strong Match"])
         self.assertGreaterEqual(results[0]["score"], 0.30)
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_low_calorie_query_uses_nutrition_in_ranking(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_get_model.return_value = mock_model
+
+        hall = DiningHall.objects.create(name="Nutrition Rank Hall", location="Test")
+        high_calorie_vec = np.zeros(384, dtype=np.float32)
+        high_calorie_vec[0] = 1.0
+        low_calorie_vec = np.zeros(384, dtype=np.float32)
+        low_calorie_vec[:2] = [0.5, 0.866]
+        Dish.objects.create(
+            dish_name="Loaded Pasta",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            calories=900,
+            protein=12,
+            nutrition_source="ai_generated",
+            embedding=current_embedding_blob(high_calorie_vec),
+        )
+        Dish.objects.create(
+            dish_name="Vegetable Bowl",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            calories=320,
+            protein=18,
+            fiber=6,
+            nutrition_source="ai_generated",
+            embedding=current_embedding_blob(low_calorie_vec),
+        )
+        query_vec = np.zeros(384, dtype=np.float32)
+        query_vec[0] = 1.0
+        mock_model.encode.return_value = query_vec
+
+        results = search("low calories")
+
+        self.assertEqual(results[0]["dish_name"], "Vegetable Bowl")
+        self.assertIn("Low calorie: 320 calories", results[0]["match_reasons"])
+        self.assertGreater(results[0]["nutrition_score"], results[1]["nutrition_score"])
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_search_applies_plain_language_allergen_and_dietary_filters(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_get_model.return_value = mock_model
+
+        hall = DiningHall.objects.create(name="Filter Hall", location="Test")
+        milk_vec = np.zeros(384, dtype=np.float32)
+        milk_vec[0] = 1.0
+        safe_vec = np.zeros(384, dtype=np.float32)
+        safe_vec[:2] = [0.8, 0.6]
+        Dish.objects.create(
+            dish_name="Cheesy Vegetable Pasta",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            allergens=["Milk"],
+            dietary_flags=["Vegetarian"],
+            embedding=current_embedding_blob(milk_vec),
+        )
+        Dish.objects.create(
+            dish_name="Garden Vegetable Pasta",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            allergens=[],
+            dietary_flags=["Vegetarian"],
+            embedding=current_embedding_blob(safe_vec),
+        )
+        query_vec = np.zeros(384, dtype=np.float32)
+        query_vec[0] = 1.0
+        mock_model.encode.return_value = query_vec
+
+        results = search("vegetarian without milk")
+
+        self.assertEqual([result["dish_name"] for result in results], ["Garden Vegetable Pasta"])
+        self.assertIn("Vegetarian", results[0]["match_reasons"])
+        self.assertIn("No listed Milk allergen", results[0]["match_reasons"])
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_search_relaxes_constraints_when_no_exact_match_exists(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_get_model.return_value = mock_model
+
+        hall = DiningHall.objects.create(name="Relax Hall", location="Test")
+        vec = np.zeros(384, dtype=np.float32)
+        vec[0] = 1.0
+        Dish.objects.create(
+            dish_name="Vegetarian Grain Bowl",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            allergens=[],
+            dietary_flags=["Vegetarian"],
+            embedding=current_embedding_blob(vec),
+        )
+        query_vec = np.zeros(384, dtype=np.float32)
+        query_vec[0] = 1.0
+        mock_model.encode.return_value = query_vec
+
+        results = search("vegan without milk")
+
+        self.assertEqual([result["dish_name"] for result in results], ["Vegetarian Grain Bowl"])
+        self.assertTrue(results[0]["constraints_relaxed"])
+        self.assertIn("No exact constraint match; showing closest options", results[0]["match_reasons"])
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_search_applies_numeric_calorie_filter(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_get_model.return_value = mock_model
+
+        hall = DiningHall.objects.create(name="Numeric Hall", location="Test")
+        high_vec = np.zeros(384, dtype=np.float32)
+        high_vec[0] = 1.0
+        low_vec = np.zeros(384, dtype=np.float32)
+        low_vec[:2] = [0.7, 0.714]
+        Dish.objects.create(
+            dish_name="Heavy Entree",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            calories=700,
+            nutrition_source="ai_generated",
+            embedding=current_embedding_blob(high_vec),
+        )
+        Dish.objects.create(
+            dish_name="Light Entree",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            calories=450,
+            nutrition_source="ai_generated",
+            embedding=current_embedding_blob(low_vec),
+        )
+        query_vec = np.zeros(384, dtype=np.float32)
+        query_vec[0] = 1.0
+        mock_model.encode.return_value = query_vec
+
+        results = search("under 500 calories")
+
+        self.assertEqual([result["dish_name"] for result in results], ["Light Entree"])
+        self.assertFalse(results[0]["constraints_relaxed"])
 
     @patch("mealPlanning.services.semantic_search._get_model")
     def test_search_skips_embeddings_from_old_model_dimensions(self, mock_get_model):
@@ -896,6 +1039,18 @@ class SemanticSearchServiceTest(TestCase):
         self.assertEqual(results, [])
         results = search("   ")
         self.assertEqual(results, [])
+
+    def test_has_current_embeddings_uses_fast_existence_check(self):
+        hall = DiningHall.objects.create(name="Fast Check Hall", location="Test")
+        Dish.objects.create(
+            dish_name="Corrupt Blob",
+            category="Entrees",
+            dining_hall=hall,
+            last_seen=date.today(),
+            embedding=b"not a pickle",
+        )
+
+        self.assertTrue(semantic_search.has_current_embeddings())
 
 
 from django.core.management import call_command
