@@ -31,31 +31,20 @@ def _get_model():
 
 def _encode_via_hf_api(text):
     """
-    Encode text using the HuggingFace Inference API.
+    Encode text using the HuggingFace InferenceClient.
     The model runs on HF's servers — no local memory cost.
+    Requires HF_API_TOKEN env var (free account at huggingface.co).
     Returns a normalized float32 numpy array.
     """
-    import requests
+    from huggingface_hub import InferenceClient
 
-    headers = {"Content-Type": "application/json"}
     hf_token = os.environ.get("HF_API_TOKEN")
-    if hf_token:
-        headers["Authorization"] = f"Bearer {hf_token}"
+    client = InferenceClient(token=hf_token)
+    result = client.feature_extraction(text, model=MODEL_NAME)
 
-    response = requests.post(
-        HF_API_URL,
-        headers=headers,
-        json={"inputs": text},
-        timeout=30,
-    )
-    response.raise_for_status()
-    data = response.json()
-
-    # HF Inference API returns [[float, ...]] for sentence-transformers
-    if isinstance(data, list) and isinstance(data[0], list):
-        vec = np.array(data[0], dtype=np.float32)
-    else:
-        vec = np.array(data, dtype=np.float32)
+    vec = np.array(result, dtype=np.float32)
+    if vec.ndim > 1:
+        vec = vec[0]  # flatten if nested
 
     norm = np.linalg.norm(vec)
     if norm > 0:
