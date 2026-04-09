@@ -47,6 +47,26 @@ interface DiningHall {
 const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Halal", "Jain"];
 const ALLERGEN_FILTERS = ["Gluten", "Milk", "Eggs", "Soy", "Corn", "Wheat", "Fish"];
 
+function getAiErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const apiError =
+      typeof error.response?.data?.error === "string" ? error.response.data.error : null;
+
+    if (error.response?.status === 400 && apiError) {
+      return apiError;
+    }
+    if (error.response?.status === 503) {
+      return apiError ?? "AI search unavailable — try Filter mode instead.";
+    }
+    if (!error.response) {
+      return "Could not reach AI search. Check the backend and try again.";
+    }
+    return apiError ?? "AI search failed. Try Filter mode instead.";
+  }
+
+  return "AI search unavailable — try Filter mode instead.";
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function ChevronRight() {
@@ -313,8 +333,8 @@ export default function Menu() {
         if (selectedHall) params.hall = selectedHall.Dining_Hall_ID;
         const { data } = await axios.get(`${API_BASE}/semantic-search/`, { params });
         setAiResults(data.results);
-      } catch {
-        setAiError("AI search unavailable — try Filter mode instead.");
+      } catch (error) {
+        setAiError(getAiErrorMessage(error));
         setAiResults([]);
       } finally {
         setAiLoading(false);
@@ -337,9 +357,9 @@ export default function Menu() {
   // ── Derived: filtered dishes ──────────────────────────────────────────────
   const filteredDishes = useMemo(() => {
     if (!selectedHall) return [];
-    if (searchMode === "ai") return aiResults ?? selectedHall.dishes;
-    return selectedHall.dishes.filter((d) => {
-      if (search && !d.dish_name.toLowerCase().includes(search.toLowerCase())) return false;
+    const sourceDishes = searchMode === "ai" ? (aiResults ?? selectedHall.dishes) : selectedHall.dishes;
+    return sourceDishes.filter((d) => {
+      if (searchMode === "filter" && search && !d.dish_name.toLowerCase().includes(search.toLowerCase())) return false;
       if (activeMealPeriod !== "All" && d.meal_period !== activeMealPeriod) return false;
       for (const flag of activeDietary) {
         if (flag === "Gluten-Free") {
