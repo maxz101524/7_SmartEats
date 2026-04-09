@@ -1484,7 +1484,9 @@ class SemanticSearchView(APIView):
 
         try:
             from mealPlanning.services import semantic_search
-            results = semantic_search.search(query, hall_id=hall_id, top_k=top_k)
+            # Query expansion: short queries are anchored in food-description space
+            expanded = f"A UIUC dining hall dish that is {query}" if len(query.split()) <= 3 else query
+            results = semantic_search.search(expanded, hall_id=hall_id, top_k=top_k)
         except Exception as exc:
             logger.error("Semantic search error: %s", exc)
             return Response(

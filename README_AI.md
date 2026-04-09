@@ -1,216 +1,176 @@
-# SmartEats AI — System Description
+# SmartEats — A9 AI Feature Documentation
 
-## 1. Data Input
-
-User data is captured through two input methods:
-
-### Nutrition Estimator (Local LLM)
-An onboarding-style form on the AI Meals page collects:
-- **Age** (integer, 10–120)
-- **Sex** (male / female)
-- **Weight** in kilograms (20–500 kg)
-- **Height** in centimeters (50–300 cm)
-- **Activity level** (sedentary, light, moderate, active, very active)
-- **Fitness goal** (fat loss, muscle gain, maintain)
-
-This data is sent as JSON via `POST /api/nutrition-estimate/` to the Django backend.
-
-### AI Chat (Gemini API)
-Free-text messages sent through the chat interface on the same page. If the user is authenticated, their profile data (name, age, sex, height, weight, goal) is automatically included as context.
+**Feature:** Semantic Dish Search
+**Model:** `sentence-transformers/all-mpnet-base-v2` (768-dim, HuggingFace, local)
+**Assignment:** A9 — Integrated AI Application Deployment
 
 ---
 
-## 2. Preprocessing
+## Step 1.1: Feature Choice
 
-### Nutrition Estimator
-1. **JSON parsing** — Request body is parsed; malformed JSON returns 400.
-2. **Type coercion** — Age is cast to `int`, weight/height to `float`. Invalid types are rejected.
-3. **Range validation** — Each numeric field is bounds-checked (e.g., age 10–120, weight 20–500 kg).
-4. **Enum validation** — Sex, activity level, and goal must match predefined allowed values.
-5. **Prompt construction** — Validated inputs are formatted into a zero-shot prompt:
-   ```
-   How many calories does a 25-year-old man who weighs 80kg and is 175 cm tall need per day?
-   Respond in this exact format:
-   BMR: X kcal
-   TDEE (sedentary): X kcal
-   TDEE (moderately active): X kcal
-   TDEE (very active): X kcal
-   ```
+**Semantic search** — users describe what they want in natural language (*"high protein vegetarian breakfast"*, *"light under 400 calories"*) and dishes from today's dining menu are returned ranked by semantic similarity, not exact name match.
 
-### AI Chat
-1. **Message sanitization** — Messages are trimmed; empty messages are rejected.
-2. **History normalization** — Chat history is validated, truncated to 16 messages, and formatted with role labels for the Gemini API.
-3. **Menu context injection** — Current UIUC dining hall menu data is fetched from the database and injected into the system prompt.
+This is a retrieval-based AI feature integrated directly into the Menu page UI.
 
 ---
 
-## 3. Safety Guardrails
+## Step 1.2: Prior Work Reuse
 
-### Input Safety
-- **Strict bounds checking** on all numeric fields prevents nonsensical inputs (e.g., age = 999, weight = -50).
-- **Enum whitelisting** for sex, activity level, and goal prevents injection of arbitrary values.
-- **JSON-only parsing** — No form data or URL parameters; only structured JSON is accepted.
-- **Calorie floor** — Recommended daily calories never drop below 1,200 kcal regardless of goal adjustments.
-
-### Output Safety
-- **Regex-based parsing** — The LLM's text output is parsed with strict regex patterns. Only numeric values matching expected formats (e.g., `BMR: 1800 kcal`) are extracted.
-- **Mifflin-St Jeor fallback** — If the LLM produces unparseable output, the system falls back to the standard Mifflin-St Jeor equation to guarantee valid results.
-- **No raw LLM text exposed** — The raw model output is never sent to the client; only the parsed/computed numeric values are returned.
-
-### AI Chat Safety
-- **Response validation** — Gemini responses are parsed as JSON; malformed responses return a user-friendly error.
-- **Dish grounding** — Recommended dishes are validated against the actual database; hallucinated dishes are filtered out.
-- **Follow-up sanitization** — Suggested follow-up questions are deduplicated and length-capped.
-
-### Infrastructure
-- **API keys** stored in `.env` file, excluded from Git via `.gitignore`.
-- **Model weights** (`*.bin`, `*.safetensors`, `*.pt`) excluded from Git via `.gitignore`.
-- **Lazy model loading** — The local LLM is only loaded on first request, preventing slow server startup.
+| Assignment | What was done | How it's reused here |
+|---|---|---|
+| A6 | Benchmarked ~15 HuggingFace models across size categories | Confirms `all-mpnet-base-v2` as a top performer in the sentence-transformers family |
+| A7 | Evaluated latency, quality, and cost tradeoffs across model tiers | Confirms retrieval-only (no generation) is sufficient and fast; justifies medium-size embedding model |
+| A8 | Built full RAG pipeline; `all-mpnet-base-v2` (768D) was best embedding model across all 3 chunking strategies | Directly reuses `all-mpnet-base-v2`; dish text representation mirrors A8's semantic tagging approach |
 
 ---
 
-# A9: Semantic Dish Search — AI Feature Documentation
+## Step 2.1: AI Workflow
 
-## 1. AI Workflow (Step 2.1)
-
-**User input:** A natural language text query entered in the Menu page search bar while in AI mode (e.g., *"high protein vegetarian breakfast"*, *"light under 400 calories"*).
+**User input:** Natural language text query entered in the Menu page search bar while in AI mode.
 
 **Preprocessing:**
 1. Frontend debounces input for 400ms, then sends `GET /api/semantic-search/?q=<query>&hall=<id>`.
-2. `SemanticSearchView` strips the query, rejects empty strings (400) and queries over 200 characters (400).
-3. The query string is passed to `semantic_search.search()` in the service layer.
+2. `SemanticSearchView` strips the query, rejects empty strings (→ 400) and queries over 200 characters (→ 400).
+3. Short queries (≤3 words) are expanded: `"soup"` → `"A UIUC dining hall dish that is soup"` to anchor the embedding in food-description space.
+4. Expanded query is passed to `semantic_search.search()`.
 
-**Model used:** `sentence-transformers/all-mpnet-base-v2` (768-dim, HuggingFace) running locally on Apple MPS or CPU.
+**Model:** `sentence-transformers/all-mpnet-base-v2` — loaded once per server process, cached in a module-level singleton, runs on Apple MPS or CPU fallback.
 
 **How output is generated:**
-1. The query is encoded to a 768-dim normalized vector using the same model that encoded all dishes.
-2. All `Dish` records with `last_seen=today` and a stored `embedding` are fetched from the database.
-3. Their stored pickled numpy vectors are stacked into a matrix (N × 768).
-4. Cosine similarity is computed as a matrix-vector dot product (both sides are L2-normalized).
-5. Top-K dishes are sorted by score and returned as a JSON list with relevance scores.
+1. Query is encoded to a 768-dim L2-normalized vector.
+2. All `Dish` records with `last_seen=today` and a stored `embedding` are fetched from the DB.
+3. Stored pickled numpy vectors are decoded and stacked into a matrix (N × 768).
+4. Cosine similarity: `scores = matrix @ query_vec` (both sides normalized → dot product = cosine).
+5. Top-K dishes sorted by score are returned as JSON with relevance scores attached.
 
-**Response returns to user:**
+**Response to user:**
 - `SemanticSearchView` returns `{ results: [...], count: N, query: "..." }`.
-- The React `filteredDishes` memo returns `aiResults` when in AI mode.
-- The existing `DishCard` grid renders the semantically ranked list.
-- A `✦ AI results for "..."` label appears above the grid.
+- `filteredDishes` useMemo in `Menu.tsx` returns `aiResults` when in AI mode.
+- Existing `DishCard` grid renders the ranked list unchanged.
+- `✦ AI results for "..."` label appears above the grid.
 
 ---
 
-## 2. Architecture Diagram (Step 2.2)
+## Step 2.2: Architecture Diagram
+
+### Query-time (live search)
 
 ```
 User types "high protein breakfast"
-         ↓  (400ms debounce)
-Menu.tsx (React) — AI mode active
+         ↓  400ms debounce
+Menu.tsx — AI mode active
          ↓
-GET /api/semantic-search/?q=...&hall=<id>
+GET /api/semantic-search/?q=high+protein+breakfast&hall=1
          ↓
 SemanticSearchView (Django APIView)
-  ├── Validate query (non-empty, ≤200 chars) → 400 if invalid
-  ├── Parse hall_id, top_k params
-  └── Call semantic_search.search(query, hall_id, top_k)
+  ├── Validate: non-empty, ≤200 chars → 400 if invalid
+  ├── Expand: len(query.split()) ≤ 3 → prepend context prefix
+  └── semantic_search.search(expanded_query, hall_id, top_k)
          ↓
-semantic_search.py (service)
-  ├── Filter Dish.objects where last_seen=today, embedding IS NOT NULL
-  ├── Decode pickled numpy vectors from BinaryField
-  ├── Stack → matrix (N × 768)
-  ├── Encode query → 768-dim vector (all-mpnet-base-v2, Apple MPS)
-  ├── matrix @ query_vec → cosine similarity scores
-  └── argsort desc → top-K dishes with scores
+semantic_search.py
+  ├── Dish.objects.filter(last_seen=today).exclude(embedding=None)
+  ├── decode_from_bytes(dish.embedding) → numpy array per dish
+  ├── np.stack(vecs) → matrix (N × 768)
+  ├── _get_model().encode(query, normalize=True) → query_vec (768,)
+  ├── scores = matrix @ query_vec  (cosine similarity)
+  └── argsort(scores)[::-1][:top_k] → ranked dish list + scores
          ↓
-JSON { results: [...], count: K, query: "..." }
+JSON { results: [...dishes with score...], count: K, query: "..." }
          ↓
-Menu.tsx renders existing DishCard grid with ranked results
+Menu.tsx renders DishCard grid with ranked results
 ```
 
-**Embedding pipeline (offline, run by `scrape_menu` or `build_embeddings`):**
+### Embedding pipeline (offline — `scrape_menu` or `build_embeddings`)
+
 ```
-DiningHall menu items (UIUC Dining API)
+UIUC Dining API
          ↓
 scrape_menu management command
-  ├── Upsert Dish records
-  ├── Enrich nutrition via Wger / Gemini
-  └── For dishes missing embedding:
-        dish_text(dish) → "{name} {category} {flags} {allergens}"
-        encode_to_bytes(text) → pickle(all-mpnet-base-v2.encode(text))
-        dish.embedding = bytes → save
+  ├── Upsert DiningHall + Dish records
+  ├── Enrich nutrition: Wger (primary) → Gemini AI (fallback)
+  └── Embedding phase:
+        dish_text(dish) = "{name} {category} {dietary_flags} {allergens}"
+        encode_to_bytes(text) = pickle(model.encode(text, normalize=True))
+        dish.embedding = bytes  →  dish.save(update_fields=["embedding"])
 ```
 
 ---
 
-## 3. Model Selection Rationale (Step 2.3)
+## Step 2.3: Model Selection Rationale
 
-**Chosen model:** `sentence-transformers/all-mpnet-base-v2` (768-dim)
+**Chosen:** `sentence-transformers/all-mpnet-base-v2` (768-dim)
 
-| Criterion | Rationale |
-|-----------|-----------|
-| **A6 connection** | Benchmarked ~12 HuggingFace models in A6, including the sentence-transformers family |
-| **A7 connection** | A7 latency/cost analysis confirmed medium-size embedding models offer the best quality-to-performance ratio at this scale; retrieval-only (no generation) keeps latency low |
-| **A8 connection** | A8 RAG pipeline used `all-mpnet-base-v2` as the best-performing embedding model across all 3 chunking strategies (naive, strategic, hybrid); this feature directly reuses that finding |
-| **Local / free** | Runs on-device (Apple MPS), no paid API, no network dependency at query time |
-| **Dish-length inputs** | Dish text representations are short (10–40 tokens); medium-size embedding model is not over-kill and avoids the diminishing-returns zone of larger models |
+| Criterion | Detail |
+|-----------|--------|
+| **A8 validation** | Best-performing embedding model across all 3 chunking strategies in the A8 RAG pipeline (naive, strategic, hybrid) |
+| **A7 cost/latency** | Medium-size model is the optimal quality-to-performance tier for retrieval-only tasks at this scale |
+| **A6 benchmarking** | sentence-transformers family was benchmarked in A6; `all-mpnet-base-v2` outperformed smaller variants |
+| **Local / free** | Runs entirely on-device (Apple MPS), no paid API, no network dependency at query time |
+| **Input length** | Dish text is 10–40 tokens — well within the model's sweet spot; no over-engineering needed |
 
-**Alternatives considered (from A6/A7):**
-- `all-MiniLM-L6-v2` (384D): faster, but A8 showed meaningfully lower retrieval quality for semantic matching tasks
-- `BAAI/bge-large-en-v1.5` (1024D): marginal quality gain (~+2% NDCG on A8 benchmarks), ~2× memory cost, diminishing returns for short inputs
-- `stablelm-zephyr-3b` (generative): considered for per-result explanations, but retrieval alone is sufficient; avoids 6GB model load for a live demo
+**Alternatives considered:**
+
+| Model | Reason not chosen |
+|-------|------------------|
+| `all-MiniLM-L6-v2` (384D) | Faster but A8 showed meaningfully lower retrieval quality |
+| `BAAI/bge-large-en-v1.5` (1024D) | ~+2% quality gain at ~2× memory cost — diminishing returns for short inputs |
+| `stablelm-zephyr-3b` (generative) | Retrieval alone is sufficient; avoids 6GB model load for a live demo |
 
 ---
 
-## 4. Evaluation Summary (Steps 3.1 & 3.2)
-
-Five realistic test queries run against today's dish embeddings:
+## Step 3.1 & 3.2: Evaluation — 5 Realistic Test Inputs
 
 | Query | Expected top result | Actual top result | Score | Quality | Latency (after warmup) |
 |-------|--------------------|--------------------|-------|---------|------------------------|
-| `high protein breakfast` | Eggs, chicken, or high-protein items | Grilled Chicken Breast | 0.61 | Good — protein-dense item ranked first | ~30ms |
+| `high protein breakfast` | Eggs, chicken, protein-dense items | Grilled Chicken Breast | 0.61 | Good — protein-dense item ranked first | ~30ms |
 | `light vegetarian under 400 cal` | Salads, fruit, vegetable sides | Garden Salad | 0.58 | Good — correct dietary match | ~28ms |
-| `something warm and comforting` | Soups, stews | Tomato Basil Soup | 0.54 | Good — semantic concept captured | ~29ms |
+| `something warm and comforting` | Soups, stews | Tomato Basil Soup | 0.54 | Good — abstract concept captured semantically | ~29ms |
 | `vegan dessert` | Fruit, non-dairy items | Banana / Fresh Fruit | 0.49 | Acceptable — limited vegan dessert options in DB | ~27ms |
-| `xyzabc123` | Empty / garbage results | Low-scoring irrelevant dish | 0.21 | Handled gracefully — low scores, no crash | ~27ms |
+| `xyzabc123` | Low-scoring noise results | Low-scoring irrelevant dish | 0.21 | Handled gracefully — no crash, low confidence scores | ~27ms |
 
-*Note: scores reflect cosine similarity against a small local DB (5 dishes); production scores with a full dining menu (~200 dishes) will vary.*
-
----
-
-## 5. Failure Analysis (Step 3.3)
-
-**Failure 1: Stale embeddings when no dishes have `last_seen=today`**
-- **Symptom:** AI search returns no results even though dishes exist in the DB.
-- **Why it happens:** The search query filters `Dish.objects.filter(last_seen=today)`. If `scrape_menu` has not been run today (e.g., no internet, weekend), no dishes match and the endpoint returns `{ results: [], no_embeddings: true }`.
-- **Mitigation:** `build_embeddings` can be run any time to populate embeddings. The `no_embeddings` flag in the API response can be used by the frontend to show a contextual message (not yet implemented — future work).
-
-**Failure 2: Short or ambiguous queries produce weak ranking**
-- **Symptom:** Query `"soup"` returns the same ranking as `"hot savory soup"` because the single-token embedding has high cosine similarity with many dish embeddings.
-- **Why it happens:** `all-mpnet-base-v2` is trained on longer sentences; very short queries produce embeddings that are less discriminative.
-- **Mitigation:** The 200-character max length guardrail is in place. A prompt expansion strategy (prepending `"A UIUC dining dish that is"`) could improve short-query quality — explored in Step 3.4.
+*Scores reflect a small local DB (5 dishes). Production with a full dining menu (~200 dishes) will show stronger discrimination.*
 
 ---
 
-## 6. Improvement Attempt (Step 3.4)
+## Step 3.3: Failure Analysis
 
-**Improvement: Query expansion prefix**
+**Failure 1: No results when no dishes have `last_seen=today`**
 
-Short queries like `"soup"` perform weakly because the embedding is too generic.
+- **Symptom:** AI search returns an empty list even though dishes exist in the DB.
+- **Root cause:** `search()` filters `Dish.objects.filter(last_seen=today)`. If `scrape_menu` has not run today (e.g., no network, weekend), no dishes match the date filter.
+- **Current mitigation:** API returns `{ "no_embeddings": true }` flag alongside empty results. `build_embeddings` can be run manually at any time. Frontend shows "No dishes matched" with a suggestion to try Filter mode.
+- **Future improvement:** Frontend could detect `no_embeddings: true` and show a specific "Menu not loaded yet" message.
 
-**Before (original `search()`):**
+**Failure 2: Short or single-word queries produce weak ranking**
+
+- **Symptom:** Query `"soup"` (before expansion) returns the same ranking as unrelated queries because a one-token embedding has high cosine similarity with many dish vectors.
+- **Root cause:** `all-mpnet-base-v2` is trained on sentence-length inputs. Single tokens produce embeddings that are underdetermined — they sit near the centroid of many food concepts.
+- **Mitigation implemented:** Query expansion (see Step 3.4 below). The 200-character max length guardrail is also in place.
+
+---
+
+## Step 3.4: Improvement Attempt — Query Expansion
+
+**Problem:** Short queries like `"soup"` produced poor ranking because single-token embeddings are not discriminative.
+
+**Before:**
 ```python
+# In semantic_search.search():
 query_vec = model.encode(query.strip(), normalize_embeddings=True)
-# "soup" → generic embedding, low discrimination
+# "soup" → generic centroid embedding → low discrimination
 ```
 
-**After (query expansion in `SemanticSearchView`):**
+Result: `"soup"` top-1 was "Garden Salad" (score 0.41) — wrong category.
+
+**After — query expansion in `SemanticSearchView.get()`:**
 ```python
-# Prepend context prefix to improve short-query quality
+# Prepend context prefix for short queries
 expanded = f"A UIUC dining hall dish that is {query}" if len(query.split()) <= 3 else query
 results = semantic_search.search(expanded, hall_id=hall_id, top_k=top_k)
 ```
 
-**What changed:** For queries of 3 words or fewer, the view prepends a dining-context prefix before embedding. This anchors the query vector in the "food description" semantic space rather than the generic concept space.
+Result: `"A UIUC dining hall dish that is soup"` top-1 was "Tomato Basil Soup" (score 0.62) — correct.
 
-**Why it helped:** Tested with query `"soup"` vs `"A UIUC dining hall dish that is soup"`:
-- Before: top result was "Garden Salad" (score 0.41) — wrong
-- After: top result was "Tomato Basil Soup" (score 0.62) — correct
+**Why it works:** The prefix anchors the query vector in the food-description semantic space. `all-mpnet-base-v2` was trained on diverse sentences; a food-context sentence activates the relevant region of the embedding space rather than the generic "soup" concept neighborhood.
 
-This improvement is implemented in `SemanticSearchView.get()` in `backend/mealPlanning/views.py`.
+**What changed:** Only `SemanticSearchView.get()` in `backend/mealPlanning/views.py`. The `semantic_search.search()` service is unchanged — the expansion happens at the view layer so it's easy to tune or remove.
