@@ -1,6 +1,9 @@
 from django.shortcuts import get_object_or_404, render
 
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 import requests as http_requests
 from  django.http import HttpResponse, JsonResponse
 from django.views import View
@@ -1451,3 +1454,47 @@ class AIRecommendView(View):
                 ],
                 "tip": "Try to hit your protein goal today — it helps with recovery and focus.",
             })
+
+
+class SemanticSearchView(APIView):
+    """
+    GET /api/semantic-search/?q=<query>&hall=<id>&top_k=10
+    Returns dishes ranked by semantic similarity to the query.
+    Primary AI feature for A9 — uses sentence-transformers/all-mpnet-base-v2 locally.
+    """
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        if not query:
+            return Response(
+                {"error": "Query parameter 'q' is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(query) > 200:
+            return Response(
+                {"error": "Query must be 200 characters or fewer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        hall_id = request.query_params.get("hall") or None
+        try:
+            top_k = min(int(request.query_params.get("top_k", 10)), 20)
+        except ValueError:
+            top_k = 10
+
+        try:
+            from mealPlanning.services import semantic_search
+            results = semantic_search.search(query, hall_id=hall_id, top_k=top_k)
+        except Exception as exc:
+            logger.error("Semantic search error: %s", exc)
+            return Response(
+                {"error": "Search service unavailable. Try the filter instead."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response({
+            "results": results,
+            "count": len(results),
+            "query": query,
+            "no_embeddings": len(results) == 0,
+        })

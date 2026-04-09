@@ -734,3 +734,47 @@ class BuildEmbeddingsCommandTest(TestCase):
         call_command("build_embeddings", stdout=out)
 
         mock_encode.assert_not_called()
+
+
+from rest_framework.test import APIClient
+
+class SemanticSearchViewTest(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_missing_query_returns_400(self):
+        response = self.client.get("/api/semantic-search/")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.data)
+
+    def test_empty_query_returns_400(self):
+        response = self.client.get("/api/semantic-search/?q=")
+        self.assertEqual(response.status_code, 400)
+
+    def test_query_too_long_returns_400(self):
+        response = self.client.get(f"/api/semantic-search/?q={'x' * 201}")
+        self.assertEqual(response.status_code, 400)
+
+    @patch("mealPlanning.services.semantic_search.search")
+    def test_valid_query_returns_200_with_results(self, mock_search):
+        mock_search.return_value = [
+            {"dish_id": 1, "dish_name": "Chicken", "score": 0.9}
+        ]
+        response = self.client.get("/api/semantic-search/?q=high protein")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("results", response.data)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["query"], "high protein")
+
+    @patch("mealPlanning.services.semantic_search.search")
+    def test_hall_param_is_passed_to_service(self, mock_search):
+        mock_search.return_value = []
+        self.client.get("/api/semantic-search/?q=soup&hall=3")
+        mock_search.assert_called_once_with("soup", hall_id="3", top_k=10)
+
+    @patch("mealPlanning.services.semantic_search.search")
+    def test_service_error_returns_503(self, mock_search):
+        mock_search.side_effect = RuntimeError("model crashed")
+        response = self.client.get("/api/semantic-search/?q=breakfast")
+        self.assertEqual(response.status_code, 503)
