@@ -695,3 +695,39 @@ class SemanticSearchServiceTest(TestCase):
         self.assertEqual(results, [])
         results = search("   ")
         self.assertEqual(results, [])
+
+
+from django.core.management import call_command
+import io
+
+class BuildEmbeddingsCommandTest(TestCase):
+
+    @patch("mealPlanning.services.semantic_search.encode_to_bytes")
+    def test_embeds_dishes_without_embeddings(self, mock_encode):
+        mock_encode.return_value = b"fake_embedding"
+        hall = DiningHall.objects.create(name="Ikenberry", location="Ikenberry")
+        dish = Dish.objects.create(
+            dish_name="Pancakes", category="Breakfast",
+            dining_hall=hall, last_seen=date.today(),
+        )
+        self.assertIsNone(dish.embedding)
+
+        out = io.StringIO()
+        call_command("build_embeddings", stdout=out)
+
+        dish.refresh_from_db()
+        self.assertEqual(bytes(dish.embedding), b"fake_embedding")
+        mock_encode.assert_called_once()
+
+    @patch("mealPlanning.services.semantic_search.encode_to_bytes")
+    def test_skips_dishes_that_already_have_embeddings(self, mock_encode):
+        hall = DiningHall.objects.create(name="PAR", location="PAR")
+        Dish.objects.create(
+            dish_name="Eggs", category="Breakfast",
+            dining_hall=hall, last_seen=date.today(),
+            embedding=b"existing",
+        )
+        out = io.StringIO()
+        call_command("build_embeddings", stdout=out)
+
+        mock_encode.assert_not_called()
