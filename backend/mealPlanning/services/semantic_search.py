@@ -1,4 +1,5 @@
 import logging
+import os
 import pickle
 
 import numpy as np
@@ -6,9 +7,15 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+HF_API_URL = f"https://api-inference.huggingface.co/models/{MODEL_NAME}"
 EMBEDDING_DIM = 384
 MIN_SCORE = 0.30
 _model = None
+
+
+def _use_local_model():
+    """Return True when USE_LOCAL_MODEL=true is set in the environment."""
+    return os.environ.get("USE_LOCAL_MODEL", "false").lower() == "true"
 
 
 def _get_model():
@@ -20,6 +27,50 @@ def _get_model():
         logger.info("Loading embedding model %s on %s", MODEL_NAME, device)
         _model = SentenceTransformer(MODEL_NAME, device=device)
     return _model
+
+
+def _encode_via_hf_api(text):
+    """
+    Encode text using the HuggingFace Inference API.
+    The model runs on HF's servers — no local memory cost.
+    Returns a normalized float32 numpy array.
+    """
+    import requests
+
+    headers = {"Content-Type": "application/json"}
+    hf_token = os.environ.get("HF_API_TOKEN")
+    if hf_token:
+        headers["Authorization"] = f"Bearer {hf_token}"
+
+    response = requests.post(
+        HF_API_URL,
+        headers=headers,
+        json={"inputs": text},
+        timeout=30,
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    # HF Inference API returns [[float, ...]] for sentence-transformers
+    if isinstance(data, list) and isinstance(data[0], list):
+        vec = np.array(data[0], dtype=np.float32)
+    else:
+        vec = np.array(data, dtype=np.float32)
+
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec = vec / norm
+    return vec
+
+
+def _encode(text):
+    """
+    Encode text to a normalized 384-dim float32 vector.
+    Routes to local model (dev) or HF Inference API (production).
+    """
+    if _use_local_model():
+        return _get_model().encode(text, normalize_embeddings=True).astype(np.float32)
+    return _encode_via_hf_api(text)
 
 
 def dish_text(dish):
@@ -36,8 +87,7 @@ def dish_text(dish):
 
 def encode_to_bytes(text):
     """Encode text to a normalized 384-dim vector and return as pickled bytes."""
-    model = _get_model()
-    vec = model.encode(text, normalize_embeddings=True).astype(np.float32)
+    vec = _encode(text)
     return pickle.dumps(vec)
 
 
@@ -112,8 +162,7 @@ def search(query, hall_id=None, top_k=10):
         return []
 
     matrix = np.stack(vecs)                                         # (N, D)
-    model = _get_model()
-    query_vec = model.encode(query.strip(), normalize_embeddings=True).astype(np.float32)  # (D,)
+    query_vec = _encode(query.strip())                               # (D,)
     scores = matrix @ query_vec                                     # cosine similarity
 
     top_indices = np.argsort(scores)[::-1][:top_k]
