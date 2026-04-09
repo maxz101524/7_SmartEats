@@ -99,6 +99,41 @@ Tabbed interface with two features:
 
 ---
 
+## A9: Semantic Dish Search (Primary AI Feature)
+
+The Menu page has a **Filter / AI** mode toggle on the search bar.
+
+- **Filter mode** (default): client-side exact name match — unchanged behaviour.
+- **AI mode**: natural language semantic search powered by `sentence-transformers/all-mpnet-base-v2` running locally on Apple MPS (or CPU fallback). Type a description like *"high protein vegetarian breakfast"* and dishes are ranked by cosine similarity against pre-computed 768-dim embeddings stored in the `Dish.embedding` field.
+
+### How to access the AI feature
+
+1. Open the app at `http://localhost:5173`
+2. Navigate to `/menu` and select a dining hall
+3. Click the **✦ AI** toggle in the search bar
+4. Type a natural language query — results update after a 400ms debounce
+
+### Model download note
+
+`all-mpnet-base-v2` (~420 MB) downloads automatically on first use to `~/.cache/huggingface/`. It is **not committed to the repo** (covered by `.gitignore` patterns for `*.bin`, `*.safetensors`). After the first download it is cached permanently.
+
+To pre-warm the model and backfill any existing dishes with embeddings:
+
+```bash
+cd backend
+python manage.py build_embeddings --settings=SmartEats_config.settings.development
+```
+
+The `scrape_menu` pipeline also computes embeddings for any newly scraped dishes automatically.
+
+### New API endpoint (A9)
+
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `GET /api/semantic-search/?q=<query>&hall=<id>&top_k=10` | No | Semantic search — returns ranked dishes with relevance scores |
+
+---
+
 ## Running locally
 
 **Backend:**
@@ -107,7 +142,7 @@ cd backend
 pip install -r requirements.txt
 python manage.py runserver --settings=SmartEats_config.settings.development
 ```
-> First request to `/api/nutrition-estimate/` will download the model (~3GB). Subsequent requests use the cached model.
+> First request to `/api/nutrition-estimate/` will download the StableLM model (~3GB). First call to `/api/semantic-search/` will download `all-mpnet-base-v2` (~420MB). Both are cached in `~/.cache/huggingface/`.
 
 **Frontend:**
 ```bash
