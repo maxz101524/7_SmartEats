@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             name="embedding",
             field=models.BinaryField(
                 blank=True,
-                help_text="Pickled numpy float32 array (768-dim) from all-mpnet-base-v2",
+                help_text="Pickled numpy float32 array (384-dim) from all-MiniLM-L6-v2",
                 null=True,
             ),
         ),

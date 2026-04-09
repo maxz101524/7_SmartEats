@@ -25,7 +25,7 @@ smarteats_week5/
 │       ├── urls.py                 # /api/ routes
 │       ├── tests.py                # 46 unit tests
 │       ├── services/
-│       │   ├── semantic_search.py  # A9 — all-mpnet-base-v2 embedding + cosine search
+│       │   ├── semantic_search.py  # A9 — all-MiniLM-L6-v2 embedding + cosine search
 │       │   ├── gemini_client.py    # Gemini dish nutrition estimation
 │       │   ├── ai_chat.py          # Gemini AI chat service
 │       │   └── local_llm.py        # StableLM nutrition estimator
@@ -92,7 +92,7 @@ cd backend
 python manage.py test mealPlanning --settings=SmartEats_config.settings.development -v 2
 ```
 
-46 tests, all passing.
+51 tests, all passing.
 
 ---
 
@@ -101,7 +101,7 @@ python manage.py test mealPlanning --settings=SmartEats_config.settings.developm
 The Menu page has a **Filter / AI** toggle on the search bar.
 
 - **Filter mode** (default): client-side exact name match.
-- **AI mode**: natural language semantic search powered by `sentence-transformers/all-mpnet-base-v2` running locally. Type *"high protein vegetarian breakfast"* and dishes are ranked by cosine similarity against pre-computed 768-dim embeddings stored per dish.
+- **AI mode**: natural language semantic search powered by `sentence-transformers/all-MiniLM-L6-v2`. Type *"high protein vegetarian breakfast"* and dishes are ranked by cosine similarity against pre-computed 384-dim embeddings stored per dish.
 
 ### Accessing the feature
 
@@ -113,11 +113,17 @@ The Menu page has a **Filter / AI** toggle on the search bar.
 
 ### Model download
 
-`all-mpnet-base-v2` (~420 MB) downloads automatically on first search to `~/.cache/huggingface/`. It is not committed to the repo. To pre-warm and backfill dish embeddings:
+`all-MiniLM-L6-v2` (~90 MB) downloads automatically on first search to `~/.cache/huggingface/`. It is not committed to the repo. To pre-warm and backfill dish embeddings:
 
 ```bash
 cd backend
 python manage.py build_embeddings --settings=SmartEats_config.settings.development
+```
+
+If you are upgrading from an older checkout that used `all-mpnet-base-v2`, run a full refresh once:
+
+```bash
+python manage.py build_embeddings --force --settings=SmartEats_config.settings.development
 ```
 
 `scrape_menu` also computes embeddings for newly scraped dishes automatically:
@@ -170,10 +176,10 @@ The app downloads weights locally on first use.
 
 ## Deployment
 
-- **Backend (Render):** `https://smarteats-backend.onrender.com` — `USE_LOCAL_LLM=false` (memory constraint)
+- **Backend (Render):** `https://smarteats-backend.onrender.com` — `USE_LOCAL_LLM=false` (memory constraint for nutrition estimation only)
 - **Frontend (Vercel):** `https://smarteats7.vercel.app`
 
-> Semantic search runs locally only. The Render backend does not run `all-mpnet-base-v2` due to memory constraints.
+> Semantic search now uses a smaller local embedding model that fits the deployed backend memory budget. After deploying the backend, run `python manage.py build_embeddings --force --settings=SmartEats_config.settings.development` once so any older stored vectors are regenerated.
 
 ---
 

@@ -1460,7 +1460,7 @@ class SemanticSearchView(APIView):
     """
     GET /api/semantic-search/?q=<query>&hall=<id>&top_k=10
     Returns dishes ranked by semantic similarity to the query.
-    Primary AI feature for A9 — uses sentence-transformers/all-mpnet-base-v2 locally.
+    Primary AI feature for A9 — uses sentence-transformers/all-MiniLM-L6-v2 locally.
     """
 
     def get(self, request):

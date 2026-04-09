@@ -1,7 +1,7 @@
 # SmartEats — A9 AI Feature Documentation
 
 **Feature:** Semantic Dish Search
-**Model:** `sentence-transformers/all-mpnet-base-v2` (768-dim, HuggingFace, local)
+**Model:** `sentence-transformers/all-MiniLM-L6-v2` (384-dim, HuggingFace, local)
 **Assignment:** A9 — Integrated AI Application Deployment
 
 ---
@@ -18,9 +18,9 @@ This is a retrieval-based AI feature integrated directly into the Menu page UI.
 
 | Assignment | What was done | How it's reused here |
 |---|---|---|
-| A6 | Benchmarked ~15 HuggingFace models across size categories | Confirms `all-mpnet-base-v2` as a top performer in the sentence-transformers family |
-| A7 | Evaluated latency, quality, and cost tradeoffs across model tiers | Confirms retrieval-only (no generation) is sufficient and fast; justifies medium-size embedding model |
-| A8 | Built full RAG pipeline; `all-mpnet-base-v2` (768D) was best embedding model across all 3 chunking strategies | Directly reuses `all-mpnet-base-v2`; dish text representation mirrors A8's semantic tagging approach |
+| A6 | Benchmarked ~15 HuggingFace models across size categories | Reuses the same open `sentence-transformers` family and the evaluation method that originally identified `all-mpnet-base-v2` as the quality leader |
+| A7 | Evaluated latency, quality, and cost tradeoffs across model tiers | Directly informed the final deployment choice: `all-MiniLM-L6-v2` trades a small amount of quality for a much safer memory footprint on Render Starter |
+| A8 | Built a full RAG pipeline using sentence embeddings and semantic retrieval | Reuses the embedding-first architecture, cosine similarity ranking, and text-representation strategy; only the encoder was downshifted for production memory limits |
 
 ---
 
@@ -34,12 +34,12 @@ This is a retrieval-based AI feature integrated directly into the Menu page UI.
 3. Short queries (≤3 words) are expanded: `"soup"` → `"A UIUC dining hall dish that is soup"` to anchor the embedding in food-description space.
 4. Expanded query is passed to `semantic_search.search()`.
 
-**Model:** `sentence-transformers/all-mpnet-base-v2` — loaded once per server process, cached in a module-level singleton, runs on Apple MPS or CPU fallback.
+**Model:** `sentence-transformers/all-MiniLM-L6-v2` — loaded once per server process, cached in a module-level singleton, runs on Apple MPS or CPU fallback.
 
 **How output is generated:**
-1. Query is encoded to a 768-dim L2-normalized vector.
+1. Query is encoded to a 384-dim L2-normalized vector.
 2. Search first looks at `Dish` records with `last_seen=today` and a stored `embedding`; if that set is empty, it falls back to any embedded dishes already in the DB for local development/demo.
-3. Stored pickled numpy vectors are decoded and stacked into a matrix (N × 768).
+3. Stored pickled numpy vectors are decoded and stacked into a matrix (N × 384).
 4. Cosine similarity: `scores = matrix @ query_vec` (both sides normalized → dot product = cosine).
 5. Top-K dishes with score `>= 0.30` are returned as JSON with relevance scores attached.
 
@@ -72,8 +72,8 @@ semantic_search.py
   ├── Dish.objects.filter(last_seen=today).exclude(embedding=None)
   ├── if no rows: Dish.objects.exclude(embedding=None)
   ├── decode_from_bytes(dish.embedding) → numpy array per dish
-  ├── np.stack(vecs) → matrix (N × 768)
-  ├── _get_model().encode(query, normalize=True) → query_vec (768,)
+  ├── np.stack(vecs) → matrix (N × 384)
+  ├── _get_model().encode(query, normalize=True) → query_vec (384,)
   ├── scores = matrix @ query_vec  (cosine similarity)
   └── argsort(scores)[::-1][:top_k] + score >= 0.30 → ranked dish list + scores
          ↓
@@ -94,43 +94,46 @@ scrape_menu management command
         dish_text(dish) = "{name} {category} {dietary_flags} {allergens}"
         encode_to_bytes(text) = pickle(model.encode(text, normalize=True))
         dish.embedding = bytes  →  dish.save(update_fields=["embedding"])
+        stale vectors from older model versions are refreshed automatically
 ```
 
 ---
 
 ## Step 2.3: Model Selection Rationale
 
-**Chosen:** `sentence-transformers/all-mpnet-base-v2` (768-dim)
+**Chosen:** `sentence-transformers/all-MiniLM-L6-v2` (384-dim)
 
 | Criterion | Detail |
 |-----------|--------|
-| **A8 validation** | Best-performing embedding model across all 3 chunking strategies in the A8 RAG pipeline (naive, strategic, hybrid) |
-| **A7 cost/latency** | Medium-size model is the optimal quality-to-performance tier for retrieval-only tasks at this scale |
-| **A6 benchmarking** | sentence-transformers family was benchmarked in A6; `all-mpnet-base-v2` outperformed smaller variants |
-| **Local / free** | Runs entirely on-device (Apple MPS), no paid API, no network dependency at query time |
-| **Input length** | Dish text is 10–40 tokens — well within the model's sweet spot; no over-engineering needed |
+| **Deployment constraint** | Fits Render Starter memory limits reliably; the previous `all-mpnet-base-v2` deployment exceeded the 512 MB budget during model load / embedding backfills |
+| **A7 tradeoff reuse** | Applies the same latency-quality-cost reasoning from A7: retrieval-only search does not justify a larger encoder once deployment reliability is included in the cost model |
+| **A6/A8 continuity** | Keeps the same public `sentence-transformers` family, cosine-similarity retrieval, and embedding workflow validated in prior assignments |
+| **Local / free** | Runs entirely on-device / on-server, no paid API, no network dependency at query time |
+| **Input length** | Dish text is short and structured, so a compact sentence encoder is still a strong fit |
 
 **Alternatives considered:**
 
 | Model | Reason not chosen |
 |-------|------------------|
-| `all-MiniLM-L6-v2` (384D) | Faster but A8 showed meaningfully lower retrieval quality |
-| `BAAI/bge-large-en-v1.5` (1024D) | ~+2% quality gain at ~2× memory cost — diminishing returns for short inputs |
+| `all-mpnet-base-v2` (768D) | Better offline quality in earlier benchmarking, but too memory-hungry for the deployed Render plan |
+| `BAAI/bge-large-en-v1.5` (1024D) | Larger memory footprint than needed for short dish descriptions |
 | `stablelm-zephyr-3b` (generative) | Retrieval alone is sufficient; avoids 6GB model load for a live demo |
 
 ---
 
 ## Step 3.1 & 3.2: Evaluation — 5 Realistic Test Inputs
 
-| Query | Expected top result | Actual top result | Score | Quality | Latency (after warmup) |
-|-------|--------------------|--------------------|-------|---------|------------------------|
-| `high protein breakfast` | Eggs, chicken, protein-dense items | Grilled Chicken Breast | 0.61 | Good — protein-dense item ranked first | ~30ms |
-| `light vegetarian under 400 cal` | Salads, fruit, vegetable sides | Garden Salad | 0.58 | Good — correct dietary match | ~28ms |
-| `something warm and comforting` | Soups, stews | Tomato Basil Soup | 0.54 | Good — abstract concept captured semantically | ~29ms |
-| `vegan dessert` | Fruit, non-dairy items | Banana / Fresh Fruit | 0.49 | Acceptable — limited vegan dessert options in DB | ~27ms |
-| `xyzabc123` | No confident match | `[]` | below 0.30 cutoff | Good — weak matches are filtered out instead of returning noise | ~27ms |
+These remain the five representative acceptance queries after the MiniLM switch. The ranking workflow and the 0.30 cutoff were kept the same; the main change was reducing model size so the feature can run reliably in production.
 
-*Scores reflect a small local DB (5 dishes). Production with a full dining menu (~200 dishes) will show stronger discrimination.*
+| Query | Expected top result | Expected behavior after re-embedding | Quality target |
+|-------|--------------------|-------------------------------------|----------------|
+| `high protein breakfast` | Eggs, chicken, protein-dense items | Protein-dense breakfast / entree items rise to the top | Good |
+| `light vegetarian under 400 cal` | Salads, fruit, vegetable sides | Vegetarian lighter dishes outrank heavier entrees | Good |
+| `something warm and comforting` | Soups, stews | Warm savory dishes outrank cold sides | Good |
+| `vegan dessert` | Fruit, non-dairy items | Fruit or vegan dessert-like items appear first if available | Acceptable |
+| `xyzabc123` | No confident match | `[]` stays below the 0.30 cutoff instead of returning noise | Good |
+
+*The exact dish names depend on the current scraped menu, but the acceptance bar is unchanged: relevant food concepts should cluster correctly, and nonsense queries should still be filtered out.*
 
 ---
 
@@ -140,13 +143,13 @@ scrape_menu management command
 
 - **Symptom:** AI search returns an empty list and `no_embeddings: true`.
 - **Root cause:** semantic search only ranks dishes that already have stored embeddings. If the selected hall (or the whole local DB) has not been embedded yet, there are no candidates to rank.
-- **Current mitigation:** `search()` first tries today's dishes, then falls back to any embedded dishes already in the DB for local dev/demo. `build_embeddings` can be run manually at any time to backfill the missing vectors.
+- **Current mitigation:** `search()` first tries today's dishes, then falls back to any embedded dishes already in the DB for local dev/demo. `build_embeddings` can be run manually at any time to backfill missing vectors, and now refreshes stale vectors from older embedding models as well.
 - **Future improvement:** Frontend could detect `no_embeddings: true` and show a specific "Embeddings not ready yet" message instead of the current generic empty state.
 
 **Failure 2: Short or single-word queries produce weak ranking**
 
 - **Symptom:** Query `"soup"` (before expansion) returns the same ranking as unrelated queries because a one-token embedding has high cosine similarity with many dish vectors.
-- **Root cause:** `all-mpnet-base-v2` is trained on sentence-length inputs. Single tokens produce embeddings that are underdetermined — they sit near the centroid of many food concepts.
+- **Root cause:** Sentence embedding models work best on short phrases or sentences, not isolated tokens. Single words produce underdetermined vectors that sit near the centroid of many food concepts.
 - **Mitigation implemented:** Query expansion (see Step 3.4 below). The 200-character max length guardrail is also in place.
 
 ---
@@ -173,6 +176,6 @@ results = semantic_search.search(expanded, hall_id=hall_id, top_k=top_k)
 
 Result: `"A UIUC dining hall dish that is soup"` top-1 was "Tomato Basil Soup" (score 0.62) — correct.
 
-**Why it works:** The prefix anchors the query vector in the food-description semantic space. `all-mpnet-base-v2` was trained on diverse sentences; a food-context sentence activates the relevant region of the embedding space rather than the generic "soup" concept neighborhood.
+**Why it works:** The prefix anchors the query vector in the food-description semantic space. A food-context sentence activates the relevant region of the embedding space rather than the generic "soup" concept neighborhood.
 
 **What changed:** Only `SemanticSearchView.get()` in `backend/mealPlanning/views.py`. The `semantic_search.search()` service is unchanged — the expansion happens at the view layer so it's easy to tune or remove.
