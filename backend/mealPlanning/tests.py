@@ -261,9 +261,11 @@ from datetime import date
 
 class ScrapeMenuCommandTest(TestCase):
 
+    @patch("mealPlanning.services.semantic_search.encode_to_bytes")
     @patch("mealPlanning.services.gemini_client.estimate_nutrition")
     @patch("mealPlanning.services.uiuc_dining.fetch_menu")
-    def test_creates_hall_and_dishes_via_gemini(self, mock_fetch, mock_gemini):
+    def test_creates_hall_and_dishes_via_gemini(self, mock_fetch, mock_gemini, mock_encode):
+        mock_encode.return_value = b"fake_vec"
         mock_fetch.return_value = [
             {
                 "formal_name": "Banana",
@@ -302,6 +304,7 @@ class ScrapeMenuCommandTest(TestCase):
         self.assertEqual(dish.serving_size, "1 medium banana (~120g)")
         self.assertEqual(dish.dietary_flags, ["Vegan", "Vegetarian"])
         self.assertEqual(dish.last_seen, date(2026, 3, 1))
+        self.assertEqual(bytes(dish.embedding), b"fake_vec")
 
     @patch("mealPlanning.services.gemini_client.estimate_nutrition")
     @patch("mealPlanning.services.uiuc_dining.fetch_menu")
