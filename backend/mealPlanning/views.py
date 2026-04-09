@@ -1460,7 +1460,7 @@ class SemanticSearchView(APIView):
     """
     GET /api/semantic-search/?q=<query>&hall=<id>&top_k=10
     Returns dishes ranked by semantic similarity to the query.
-    Primary AI feature for A9 — uses sentence-transformers/all-MiniLM-L6-v2 locally.
+    Primary AI feature for A9 using sentence-transformers/all-MiniLM-L6-v2.
     """
 
     def get(self, request):
@@ -1484,9 +1484,7 @@ class SemanticSearchView(APIView):
 
         try:
             from mealPlanning.services import semantic_search
-            # Query expansion: short queries are anchored in food-description space
-            expanded = f"A UIUC dining hall dish that is {query}" if len(query.split()) <= 3 else query
-            results = semantic_search.search(expanded, hall_id=hall_id, top_k=top_k)
+            results = semantic_search.search(query, hall_id=hall_id, top_k=top_k)
         except Exception as exc:
             logger.error("Semantic search error: %s", exc)
             return Response(
@@ -1494,13 +1492,9 @@ class SemanticSearchView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        embedding_qs = Dish.objects.exclude(embedding=None)
-        if hall_id is not None:
-            embedding_qs = embedding_qs.filter(dining_hall_id=hall_id)
-
         return Response({
             "results": results,
             "count": len(results),
             "query": query,
-            "no_embeddings": not embedding_qs.exists(),
+            "no_embeddings": not semantic_search.has_current_embeddings(hall_id=hall_id),
         })
