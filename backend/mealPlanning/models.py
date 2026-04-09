@@ -90,6 +90,10 @@ class Dish(models.Model):
         null=True, blank=True,
         help_text="Last date this dish appeared on the menu"
     )
+    embedding = models.BinaryField(
+        null=True, blank=True,
+        help_text="Pickled numpy float32 array (768-dim) from all-mpnet-base-v2"
+    )
 
     def get_absolute_url(self):
         return reverse('dish_detail', kwargs={'dish_id': self.dish_id})

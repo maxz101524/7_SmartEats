@@ -104,6 +104,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 describe("Menu redesign", () => {
@@ -214,5 +215,68 @@ describe("Menu redesign", () => {
     expect(
       screen.queryByRole("heading", { name: "Ikenberry Dining Center" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps dietary filters applied after AI results load", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(axios.get).mockImplementation((url) => {
+      if (typeof url === "string" && url.includes("/semantic-search/")) {
+        return Promise.resolve({
+          data: {
+            results: [halls[0].dishes[1], halls[0].dishes[2]],
+          },
+        });
+      }
+
+      return Promise.resolve({ data: halls });
+    });
+
+    renderMenu();
+
+    await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
+    await user.click(screen.getByRole("button", { name: "Vegetarian" }));
+    await user.click(screen.getByRole("button", { name: "✦ AI" }));
+    await user.type(
+      screen.getByRole("textbox", { name: /ai semantic search/i }),
+      "protein",
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Garlic Mashed Potatoes")).toBeInTheDocument();
+      expect(screen.queryByText("Grilled Lemon Chicken")).not.toBeInTheDocument();
+    }, { timeout: 2000 });
+
+  });
+
+  it("surfaces backend validation errors in AI mode", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(axios.isAxiosError).mockImplementation(
+      (error) => Boolean((error as { response?: unknown })?.response),
+    );
+    vi.mocked(axios.get).mockImplementation((url) => {
+      if (typeof url === "string" && url.includes("/semantic-search/")) {
+        return Promise.reject({
+          response: {
+            status: 400,
+            data: { error: "Query must be 200 characters or fewer." },
+          },
+        });
+      }
+
+      return Promise.resolve({ data: halls });
+    });
+
+    renderMenu();
+
+    await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
+    await user.click(screen.getByRole("button", { name: "✦ AI" }));
+    await user.type(
+      screen.getByRole("textbox", { name: /ai semantic search/i }),
+      "way too long",
+    );
+
+    await screen.findByText("Query must be 200 characters or fewer.", {}, { timeout: 2000 });
   });
 });

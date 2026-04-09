@@ -52,4 +52,6 @@ urlpatterns = [
     path("daily-history/", views.DailyHistoryView.as_view(), name="daily-history"),
     path("ai-recommend/", views.AIRecommendView.as_view(), name="ai-recommend"),
 
+    path("semantic-search/", views.SemanticSearchView.as_view(), name="semantic_search"),
+
 ]

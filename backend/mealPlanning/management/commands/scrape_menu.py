@@ -4,7 +4,7 @@ from datetime import date
 from django.core.management.base import BaseCommand
 
 from mealPlanning.models import DiningHall, Dish
-from mealPlanning.services import uiuc_dining, gemini_client
+from mealPlanning.services import uiuc_dining, gemini_client, semantic_search
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class Command(BaseCommand):
 
         stats = {"halls": 0, "created": 0, "updated": 0, "ai": 0, "skipped": 0, "force_enriched": 0}
         dishes_to_enrich = []
+        today_dishes = []
 
         for option_id, hall_name in uiuc_dining.DINING_OPTIONS.items():
             items = uiuc_dining.fetch_menu(option_id, menu_date)
@@ -62,6 +63,7 @@ class Command(BaseCommand):
                 dish.uiuc_item_id = item["item_id"]
                 dish.last_seen = date.fromisoformat(menu_date)
                 dish.save()
+                today_dishes.append(dish)
 
                 if created:
                     stats["created"] += 1
@@ -111,3 +113,15 @@ class Command(BaseCommand):
             f"AI: {stats['ai']}, Skipped: {stats['skipped']}, "
             f"Force re-enriched: {stats['force_enriched']}"
         ))
+
+        # Embedding phase — compute for any dish scraped today that lacks an embedding
+        dishes_needing_embedding = [d for d in today_dishes if d.embedding is None]
+        self.stdout.write(f"Embedding {len(dishes_needing_embedding)} dishes...")
+        for dish in dishes_needing_embedding:
+            try:
+                dish.refresh_from_db()  # pick up any nutrition updates
+                text = semantic_search.dish_text(dish)
+                dish.embedding = semantic_search.encode_to_bytes(text)
+                dish.save(update_fields=["embedding"])
+            except Exception as exc:
+                logger.warning("Embedding failed for '%s': %s", dish.dish_name, exc)

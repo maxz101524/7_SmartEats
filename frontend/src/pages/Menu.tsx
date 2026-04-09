@@ -43,6 +43,26 @@ interface DiningHall {
 const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Halal", "Jain"];
 const ALLERGEN_FILTERS = ["Gluten", "Milk", "Eggs", "Soy", "Corn", "Wheat", "Fish"];
 
+function getAiErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const apiError =
+      typeof error.response?.data?.error === "string" ? error.response.data.error : null;
+
+    if (error.response?.status === 400 && apiError) {
+      return apiError;
+    }
+    if (error.response?.status === 503) {
+      return apiError ?? "AI search unavailable — try Filter mode instead.";
+    }
+    if (!error.response) {
+      return "Could not reach AI search. Check the backend and try again.";
+    }
+    return apiError ?? "AI search failed. Try Filter mode instead.";
+  }
+
+  return "AI search unavailable — try Filter mode instead.";
+}
+
 const panelStyle: CSSProperties = {
   background: "var(--se-bg-surface)",
   border: "1px solid var(--se-border)",
@@ -358,6 +378,10 @@ export default function Menu() {
   const [loading, setLoading] = useState(true);
   const [hallsError, setHallsError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [searchMode, setSearchMode] = useState<"filter" | "ai">("filter");
+  const [aiResults, setAiResults] = useState<Dish[] | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [showHallPicker, setShowHallPicker] = useState(false);
   const [activeMealPeriod, setActiveMealPeriod] = useState("All");
   const [activeDietary, setActiveDietary] = useState<Set<string>>(new Set());
@@ -413,7 +437,10 @@ export default function Menu() {
   const selectHall = (hall: DiningHall) => {
     setSelectedHall(hall);
     setSearch("");
+    setAiResults(null);
+    setAiError(null);
     setShowHallPicker(false);
+    setAiLoading(false);
     setActiveMealPeriod("All");
     setActiveDietary(new Set());
     setExcludedAllergens(new Set());
@@ -438,6 +465,30 @@ export default function Menu() {
     });
   };
 
+  useEffect(() => {
+    if (searchMode !== "ai" || !search.trim()) {
+      setAiResults(null);
+      setAiLoading(false);
+      setAiError(null);
+      return;
+    }
+    setAiLoading(true);
+    setAiError(null);
+    const timer = setTimeout(async () => {
+      try {
+        const params: Record<string, string | number> = { q: search };
+        if (selectedHall) params.hall = selectedHall.Dining_Hall_ID;
+        const { data } = await axios.get(`${API_BASE}/semantic-search/`, { params });
+        setAiResults(data.results);
+      } catch (error) {
+        setAiError(getAiErrorMessage(error));
+        setAiResults([]);
+      } finally {
+        setAiLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search, searchMode, selectedHall]);
   const mealPeriods = useMemo(() => {
     if (!selectedHall) return ["All"];
 
@@ -452,37 +503,25 @@ export default function Menu() {
 
   const filteredDishes = useMemo(() => {
     if (!selectedHall) return [];
-
-    return selectedHall.dishes.filter((dish) => {
-      if (
-        search &&
-        !dish.dish_name.toLowerCase().includes(search.toLowerCase())
-      ) {
-        return false;
-      }
-
-      if (
-        activeMealPeriod !== "All" &&
-        dish.meal_period !== activeMealPeriod
-      ) {
-        return false;
-      }
-
+    const sourceDishes = searchMode === "ai" ? (aiResults ?? selectedHall.dishes) : selectedHall.dishes;
+    return sourceDishes.filter((d) => {
+      if (searchMode === "filter" && search && !d.dish_name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (activeMealPeriod !== "All" && d.meal_period !== activeMealPeriod) return false;
       for (const flag of activeDietary) {
         if (flag === "Gluten-Free") {
-          if (dish.allergens?.includes("Gluten")) return false;
-        } else if (!dish.dietary_flags?.includes(flag)) {
+          if (d.allergens?.includes("Gluten")) return false;
+        } else if (!d.dietary_flags?.includes(flag)) {
           return false;
         }
       }
 
       for (const allergen of excludedAllergens) {
-        if (dish.allergens?.includes(allergen)) return false;
+        if (d.allergens?.includes(allergen)) return false;
       }
 
       return true;
     });
-  }, [selectedHall, search, activeMealPeriod, activeDietary, excludedAllergens]);
+  }, [selectedHall, search, searchMode, aiResults, activeMealPeriod, activeDietary, excludedAllergens]);
 
   const stationGroups = useMemo(() => {
     const groups: Record<string, Dish[]> = {};
@@ -860,64 +899,139 @@ export default function Menu() {
           </div>
 
           <div className="flex flex-col lg:flex-row gap-4">
-            <div style={{ position: "relative", flex: "1 1 260px", minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flex: "1 1 340px",
+                minWidth: 0,
+              }}
+            >
               <div
                 style={{
-                  position: "absolute",
-                  left: 14,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  pointerEvents: "none",
                   display: "flex",
-                  alignItems: "center",
+                  padding: 4,
+                  borderRadius: "var(--se-radius-full)",
+                  background: "rgba(255,255,255,0.82)",
+                  border: "1px solid var(--se-border)",
+                  boxShadow: "var(--se-shadow-sm)",
+                  flexShrink: 0,
                 }}
               >
-                <IconSearch size={16} color="var(--se-text-faint)" />
+                {(["filter", "ai"] as const).map((mode) => {
+                  const active = searchMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setSearchMode(mode);
+                        setSearch("");
+                        setAiResults(null);
+                        setAiLoading(false);
+                        setAiError(null);
+                      }}
+                      style={{
+                        height: 38,
+                        padding: "0 14px",
+                        borderRadius: "var(--se-radius-full)",
+                        border: "none",
+                        background: active ? "var(--se-primary)" : "transparent",
+                        color: active
+                          ? "var(--se-text-inverted)"
+                          : "var(--se-text-muted)",
+                        fontSize: "var(--se-text-sm)",
+                        fontWeight: "var(--se-weight-bold)",
+                        cursor: "pointer",
+                        transition: "all 140ms ease",
+                      }}
+                    >
+                      {mode === "ai" ? "✦ AI" : "Filter"}
+                    </button>
+                  );
+                })}
               </div>
-              <input
-                type="text"
-                aria-label="Search dishes"
-                placeholder="Search dishes"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                style={{
-                  width: "100%",
-                  height: 46,
-                  borderRadius: "var(--se-radius-full)",
-                  border: "1px solid var(--se-border)",
-                  background: "rgba(255,255,255,0.82)",
-                  paddingLeft: 40,
-                  paddingRight: search ? 42 : 16,
-                  fontSize: "var(--se-text-sm)",
-                  color: "var(--se-text-main)",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
+
+              <div style={{ position: "relative", flex: "1 1 260px", minWidth: 0 }}>
+                <div
                   style={{
                     position: "absolute",
-                    right: 8,
+                    left: 14,
                     top: "50%",
                     transform: "translateY(-50%)",
-                    width: 30,
-                    height: 30,
-                    borderRadius: "50%",
-                    border: "none",
-                    background: "var(--se-bg-subtle)",
-                    display: "inline-flex",
+                    pointerEvents: "none",
+                    display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
                   }}
                 >
-                  <IconClose size={14} color="var(--se-text-muted)" />
-                </button>
-              )}
+                  {searchMode === "ai" && aiLoading ? (
+                    <span style={{ fontSize: 13, color: "var(--se-primary)" }}>
+                      ⏳
+                    </span>
+                  ) : (
+                    <IconSearch size={16} color="var(--se-text-faint)" />
+                  )}
+                </div>
+                <input
+                  type="text"
+                  aria-label={
+                    searchMode === "ai" ? "AI semantic search" : "Search dishes"
+                  }
+                  placeholder={
+                    searchMode === "ai"
+                      ? "Try: high protein breakfast, light vegetarian..."
+                      : "Search dishes"
+                  }
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  style={{
+                    width: "100%",
+                    height: 46,
+                    borderRadius: "var(--se-radius-full)",
+                    border:
+                      searchMode === "ai"
+                        ? "1.5px solid rgba(var(--se-primary-rgb), 0.35)"
+                        : "1px solid var(--se-border)",
+                    background: "rgba(255,255,255,0.82)",
+                    paddingLeft: 40,
+                    paddingRight: search ? 42 : 16,
+                    fontSize: "var(--se-text-sm)",
+                    color: "var(--se-text-main)",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch("");
+                      setAiResults(null);
+                      setAiLoading(false);
+                      setAiError(null);
+                    }}
+                    aria-label="Clear search"
+                    style={{
+                      position: "absolute",
+                      right: 8,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: 30,
+                      height: 30,
+                      borderRadius: "50%",
+                      border: "none",
+                      background: "var(--se-bg-subtle)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <IconClose size={14} color="var(--se-text-muted)" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div
@@ -939,11 +1053,48 @@ export default function Menu() {
                   border: "1px solid var(--se-border)",
                 }}
               >
-                {hasActiveFilters ? "Filters active" : "Browsing all dishes"}
+                {searchMode === "ai"
+                  ? aiLoading
+                    ? "Searching with AI"
+                    : hasActiveFilters
+                      ? "AI + filters active"
+                      : "AI search ready"
+                  : hasActiveFilters
+                    ? "Filters active"
+                    : "Browsing all dishes"}
               </span>
+              {searchMode === "ai" && !aiLoading && aiResults && !aiError && (
+                <span>{aiResults.length} AI matches</span>
+              )}
               <span>{stationGroups.length} station groups</span>
             </div>
           </div>
+
+          {searchMode === "ai" && aiError && (
+            <p
+              style={{
+                margin: 0,
+                fontSize: "var(--se-text-sm)",
+                fontWeight: "var(--se-weight-semibold)",
+                color: "var(--se-error)",
+              }}
+            >
+              {aiError}
+            </p>
+          )}
+
+          {searchMode === "ai" && !aiError && aiResults && aiResults.length > 0 && (
+            <p
+              style={{
+                margin: 0,
+                fontSize: "var(--se-text-xs)",
+                fontWeight: "var(--se-weight-semibold)",
+                color: "var(--se-text-faint)",
+              }}
+            >
+              ✦ AI results for "{search}"
+            </p>
+          )}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
