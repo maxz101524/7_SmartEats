@@ -684,12 +684,51 @@ class SemanticSearchServiceTest(TestCase):
         self.assertGreater(results[0]["score"], results[1]["score"])
 
     @patch("mealPlanning.services.semantic_search._get_model")
-    def test_search_returns_empty_list_when_no_embeddings_today(self, mock_get_model):
+    def test_search_filters_out_results_below_min_score(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_get_model.return_value = mock_model
+
+        hall = DiningHall.objects.create(name="Threshold Hall", location="Test")
+        Dish.objects.create(
+            dish_name="Strong Match", category="Entrees",
+            dining_hall=hall, last_seen=date.today(),
+            embedding=pickle.dumps(np.array([0.31, 0.0], dtype=np.float32)),
+        )
+        Dish.objects.create(
+            dish_name="Weak Match", category="Entrees",
+            dining_hall=hall, last_seen=date.today(),
+            embedding=pickle.dumps(np.array([0.29, 0.0], dtype=np.float32)),
+        )
+        mock_model.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
+
+        results = search("protein")
+        self.assertEqual([result["dish_name"] for result in results], ["Strong Match"])
+        self.assertGreaterEqual(results[0]["score"], 0.30)
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_search_falls_back_to_all_embedded_dishes_when_none_seen_today(self, mock_get_model):
         mock_model = MagicMock()
         mock_model.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
         mock_get_model.return_value = mock_model
 
-        # No dishes with last_seen=today
+        hall = DiningHall.objects.create(name="Fallback Hall", location="Test")
+        Dish.objects.create(
+            dish_name="Yesterday's Chili", category="Soups",
+            dining_hall=hall, last_seen=date(2026, 1, 1),
+            embedding=pickle.dumps(np.array([1.0, 0.0], dtype=np.float32)),
+        )
+
+        results = search("comfort food")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["dish_name"], "Yesterday's Chili")
+
+    @patch("mealPlanning.services.semantic_search._get_model")
+    def test_search_returns_empty_list_when_no_embeddings_exist_anywhere(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_model.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
+        mock_get_model.return_value = mock_model
+
+        # No embedded dishes exist anywhere in the local DB
         results = search("anything")
         self.assertEqual(results, [])
 
@@ -773,6 +812,29 @@ class SemanticSearchViewTest(TestCase):
         self.client.get("/api/semantic-search/?q=soup&hall=3")
         # "soup" is ≤3 words → expanded by query expansion logic
         mock_search.assert_called_once_with("A UIUC dining hall dish that is soup", hall_id="3", top_k=10)
+
+    @patch("mealPlanning.services.semantic_search.search")
+    def test_empty_results_without_embeddings_report_no_embeddings(self, mock_search):
+        mock_search.return_value = []
+        response = self.client.get("/api/semantic-search/?q=soup")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["no_embeddings"])
+
+    @patch("mealPlanning.services.semantic_search.search")
+    def test_empty_results_with_existing_embeddings_report_no_embeddings_false(self, mock_search):
+        mock_search.return_value = []
+        hall = DiningHall.objects.create(name="API Hall", location="Test")
+        Dish.objects.create(
+            dish_name="Embedded Soup",
+            category="Soups",
+            dining_hall=hall,
+            last_seen=date.today(),
+            embedding=b"existing",
+        )
+
+        response = self.client.get("/api/semantic-search/?q=soup")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["no_embeddings"])
 
     @patch("mealPlanning.services.semantic_search.search")
     def test_service_error_returns_503(self, mock_search):

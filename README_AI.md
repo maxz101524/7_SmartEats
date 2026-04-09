@@ -38,13 +38,14 @@ This is a retrieval-based AI feature integrated directly into the Menu page UI.
 
 **How output is generated:**
 1. Query is encoded to a 768-dim L2-normalized vector.
-2. All `Dish` records with `last_seen=today` and a stored `embedding` are fetched from the DB.
+2. Search first looks at `Dish` records with `last_seen=today` and a stored `embedding`; if that set is empty, it falls back to any embedded dishes already in the DB for local development/demo.
 3. Stored pickled numpy vectors are decoded and stacked into a matrix (N × 768).
 4. Cosine similarity: `scores = matrix @ query_vec` (both sides normalized → dot product = cosine).
-5. Top-K dishes sorted by score are returned as JSON with relevance scores attached.
+5. Top-K dishes with score `>= 0.30` are returned as JSON with relevance scores attached.
 
 **Response to user:**
-- `SemanticSearchView` returns `{ results: [...], count: N, query: "..." }`.
+- `SemanticSearchView` returns `{ results: [...], count: N, query: "...", no_embeddings: bool }`.
+- `no_embeddings` is `true` only when the selected search scope has zero embedded dishes at all.
 - `filteredDishes` useMemo in `Menu.tsx` returns `aiResults` when in AI mode.
 - Existing `DishCard` grid renders the ranked list unchanged.
 - `✦ AI results for "..."` label appears above the grid.
@@ -69,13 +70,14 @@ SemanticSearchView (Django APIView)
          ↓
 semantic_search.py
   ├── Dish.objects.filter(last_seen=today).exclude(embedding=None)
+  ├── if no rows: Dish.objects.exclude(embedding=None)
   ├── decode_from_bytes(dish.embedding) → numpy array per dish
   ├── np.stack(vecs) → matrix (N × 768)
   ├── _get_model().encode(query, normalize=True) → query_vec (768,)
   ├── scores = matrix @ query_vec  (cosine similarity)
-  └── argsort(scores)[::-1][:top_k] → ranked dish list + scores
+  └── argsort(scores)[::-1][:top_k] + score >= 0.30 → ranked dish list + scores
          ↓
-JSON { results: [...dishes with score...], count: K, query: "..." }
+JSON { results: [...dishes with score...], count: K, query: "...", no_embeddings: bool }
          ↓
 Menu.tsx renders DishCard grid with ranked results
 ```
@@ -126,7 +128,7 @@ scrape_menu management command
 | `light vegetarian under 400 cal` | Salads, fruit, vegetable sides | Garden Salad | 0.58 | Good — correct dietary match | ~28ms |
 | `something warm and comforting` | Soups, stews | Tomato Basil Soup | 0.54 | Good — abstract concept captured semantically | ~29ms |
 | `vegan dessert` | Fruit, non-dairy items | Banana / Fresh Fruit | 0.49 | Acceptable — limited vegan dessert options in DB | ~27ms |
-| `xyzabc123` | Low-scoring noise results | Low-scoring irrelevant dish | 0.21 | Handled gracefully — no crash, low confidence scores | ~27ms |
+| `xyzabc123` | No confident match | `[]` | below 0.30 cutoff | Good — weak matches are filtered out instead of returning noise | ~27ms |
 
 *Scores reflect a small local DB (5 dishes). Production with a full dining menu (~200 dishes) will show stronger discrimination.*
 
@@ -134,12 +136,12 @@ scrape_menu management command
 
 ## Step 3.3: Failure Analysis
 
-**Failure 1: No results when no dishes have `last_seen=today`**
+**Failure 1: No results when the selected scope has no embedded dishes**
 
-- **Symptom:** AI search returns an empty list even though dishes exist in the DB.
-- **Root cause:** `search()` filters `Dish.objects.filter(last_seen=today)`. If `scrape_menu` has not run today (e.g., no network, weekend), no dishes match the date filter.
-- **Current mitigation:** API returns `{ "no_embeddings": true }` flag alongside empty results. `build_embeddings` can be run manually at any time. Frontend shows "No dishes matched" with a suggestion to try Filter mode.
-- **Future improvement:** Frontend could detect `no_embeddings: true` and show a specific "Menu not loaded yet" message.
+- **Symptom:** AI search returns an empty list and `no_embeddings: true`.
+- **Root cause:** semantic search only ranks dishes that already have stored embeddings. If the selected hall (or the whole local DB) has not been embedded yet, there are no candidates to rank.
+- **Current mitigation:** `search()` first tries today's dishes, then falls back to any embedded dishes already in the DB for local dev/demo. `build_embeddings` can be run manually at any time to backfill the missing vectors.
+- **Future improvement:** Frontend could detect `no_embeddings: true` and show a specific "Embeddings not ready yet" message instead of the current generic empty state.
 
 **Failure 2: Short or single-word queries produce weak ranking**
 

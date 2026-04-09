@@ -23,7 +23,7 @@ smarteats_week5/
 │       ├── models.py               # DiningHall, Dish (w/ embedding field), UserProfile, Meal
 │       ├── views.py                # All API views incl. SemanticSearchView
 │       ├── urls.py                 # /api/ routes
-│       ├── tests.py                # 42 unit tests
+│       ├── tests.py                # 46 unit tests
 │       ├── services/
 │       │   ├── semantic_search.py  # A9 — all-mpnet-base-v2 embedding + cosine search
 │       │   ├── gemini_client.py    # Gemini dish nutrition estimation
@@ -92,7 +92,7 @@ cd backend
 python manage.py test mealPlanning --settings=SmartEats_config.settings.development -v 2
 ```
 
-42 tests, all passing.
+46 tests, all passing.
 
 ---
 
@@ -126,7 +126,7 @@ python manage.py build_embeddings --settings=SmartEats_config.settings.developme
 python manage.py scrape_menu --settings=SmartEats_config.settings.development
 ```
 
-> **Note:** If no dishes have `last_seen=today`, AI search returns empty results. Run `scrape_menu` or `build_embeddings` to populate.
+> **Note:** AI search prefers dishes from today's menu, then falls back to any embedded dishes already in the DB for local development. Run `scrape_menu` for the freshest menu, or `build_embeddings` to backfill older rows.
 
 ---
 

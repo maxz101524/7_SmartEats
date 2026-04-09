@@ -1494,9 +1494,13 @@ class SemanticSearchView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        embedding_qs = Dish.objects.exclude(embedding=None)
+        if hall_id is not None:
+            embedding_qs = embedding_qs.filter(dining_hall_id=hall_id)
+
         return Response({
             "results": results,
             "count": len(results),
             "query": query,
-            "no_embeddings": len(results) == 0,
+            "no_embeddings": not embedding_qs.exists(),
         })
