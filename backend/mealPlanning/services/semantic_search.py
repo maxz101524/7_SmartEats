@@ -62,6 +62,13 @@ def search(query, hall_id=None, top_k=10):
 
     dishes = list(qs)
     if not dishes:
+        # Fallback: use all embedded dishes when none have today's date
+        # (handles local dev / demo without requiring a daily scrape)
+        qs = Dish.objects.exclude(embedding=None)
+        if hall_id is not None:
+            qs = qs.filter(dining_hall_id=hall_id)
+        dishes = list(qs)
+    if not dishes:
         return []
 
     # Build embedding matrix

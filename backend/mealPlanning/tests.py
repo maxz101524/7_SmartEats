@@ -771,7 +771,8 @@ class SemanticSearchViewTest(TestCase):
     def test_hall_param_is_passed_to_service(self, mock_search):
         mock_search.return_value = []
         self.client.get("/api/semantic-search/?q=soup&hall=3")
-        mock_search.assert_called_once_with("soup", hall_id="3", top_k=10)
+        # "soup" is ≤3 words → expanded by query expansion logic
+        mock_search.assert_called_once_with("A UIUC dining hall dish that is soup", hall_id="3", top_k=10)
 
     @patch("mealPlanning.services.semantic_search.search")
     def test_service_error_returns_503(self, mock_search):
