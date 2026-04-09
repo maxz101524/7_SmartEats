@@ -662,9 +662,9 @@ class SemanticSearchServiceTest(TestCase):
         mock_get_model.return_value = mock_model
 
         hall = DiningHall.objects.create(name="Test Hall", location="Test")
-        # dish1: "protein" direction [1, 0]; dish2: "vegetable" direction [0, 1]
-        vec1 = np.array([1.0, 0.0], dtype=np.float32)
-        vec2 = np.array([0.0, 1.0], dtype=np.float32)
+        # Both dishes score above MIN_SCORE (0.30); dish1 scores higher
+        vec1 = np.array([1.0, 0.0], dtype=np.float32)   # dot [1,0] = 1.0
+        vec2 = np.array([0.8, 0.6], dtype=np.float32)   # dot [1,0] = 0.8 (both pass threshold)
         dish1 = Dish.objects.create(
             dish_name="Grilled Chicken", category="Entrees",
             dining_hall=hall, last_seen=date.today(),

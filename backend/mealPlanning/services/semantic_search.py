@@ -93,6 +93,10 @@ def search(query, hall_id=None, top_k=10):
 
     top_indices = np.argsort(scores)[::-1][:top_k]
 
+    # Drop results below the relevance threshold — prevents weak matches from flooding results
+    MIN_SCORE = 0.30
+    top_indices = [i for i in top_indices if scores[i] >= MIN_SCORE]
+
     results = []
     for idx in top_indices:
         dish = valid_dishes[int(idx)]
