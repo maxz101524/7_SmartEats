@@ -2,6 +2,7 @@ import logging
 from datetime import date
 
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from mealPlanning.models import DiningHall, Dish
 from mealPlanning.services import uiuc_dining, gemini_client, semantic_search
@@ -26,7 +27,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        menu_date = options["date"] or date.today().isoformat()
+        menu_date = options["date"] or timezone.localdate().isoformat()
         force = options["force"]
         self.stdout.write(f"Scraping menu for {menu_date} (force={force})...")
 

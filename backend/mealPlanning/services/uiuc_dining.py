@@ -9,6 +9,9 @@ DINING_OPTIONS = {
     1: "Ikenberry Dining Center",
     2: "Pennsylvania Avenue Dining Hall",
     3: "Illinois Street Dining Center",
+    5: "Lincoln/Allen Dining Hall",
+    12: "Field of Greens",
+    23: "Kosher Kitchen",
 }
 
 ALLERGEN_SET = frozenset({

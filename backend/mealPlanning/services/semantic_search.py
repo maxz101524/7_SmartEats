@@ -519,10 +519,10 @@ def _apply_db_safe_filters(qs, intent):
 
 
 def _base_candidate_queryset(hall_id):
-    from datetime import date
+    from django.utils import timezone
     from mealPlanning.models import Dish
 
-    today = date.today()
+    today = timezone.localdate()
     qs = Dish.objects.filter(last_seen=today).exclude(embedding=None)
     if hall_id is not None:
         qs = qs.filter(dining_hall_id=hall_id)

@@ -330,7 +330,8 @@ class DailyHistoryView(APIView):
 
 def dining_hall_view(request):
 
-    halls = DiningHall.objects.prefetch_related('dish').all()
+    today = timezone.localdate()
+    halls = DiningHall.objects.all()
 
     data = []
 
@@ -339,8 +340,8 @@ def dining_hall_view(request):
         data.append({
             "Dining_Hall_ID": hall.Dining_Hall_ID,
             "name": hall.name,
-            "location":hall.location,
-            "dishes": list(hall.dish.values(
+            "location": hall.location,
+            "dishes": list(hall.dish.filter(last_seen=today).values(
                 'dish_id', 'dish_name', 'calories', 'protein', 'carbohydrates', 'fat',
                 'fiber', 'sodium', 'allergens', 'dietary_flags', 'nutrition_source',
                 'ai_confidence', 'meal_period', 'course', 'serving_unit', 'serving_size',
@@ -392,15 +393,13 @@ class DishManagementView(View):
             return JsonResponse({"error": str(e)}, status=400)
 
 def dish_list_view(request):
-    
+
     search_query = request.GET.get('search', None)
     hall_id = request.GET.get('hall_id', None)
 
+    today = timezone.localdate()
+    dishes = Dish.objects.select_related('dining_hall').filter(last_seen=today)
 
-    dishes = Dish.objects.select_related('dining_hall').all()
-
-   
-    
     if search_query:
         dishes = dishes.filter(dish_name__icontains=search_query)
 
