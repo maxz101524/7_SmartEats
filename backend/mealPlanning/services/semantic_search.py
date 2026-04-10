@@ -633,13 +633,7 @@ def _score_weights(intent):
             "lexical": 0.15,
             "dietary": 0.35,
         }
-    if "plant_forward" in intent["soft_preferences"]:
-        return {
-            "semantic": 0.35,
-            "nutrition": 0.05,
-            "lexical": 0.45,
-            "dietary": 0.15,
-    }
+ 
 
     return {
         "semantic": 0.55,
@@ -861,7 +855,8 @@ def search(query, hall_id=None, top_k=10):
 
     scored.sort(key=lambda item: item[0], reverse=True)
     thresholded = [item for item in scored if item[0] >= MIN_SCORE]
-    if not thresholded and constraints_relaxed:
+    is_plant_forward = "plant_forward" in intent["soft_preferences"]
+    if not thresholded and (constraints_relaxed or is_plant_forward):
         thresholded = scored
     scored = thresholded[:top_k]
 
