@@ -23,9 +23,9 @@ smarteats_week5/
 │       ├── models.py               # DiningHall, Dish (w/ embedding field), UserProfile, Meal
 │       ├── views.py                # All API views incl. SemanticSearchView
 │       ├── urls.py                 # /api/ routes
-│       ├── tests.py                # 46 unit tests
+│       ├── tests.py                # 59 Django tests
 │       ├── services/
-│       │   ├── semantic_search.py  # A9 — all-MiniLM-L6-v2 embedding + cosine search
+│       │   ├── semantic_search.py  # A9: intent parsing + embeddings + blended ranking
 │       │   ├── gemini_client.py    # Gemini dish nutrition estimation
 │       │   ├── ai_chat.py          # Gemini AI chat service
 │       │   └── local_llm.py        # StableLM nutrition estimator
@@ -92,7 +92,7 @@ cd backend
 python manage.py test mealPlanning --settings=SmartEats_config.settings.development -v 2
 ```
 
-51 tests, all passing.
+59 tests, all passing.
 
 ---
 
@@ -101,7 +101,7 @@ python manage.py test mealPlanning --settings=SmartEats_config.settings.developm
 The Menu page has a **Filter / AI** toggle on the search bar.
 
 - **Filter mode** (default): client-side exact name match.
-- **AI mode**: natural language semantic search powered by `sentence-transformers/all-MiniLM-L6-v2`. Type *"high protein vegetarian breakfast"* and dishes are ranked by cosine similarity against pre-computed 384-dim embeddings stored per dish.
+- **AI mode**: natural language search powered by the public `sentence-transformers/all-MiniLM-L6-v2` embedding model. Type *"high protein vegetarian breakfast"*, *"low calories"*, or *"vegetarian without milk"* and dishes are ranked with a blend of semantic similarity, nutrition fit, dietary/allergen constraints, and text matches.
 
 ### Accessing the feature
 
@@ -111,19 +111,15 @@ The Menu page has a **Filter / AI** toggle on the search bar.
 4. Click **✦ AI** in the search bar
 5. Type a natural language query — results update after a 400ms debounce
 
-### Model download
+### Embeddings
 
-`all-MiniLM-L6-v2` (~90 MB) downloads automatically on first search to `~/.cache/huggingface/`. It is not committed to the repo. To pre-warm and backfill dish embeddings:
+The primary A9 feature uses the public `sentence-transformers/all-MiniLM-L6-v2` model. Set `USE_LOCAL_MODEL=true` for local model loading, or use `USE_LOCAL_MODEL=false` with `HF_API_TOKEN` on Render to avoid web-worker memory pressure.
+
+To build or refresh stored dish embeddings:
 
 ```bash
 cd backend
 python manage.py build_embeddings --settings=SmartEats_config.settings.development
-```
-
-If you are upgrading from an older checkout that used `all-mpnet-base-v2`, run a full refresh once:
-
-```bash
-python manage.py build_embeddings --force --settings=SmartEats_config.settings.development
 ```
 
 `scrape_menu` also computes embeddings for newly scraped dishes automatically:
@@ -132,7 +128,7 @@ python manage.py build_embeddings --force --settings=SmartEats_config.settings.d
 python manage.py scrape_menu --settings=SmartEats_config.settings.development
 ```
 
-> **Note:** AI search prefers dishes from today's menu, then falls back to any embedded dishes already in the DB for local development. Run `scrape_menu` for the freshest menu, or `build_embeddings` to backfill older rows.
+Use `python manage.py build_embeddings --force` after changing the model or embedding text logic. Search prefers today's menu and falls back to any current embedded dishes for local demos.
 
 ---
 
@@ -143,7 +139,7 @@ python manage.py scrape_menu --settings=SmartEats_config.settings.development
 | `GET /api/halls/` | No | Dining halls list |
 | `GET /api/dishes/` | No | Dish catalog |
 | `GET /api/dishes/<id>` | No | Dish detail |
-| `GET /api/semantic-search/?q=<query>&hall=<id>&top_k=10` | No | **A9** — Semantic search, ranked by cosine similarity |
+| `GET /api/semantic-search/?q=<query>&hall=<id>&top_k=10` | No | **A9** - Plain-language semantic dish search with intent-aware ranking |
 | `POST /api/nutrition-estimate/` | No | Local LLM calorie/macro estimation |
 | `POST /api/ai-chat/` | No | Gemini AI chat |
 | `GET /api/meals/` | Yes | Meal history |
@@ -161,7 +157,7 @@ python manage.py scrape_menu --settings=SmartEats_config.settings.development
 
 ## Git Hygiene
 
-Model weights and caches are excluded from the repo:
+Model weights, binary checkpoints, env files, local worktrees, dependency folders, and build outputs are excluded from the repo. The main model-related patterns are:
 
 ```
 *.bin
@@ -170,16 +166,24 @@ Model weights and caches are excluded from the repo:
 ~/.cache/huggingface/
 ```
 
-The app downloads weights locally on first use.
+The app downloads weights locally only when `USE_LOCAL_MODEL=true`.
 
 ---
 
 ## Deployment
 
-- **Backend (Render):** `https://smarteats-backend.onrender.com` — `USE_LOCAL_LLM=false` (memory constraint for nutrition estimation only)
+- **Backend (Render):** `https://smarteats-backend.onrender.com` - `USE_LOCAL_LLM=false`; keep `USE_LOCAL_MODEL=false` for semantic search and set `HF_API_TOKEN`
 - **Frontend (Vercel):** `https://smarteats7.vercel.app`
 
-> Semantic search now uses a smaller local embedding model that fits the deployed backend memory budget. After deploying the backend, run `python manage.py build_embeddings --force --settings=SmartEats_config.settings.development` once so any older stored vectors are regenerated.
+After deploying backend changes, run these in the Render shell against the production environment:
+
+```bash
+python manage.py migrate
+python manage.py scrape_menu
+python manage.py build_embeddings --force
+```
+
+`scrape_menu` is needed if production has no `Dish` rows yet. `build_embeddings --force` regenerates any stale vectors after search-text or model-version changes.
 
 ---
 
