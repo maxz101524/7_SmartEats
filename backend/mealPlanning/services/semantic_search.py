@@ -633,6 +633,13 @@ def _score_weights(intent):
             "lexical": 0.15,
             "dietary": 0.35,
         }
+    if "plant_forward" in intent["soft_preferences"]:
+        return {
+            "semantic": 0.35,
+            "nutrition": 0.05,
+            "lexical": 0.45,
+            "dietary": 0.15,
+    }
 
     return {
         "semantic": 0.55,
