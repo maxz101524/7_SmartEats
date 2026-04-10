@@ -107,15 +107,15 @@ Gemini is only secondary for nutrition/chat features, not required for semantic 
 
 ## 6. Evaluation
 
-| Test input | Expected behavior |
-|---|---|
-| `low calories` | Lower-calorie dishes rank above heavy entrees |
-| `high protein breakfast` | Breakfast/protein items rank higher |
-| `vegetarian without milk` | Vegetarian dishes with no listed milk allergen are preferred |
-| `something with vegetables` | Plant-forward dishes outrank unrelated items |
-| `under 500 calories` | Dishes at or below the calorie ceiling are prioritized |
+| Test input | Quality target | Latency/usefulness target |
+|---|---|---|
+| `low calories` | Lower-calorie dishes rank above heavy entrees | Fast enough for debounced search; better than exact name search |
+| `high protein breakfast` | Breakfast/protein items rank higher | Uses nutrition fields, not just dish names |
+| `vegetarian without milk` | Vegetarian dishes with no listed milk allergen are preferred | Handles diet/allergen wording directly |
+| `something with vegetables` | Plant-forward dishes outrank unrelated items | Responds to plain-language food intent |
+| `under 500 calories` | Dishes at or below the calorie ceiling are prioritized | Pushes numeric constraints into candidate filtering |
 
-Success means the top results change meaningfully across these queries and match the user intent better than exact name search.
+Success means top results change meaningfully across these queries and match the user intent better than Filter mode.
 
 ---
 
