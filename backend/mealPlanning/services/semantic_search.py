@@ -8,12 +8,16 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-MODEL_NAME = "all-mpnet-base-v2"
-
-
+# HF_API_URL = f"https://api-inference.huggingface.co/models/{MODEL_NAME}"
+# EMBEDDING_DIM = 384
+# EMBEDDING_SCHEMA_VERSION = 2
+MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
 HF_API_URL = f"https://api-inference.huggingface.co/models/{MODEL_NAME}"
-EMBEDDING_DIM = 384
-EMBEDDING_SCHEMA_VERSION = 2
+EMBEDDING_DIM = 768
+EMBEDDING_SCHEMA_VERSION = 3
+
+
+
 EMBEDDING_ENCODER = "normalized-sentence-embedding"
 MIN_SCORE = 0.30
 MAX_CANDIDATES = int(os.environ.get("SEMANTIC_SEARCH_MAX_CANDIDATES", "600"))
