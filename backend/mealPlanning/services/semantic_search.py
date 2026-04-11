@@ -7,7 +7,10 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+# MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+MODEL_NAME = "all-mpnet-base-v2"
+
+
 HF_API_URL = f"https://api-inference.huggingface.co/models/{MODEL_NAME}"
 EMBEDDING_DIM = 384
 EMBEDDING_SCHEMA_VERSION = 2
