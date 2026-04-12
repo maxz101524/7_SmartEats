@@ -59,10 +59,35 @@ const ALL_PROMPTS = [
   "Low carb dinner suggestions",
 ];
 const CHAT_STORAGE_KEY = "smarteats_ai_chat_v1";
+const ASSISTANT_STYLE_PREFIXES = [
+  "are you",
+  "do you",
+  "would you",
+  "could you",
+  "can you",
+  "what kind of",
+  "which kind of",
+] as const;
 
 function pickRandom<T>(arr: T[], n: number): T[] {
   const shuffled = [...arr].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, n);
+}
+
+function sanitizeFollowUpSuggestions(rawSuggestions: unknown): string[] | undefined {
+  if (!Array.isArray(rawSuggestions)) return undefined;
+
+  const cleaned = rawSuggestions
+    .map((item) => String(item || "").trim())
+    .filter((item) => item.length > 0 && item.length <= 80)
+    .filter((item) => {
+      const normalized = item.toLowerCase();
+      return !ASSISTANT_STYLE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+    })
+    .filter((item, index, arr) => arr.findIndex((candidate) => candidate.toLowerCase() === item.toLowerCase()) === index)
+    .slice(0, 3);
+
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 // ─── Dish recommendation card ─────────────────────────────────────────────────
@@ -578,9 +603,7 @@ export default function AIMeals() {
             recommendedDishes: Array.isArray(item.recommendedDishes)
               ? item.recommendedDishes
               : undefined,
-            followUpSuggestions: Array.isArray(item.followUpSuggestions)
-              ? item.followUpSuggestions
-              : undefined,
+            followUpSuggestions: sanitizeFollowUpSuggestions(item.followUpSuggestions),
             error: Boolean(item.error),
           };
         })
@@ -590,9 +613,7 @@ export default function AIMeals() {
           recommendedDishes: Array.isArray(item.recommendedDishes)
             ? item.recommendedDishes
             : undefined,
-          followUpSuggestions: Array.isArray(item.followUpSuggestions)
-            ? item.followUpSuggestions
-            : undefined,
+          followUpSuggestions: sanitizeFollowUpSuggestions(item.followUpSuggestions),
         }));
 
       if (restored.length > 0) {
@@ -650,7 +671,7 @@ export default function AIMeals() {
           role: "ai",
           text: data.response || "I'm not sure how to help with that.",
           recommendedDishes: data.recommended_dishes?.length > 0 ? data.recommended_dishes : undefined,
-          followUpSuggestions: data.follow_up_suggestions?.length > 0 ? data.follow_up_suggestions : undefined,
+          followUpSuggestions: sanitizeFollowUpSuggestions(data.follow_up_suggestions),
         };
         setMessages((prev) => [...prev, aiMsg]);
       }

@@ -7,8 +7,16 @@ logger = logging.getLogger(__name__)
 import requests as http_requests
 from  django.http import HttpResponse, JsonResponse
 from django.views import View
-from django.views.generic import ListView
-from .models import DiningHall, Dish, UserProfile, Meal, TempMeal, TempMealItem
+from .models import (
+    DailyRecommendationSnapshot,
+    DiningHall,
+    Dish,
+    Meal,
+    TempMeal,
+    TempMealItem,
+    UserProfile,
+    ensure_user_profile,
+)
 from django.db.models import Q, Prefetch, Sum, Count
 from django.db.models.functions import Coalesce
 from io import BytesIO
@@ -22,8 +30,6 @@ from django.utils import timezone
 import io
 from datetime import timedelta
 
-
-from .models import DiningHall, Dish, UserProfile, Meal
 from django.forms.models import model_to_dict
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
@@ -48,6 +54,122 @@ from google.auth.transport import requests
 import os
 from django.conf import settings
 from allauth.socialaccount.models import SocialAccount
+
+
+def _recommendation_context_signature(goal, dietary_flags):
+    return json.dumps({
+        "goal": goal or "maintain",
+        "dietary_flags": dietary_flags or [],
+    }, sort_keys=True)
+
+
+def _serialize_meal(meal):
+    dishes = list(meal.contain_dish.all())
+    return {
+        "meal_id": meal.meal_id,
+        "category": meal.category,
+        "total_calories": meal.total_calories,
+        "total_protein": meal.total_protein,
+        "total_carbohydrates": meal.total_carbohydrates,
+        "total_fat": meal.total_fat,
+        "date": meal.date.isoformat(),
+        "dishes": [
+            {
+                "dish_id": dish.dish_id,
+                "dish_name": dish.dish_name,
+                "hall_name": dish.dining_hall.name,
+            }
+            for dish in dishes
+        ],
+    }
+
+
+def _derive_meal_category(dishes):
+    for field_name in ("meal_period", "category", "course"):
+        for dish in dishes:
+            value = getattr(dish, field_name, "")
+            if value:
+                return value
+    return "Logged Meal"
+
+
+def _generate_recommendation_payload(goal, dietary_flags, today):
+    from mealPlanning.services.gemini_client import _get_client
+
+    dishes = list(
+        Dish.objects
+        .filter(last_seen=today)
+        .select_related("dining_hall")[:30]
+    )
+    if not dishes:
+        dishes = list(
+            Dish.objects
+            .select_related("dining_hall")
+            .order_by("-protein", "dish_name")[:30]
+        )
+
+    dish_list = [
+        {
+            "dish_id": d.dish_id,
+            "name": d.dish_name,
+            "hall": d.dining_hall.name,
+            "calories": d.calories,
+            "protein": d.protein,
+            "carbs": d.carbohydrates,
+            "fat": d.fat,
+            "meal_period": d.meal_period,
+            "dietary_flags": d.dietary_flags,
+        }
+        for d in dishes
+    ]
+
+    prompt = (
+        "You are a university dining nutrition advisor. "
+        f"The student's goal is: {goal or 'maintain'}. "
+        f"Preferred dietary flags: {', '.join(dietary_flags) if dietary_flags else 'none'}.\n"
+        "Here are today's available dishes:\n"
+        f"{json.dumps(dish_list, indent=2)}\n\n"
+        "Recommend exactly 3 dishes and explain why in one sentence each. "
+        "Also provide one short pro-tip about their nutrition today. "
+        "Respond ONLY with valid JSON in this exact format:\n"
+        '{"recommendations": [{"dish_id": N, "dish_name": "...", "hall_name": "...", '
+        '"reason": "...", "calories": N, "meal_period": "..."}], "tip": "..."}'
+    )
+
+    try:
+        client = _get_client()
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        text = response.text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        if text.startswith("json"):
+            text = text[4:]
+        result = json.loads(text.strip())
+        return {
+            "recommendations": result.get("recommendations", []),
+            "tip": result.get("tip", ""),
+        }
+    except Exception:
+        fallback = sorted(dish_list, key=lambda d: d["protein"], reverse=True)[:3]
+        return {
+            "recommendations": [
+                {
+                    "dish_id": d["dish_id"],
+                    "dish_name": d["name"],
+                    "hall_name": d["hall"],
+                    "reason": "High in protein",
+                    "calories": d["calories"],
+                    "meal_period": d["meal_period"],
+                }
+                for d in fallback
+            ],
+            "tip": "Try to hit your protein goal today — it helps with recovery and focus.",
+        }
 
 
 
@@ -99,6 +221,18 @@ class GoogleLogin(APIView):
                     'last_name': last_name,
                 }
             )
+            if not created:
+                updated_fields = []
+                if first_name and not user.first_name:
+                    user.first_name = first_name
+                    updated_fields.append("first_name")
+                if last_name and not user.last_name:
+                    user.last_name = last_name
+                    updated_fields.append("last_name")
+                if updated_fields:
+                    user.save(update_fields=updated_fields)
+
+            ensure_user_profile(user)
             
             # Get or create token
             token, _ = Token.objects.get_or_create(user=user)
@@ -155,7 +289,7 @@ class RegisterAPIView(APIView):
             )
 
            
-            profile = user.profile
+            profile = ensure_user_profile(user)
             profile.netID = netID
             profile.sex = sex
             profile.age = age
@@ -189,7 +323,7 @@ class LoginAPIView(APIView):
         if user is not None:
             token, created = Token.objects.get_or_create(user = user)
 
-            profile= user.profile
+            profile = ensure_user_profile(user)
 
             return Response({"token": token.key,
                              "first_name": user.first_name,
@@ -206,7 +340,7 @@ class UserProfileView(APIView):
 
     def get(self, request):
         user = request.user
-        profile=user.profile
+        profile = ensure_user_profile(user)
 
         return Response({
             "first_name": user.first_name,
@@ -229,7 +363,7 @@ class UserProfileView(APIView):
 
     def put(self, request):
         user = request.user
-        profile = user.profile
+        profile = ensure_user_profile(user)
         data = request.data
 
         # Update User fields
@@ -258,7 +392,7 @@ class DailyIntakeView(APIView):
 
     def get(self, request):
         user = request.user
-        profile = user.profile
+        profile = ensure_user_profile(user)
         today = timezone.localdate()
 
         totals = user.meals.filter(date=today).aggregate(
@@ -460,14 +594,65 @@ def user_profile_detail_view(request, netID):
     return JsonResponse(data)
     
 
-class MealListView(ListView):
+class MealListView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    model = Meal
+    def get(self, request):
+        meals = (
+            Meal.objects
+            .filter(user=request.user)
+            .prefetch_related(
+                Prefetch(
+                    "contain_dish",
+                    queryset=Dish.objects.select_related("dining_hall").order_by("dish_name"),
+                )
+            )
+            .order_by("-date", "-meal_id")
+        )
+        return Response([_serialize_meal(meal) for meal in meals])
 
-    def render_to_response(self, context, **response_kwargs):
-        data = list(self.get_queryset().values())
+    def post(self, request):
+        raw_dish_ids = request.data.get("dish_ids")
+        if not isinstance(raw_dish_ids, list) or not raw_dish_ids:
+            return Response(
+                {"error": "dish_ids must be a non-empty list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        return JsonResponse(data,safe=False )
+        dish_ids = []
+        for raw_id in raw_dish_ids:
+            try:
+                dish_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                return Response(
+                    {"error": "Each dish id must be an integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        dishes = list(
+            Dish.objects
+            .filter(dish_id__in=dish_ids)
+            .select_related("dining_hall")
+        )
+        if len(dishes) != len(set(dish_ids)):
+            found_ids = {dish.dish_id for dish in dishes}
+            missing_ids = sorted(set(dish_ids) - found_ids)
+            return Response(
+                {"error": f"Some dishes could not be found: {missing_ids}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        category = str(request.data.get("category", "")).strip() or _derive_meal_category(dishes)
+
+        meal = Meal.objects.create(
+            user=request.user,
+            category=category,
+        )
+        meal.contain_dish.set(dishes)
+        meal.update_nutrition()
+        meal.refresh_from_db()
+
+        return Response(_serialize_meal(meal), status=status.HTTP_201_CREATED)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -1093,7 +1278,7 @@ class MealReportsView(APIView):
     def get(self, request):
         # 2. Grab the actual authenticated user and their profile
         user = request.user
-        profile = user.profile
+        profile = ensure_user_profile(user)
 
         # -------- Filter Meals --------
         start = request.GET.get("start")
@@ -1206,9 +1391,7 @@ class AIChatView(View):
         if display_name:
             context["name"] = display_name
 
-        profile = getattr(user, "profile", None)
-        if profile is None:
-            return context
+        profile = ensure_user_profile(user)
 
         if profile.goal:
             context["goal"] = profile.goal
@@ -1368,91 +1551,64 @@ class NutritionEstimateView(View):
 @method_decorator(csrf_exempt, name='dispatch')
 class AIRecommendView(View):
     def post(self, request):
-        from mealPlanning.models import Dish
-        from mealPlanning.services.gemini_client import _get_client
-
         try:
             body = json.loads(request.body) if request.body else {}
         except json.JSONDecodeError:
             body = {}
 
-        user_context = {}
+        user = None
+        goal = "maintain"
+        dietary_flags = body.get("dietary_flags", [])
+        force_refresh = bool(body.get("force"))
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Token "):
             token_key = auth_header.split(" ", 1)[1].strip()
-            token = Token.objects.select_related("user__profile").filter(key=token_key).first()
+            token = Token.objects.select_related("user").filter(key=token_key).first()
             if token:
-                profile = token.user.profile
-                user_context = {
-                    "goal": profile.goal or "maintain",
-                    "dietary_flags": body.get("dietary_flags", []),
-                }
+                user = token.user
+                profile = ensure_user_profile(user)
+                goal = profile.goal or "maintain"
 
         today = timezone.localdate()
-        dishes = Dish.objects.filter(last_seen=today).select_related("dining_hall")
-        if not dishes.exists():
-            dishes = Dish.objects.all().select_related("dining_hall")[:50]
+        context_signature = _recommendation_context_signature(goal, dietary_flags)
 
-        dish_list = [
-            {
-                "dish_id": d.dish_id,
-                "name": d.dish_name,
-                "hall": d.dining_hall.name,
-                "calories": d.calories,
-                "protein": d.protein,
-                "carbs": d.carbohydrates,
-                "fat": d.fat,
-                "meal_period": d.meal_period,
-                "dietary_flags": d.dietary_flags,
-            }
-            for d in dishes[:30]
-        ]
-
-        goal = user_context.get("goal", "maintain")
-        prompt = (
-            f"You are a university dining nutrition advisor. "
-            f"The student's goal is: {goal}. "
-            f"Here are today's available dishes:\n"
-            f"{json.dumps(dish_list, indent=2)}\n\n"
-            f"Recommend exactly 3 dishes and explain why in one sentence each. "
-            f"Also provide one short pro-tip about their nutrition today. "
-            f"Respond ONLY with valid JSON in this exact format:\n"
-            f'{{"recommendations": [{{"dish_id": N, "dish_name": "...", "hall_name": "...", '
-            f'"reason": "...", "calories": N, "meal_period": "..."}}, ...], '
-            f'"tip": "..."}}'
-        )
-
-        try:
-            client = _get_client()
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
+        if user is not None and not force_refresh:
+            snapshot = (
+                DailyRecommendationSnapshot.objects
+                .filter(user=user, snapshot_date=today)
+                .first()
             )
-            text = response.text.strip()
-            if text.startswith("```"):
-                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-            if text.endswith("```"):
-                text = text[:-3]
-            if text.startswith("json"):
-                text = text[4:]
-            result = json.loads(text.strip())
-            return JsonResponse(result)
-        except Exception:
-            fallback = sorted(dish_list, key=lambda d: d["protein"], reverse=True)[:3]
-            return JsonResponse({
-                "recommendations": [
-                    {
-                        "dish_id": d["dish_id"],
-                        "dish_name": d["name"],
-                        "hall_name": d["hall"],
-                        "reason": "High in protein",
-                        "calories": d["calories"],
-                        "meal_period": d["meal_period"],
-                    }
-                    for d in fallback
-                ],
-                "tip": "Try to hit your protein goal today — it helps with recovery and focus.",
-            })
+            if snapshot and snapshot.recommendations and snapshot.context_signature == context_signature:
+                return JsonResponse({
+                    "recommendations": snapshot.recommendations,
+                    "tip": snapshot.tip,
+                    "cached": True,
+                    "snapshot_date": snapshot.snapshot_date.isoformat(),
+                    "generated_at": snapshot.generated_at.isoformat(),
+                })
+
+        result = _generate_recommendation_payload(goal, dietary_flags, today)
+
+        generated_at = timezone.now()
+        if user is not None:
+            snapshot, _ = DailyRecommendationSnapshot.objects.update_or_create(
+                user=user,
+                snapshot_date=today,
+                defaults={
+                    "context_signature": context_signature,
+                    "recommendations": result["recommendations"],
+                    "tip": result["tip"],
+                },
+            )
+            generated_at = snapshot.generated_at
+
+        return JsonResponse({
+            "recommendations": result["recommendations"],
+            "tip": result["tip"],
+            "cached": False,
+            "snapshot_date": today.isoformat(),
+            "generated_at": generated_at.isoformat(),
+        })
 
 
 class SemanticSearchView(APIView):

@@ -6,6 +6,7 @@ import { Card } from "../components/Card";
 import { Button } from "../components/Button";
 import { MacroProgressBar } from "../components/MacroProgressBar";
 import { FoodIcon } from "../components/FoodIcon";
+import { useToast } from "../components/Toast";
 import Skeleton from "../components/Skeleton";
 import { IconMapPin, IconSparkle, IconPlus, IconGrid } from "../components/Icons";
 
@@ -36,6 +37,9 @@ interface Recommendation {
 interface RecommendationResponse {
   recommendations: Recommendation[];
   tip: string;
+  cached?: boolean;
+  snapshot_date?: string;
+  generated_at?: string;
 }
 
 /* ── Hall hours (static) ────────────────────────────────────────────────────── */
@@ -86,10 +90,51 @@ function formatDate(): string {
   });
 }
 
+function getLocalDateKey(): string {
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getRecommendationCacheKey(token: string): string {
+  return `smarteats_dashboard_recommendations:${token.slice(0, 12)}`;
+}
+
+function readRecommendationCache(token: string): RecommendationResponse | null {
+  try {
+    const raw = localStorage.getItem(getRecommendationCacheKey(token));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RecommendationResponse;
+    if (!parsed?.snapshot_date || parsed.snapshot_date !== getLocalDateKey()) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeRecommendationCache(token: string, data: RecommendationResponse) {
+  localStorage.setItem(getRecommendationCacheKey(token), JSON.stringify(data));
+}
+
+function formatRecommendationTimestamp(timestamp?: string): string | null {
+  if (!timestamp) return null;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /* ── Component ──────────────────────────────────────────────────────────────── */
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const toast = useToast();
 
   /* Auth guard */
   useEffect(() => {
@@ -108,8 +153,10 @@ export default function Dashboard() {
   const [recData, setRecData] = useState<RecommendationResponse | null>(null);
   const [recLoading, setRecLoading] = useState(true);
   const [recError, setRecError] = useState(false);
+  const [recRefreshing, setRecRefreshing] = useState(false);
 
   const firstName = localStorage.getItem("userFirstName") ?? "";
+  const recUpdatedLabel = formatRecommendationTimestamp(recData?.generated_at);
 
   /* Fetch dining halls */
   useEffect(() => {
@@ -140,14 +187,57 @@ export default function Dashboard() {
   /* Fetch AI recommendations */
   useEffect(() => {
     const token = localStorage.getItem("authToken");
-    const headers: Record<string, string> = {};
-    if (token) headers.Authorization = `Token ${token}`;
+    if (!token) {
+      setRecLoading(false);
+      return;
+    }
+
+    const cached = readRecommendationCache(token);
+    if (cached) {
+      setRecData(cached);
+      setRecError(false);
+      setRecLoading(false);
+      return;
+    }
+
     axios
-      .post<RecommendationResponse>(`${API_BASE}/ai-recommend/`, {}, { headers })
-      .then((res) => setRecData(res.data))
+      .post<RecommendationResponse>(
+        `${API_BASE}/ai-recommend/`,
+        {},
+        { headers: { Authorization: `Token ${token}` } },
+      )
+      .then((res) => {
+        setRecData(res.data);
+        setRecError(false);
+        writeRecommendationCache(token, res.data);
+      })
       .catch(() => setRecError(true))
       .finally(() => setRecLoading(false));
   }, []);
+
+  const refreshRecommendations = async () => {
+    const token = localStorage.getItem("authToken");
+    if (!token || recRefreshing) return;
+
+    setRecRefreshing(true);
+    try {
+      const res = await axios.post<RecommendationResponse>(
+        `${API_BASE}/ai-recommend/`,
+        { force: true },
+        { headers: { Authorization: `Token ${token}` } },
+      );
+      setRecData(res.data);
+      setRecError(false);
+      writeRecommendationCache(token, res.data);
+      toast.success("Recommendations refreshed.");
+    } catch {
+      toast.error("Could not refresh recommendations.");
+      if (!recData) setRecError(true);
+    } finally {
+      setRecRefreshing(false);
+      setRecLoading(false);
+    }
+  };
 
   /* ── Render ─────────────────────────────────────────────────────────────── */
 
@@ -285,17 +375,51 @@ export default function Dashboard() {
 
           {/* ── 3. Recommended for You ── */}
           <section>
-            <p
+            <div
               style={{
-                ...sectionLabelStyle,
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
+                justifyContent: "space-between",
+                gap: 12,
+                marginBottom: 12,
+                flexWrap: "wrap",
               }}
             >
-              <IconSparkle size={14} color="var(--se-text-faint)" />
-              Recommended for You
-            </p>
+              <div>
+                <p
+                  style={{
+                    ...sectionLabelStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 0,
+                    paddingBottom: 0,
+                  }}
+                >
+                  <IconSparkle size={14} color="var(--se-text-faint)" />
+                  Recommended for You
+                </p>
+                {recUpdatedLabel && (
+                  <p
+                    style={{
+                      fontSize: "var(--se-text-xs)",
+                      color: "var(--se-text-muted)",
+                      margin: "4px 0 0",
+                    }}
+                  >
+                    Updated today at {recUpdatedLabel}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={recRefreshing}
+                onClick={refreshRecommendations}
+              >
+                Refresh
+              </Button>
+            </div>
 
             {recLoading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

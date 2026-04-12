@@ -56,6 +56,21 @@ interface ChartRow {
   grams: number;
 }
 
+interface MealLogEntry {
+  meal_id: number;
+  category: string | null;
+  total_calories: number;
+  total_protein: number;
+  total_carbohydrates: number;
+  total_fat: number;
+  date: string;
+  dishes: {
+    dish_id: number;
+    dish_name: string;
+    hall_name: string;
+  }[];
+}
+
 /* ─── Vega-Lite specs (detailed charts) ────────────────────────────── */
 
 const barSpec = {
@@ -221,6 +236,11 @@ function Profile() {
   const [reportLoading, setReportLoading] = useState(true);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  /* ── Meal log state ── */
+  const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
+  const [mealLogLoading, setMealLogLoading] = useState(true);
+  const [mealLogError, setMealLogError] = useState<string | null>(null);
+
   /* ── History state ── */
   const [historyData, setHistoryData] = useState<ChartRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -272,6 +292,25 @@ function Profile() {
       .finally(() => setReportLoading(false));
   };
 
+  const fetchMealLog = () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+    setMealLogError(null);
+    setMealLogLoading(true);
+    axios
+      .get<MealLogEntry[]>(`${API_BASE}/meals/`, { headers: { Authorization: `Token ${token}` } })
+      .then((res) => setMealLog(res.data))
+      .catch((err) => {
+        const status = err.response?.status;
+        setMealLogError(
+          status === 401
+            ? "Please log in again."
+            : "Could not load recent meal entries.",
+        );
+      })
+      .finally(() => setMealLogLoading(false));
+  };
+
   const fetchHistory = (days: number | null) => {
     const token = localStorage.getItem("authToken");
     if (!token) return;
@@ -305,6 +344,7 @@ function Profile() {
     }
     fetchProfile();
     fetchReport();
+    fetchMealLog();
     fetchHistory(historyDays);
   }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -313,7 +353,7 @@ function Profile() {
     const token = localStorage.getItem("authToken");
     if (!token) return;
     fetchHistory(historyDays);
-  }, [historyDays]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [historyDays]);
 
   /* ── Export handler ── */
   const handleDownload = async (format: "csv" | "json") => {
@@ -910,6 +950,81 @@ function Profile() {
             </div>
           )}
         </div>
+
+        {mealLogLoading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+            {[1, 2].map((i) => (
+              <Skeleton key={i} variant="rect" height={92} />
+            ))}
+          </div>
+        ) : mealLogError ? (
+          <Card padding="md" className="mb-4">
+            <EmptyState
+              message="Could not load recent meals"
+              sub={mealLogError}
+              action={<Button variant="secondary" size="sm" onClick={fetchMealLog}>Try Again</Button>}
+            />
+          </Card>
+        ) : mealLog.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+            {mealLog.slice(0, 6).map((entry) => (
+              <Card key={entry.meal_id} padding="sm">
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                      <span
+                        style={{
+                          fontSize: "var(--se-text-xs)",
+                          fontWeight: 700,
+                          color: "var(--se-text-accent)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                        }}
+                      >
+                        {entry.category || "Logged Meal"}
+                      </span>
+                      <span style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)" }}>
+                        {new Date(entry.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {entry.dishes.map((dish) => (
+                        <button
+                          key={`${entry.meal_id}-${dish.dish_id}`}
+                          type="button"
+                          onClick={() => navigate(`/dishes/${dish.dish_id}`)}
+                          style={{
+                            border: "1px solid var(--se-border)",
+                            borderRadius: "var(--se-radius-full)",
+                            background: "var(--se-bg-subtle)",
+                            color: "var(--se-text-main)",
+                            fontSize: "var(--se-text-xs)",
+                            padding: "6px 10px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {dish.dish_name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, auto)", gap: 8, textAlign: "right" }}>
+                    <span style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)" }}>
+                      {entry.total_calories} cal
+                    </span>
+                    <span style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)" }}>
+                      {entry.total_protein}P / {entry.total_carbohydrates}C / {entry.total_fat}F
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : null}
 
         {reportLoading ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

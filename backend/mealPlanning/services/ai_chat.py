@@ -18,6 +18,15 @@ MODEL_NAME = "gemini-2.5-flash"
 MAX_HISTORY_MESSAGES = 16
 MAX_RECOMMENDATIONS = 5
 MAX_FOLLOW_UP_SUGGESTIONS = 3
+ASSISTANT_STYLE_PREFIXES = (
+    "are you",
+    "do you",
+    "would you",
+    "could you",
+    "can you",
+    "what kind of",
+    "which kind of",
+)
 
 
 def _get_client():
@@ -188,6 +197,8 @@ def _sanitize_follow_up_suggestions(raw_suggestions):
         if len(text) > 80:
             continue
         lowered = text.lower()
+        if any(lowered.startswith(prefix) for prefix in ASSISTANT_STYLE_PREFIXES):
+            continue
         if lowered in seen:
             continue
         seen.add(lowered)
@@ -224,7 +235,10 @@ def get_response(user_message, history=None, user_context=None):
         "3. If user goals are unclear, ask one focused follow-up question.\n"
         "4. If recommending dishes, only use items from CURRENT MENU and explain tradeoffs.\n"
         "5. Prefer concrete guidance (calories/protein/carbs/fat) when available.\n"
-        "6. Keep response concise but useful (3-7 sentences).\n\n"
+        "6. Keep response concise but useful (3-7 sentences).\n"
+        "7. follow_up_suggestions must be written as user-ready prompts to tap next, "
+        'not assistant questions. Good examples: "Show vegetarian lunches", '
+        '"Find something under 400 calories", "Compare high-protein dinners".\n\n'
         "Return strict JSON with:\n"
         '- "response": string\n'
         '- "recommended_dishes": [{"dish_id": int, "dish_name": string, "reason": string}] (optional, max 5)\n'

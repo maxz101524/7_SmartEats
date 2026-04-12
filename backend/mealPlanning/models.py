@@ -208,10 +208,50 @@ class UserProfile(models.Model):
         return reverse('user_profile_detail', kwargs={'netID': self.netID})
     
 
+def _default_netid_for_user(user):
+    username = getattr(user, "username", "") or ""
+    return username if username and "@" not in username else None
+
+
+def ensure_user_profile(user):
+    try:
+        return user.profile
+    except UserProfile.DoesNotExist:
+        profile, _ = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={"netID": _default_netid_for_user(user)},
+        )
+        return profile
+
+
+class DailyRecommendationSnapshot(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="daily_recommendation_snapshots",
+    )
+    snapshot_date = models.DateField()
+    context_signature = models.CharField(max_length=255, blank=True, default="")
+    recommendations = models.JSONField(default=list, blank=True)
+    tip = models.TextField(blank=True, default="")
+    generated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "snapshot_date"],
+                name="unique_daily_recommendation_snapshot",
+            )
+        ]
+        ordering = ["-snapshot_date", "-generated_at"]
+
+    def __str__(self):
+        return f"{self.user.username} @ {self.snapshot_date}"
+
+
 
 
     
-
 class Meal(models.Model):
 
     """
@@ -313,11 +353,25 @@ class TempMealItem(models.Model):
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
-        UserProfile.objects.create(user=instance)
+        UserProfile.objects.create(
+            user=instance,
+            netID=_default_netid_for_user(instance),
+        )
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
-    instance.profile.save()
+    try:
+        profile = instance.profile
+    except UserProfile.DoesNotExist:
+        profile = UserProfile.objects.create(
+            user=instance,
+            netID=_default_netid_for_user(instance),
+        )
+    if not profile.netID:
+        default_netid = _default_netid_for_user(instance)
+        if default_netid:
+            profile.netID = default_netid
+            profile.save(update_fields=["netID"])
 
 
 @receiver(m2m_changed, sender=Meal.contain_dish.through)
