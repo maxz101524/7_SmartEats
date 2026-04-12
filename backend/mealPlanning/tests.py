@@ -3,6 +3,7 @@ import os
 import pickle
 import numpy as np
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 from django.test import TestCase
@@ -11,6 +12,7 @@ from django.db.models.signals import post_save
 from rest_framework.authtoken.models import Token
 
 from mealPlanning.models import (
+    DailyRecommendationSnapshot,
     DiningHall,
     Dish,
     Meal,
@@ -451,6 +453,102 @@ class ScrapeMenuCommandTest(TestCase):
         self.assertEqual(dish.serving_size, "1 medium banana (~120g)")
 
 
+class MealLoggingAndRecommendationsViewTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+
+        self.user = User.objects.create_user(username="meal_user", password="pw123456")
+        self.token = Token.objects.create(user=self.user)
+        self.hall = DiningHall.objects.create(name="Ikenberry Dining Center", location="Ikenberry")
+        self.dish = Dish.objects.create(
+            dish_name="Grilled Salmon",
+            category="Entrees",
+            calories=430,
+            protein=38,
+            carbohydrates=12,
+            fat=18,
+            meal_period="Dinner",
+            dining_hall=self.hall,
+            last_seen=date.today(),
+        )
+
+    def test_post_meals_creates_logged_meal(self):
+        response = self.client.post(
+            "/api/meals/",
+            data=json.dumps({"dish_ids": [self.dish.dish_id]}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Token {self.token.key}",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["total_calories"], 430)
+        self.assertEqual(payload["category"], "Dinner")
+        self.assertEqual(payload["dishes"][0]["dish_name"], "Grilled Salmon")
+        self.assertEqual(Meal.objects.filter(user=self.user).count(), 1)
+
+    @patch("mealPlanning.views._generate_recommendation_payload")
+    @patch("mealPlanning.views.ensure_user_profile")
+    def test_ai_recommend_reuses_daily_snapshot_until_forced(self, mock_ensure_profile, mock_generate):
+        mock_ensure_profile.return_value = SimpleNamespace(goal=None)
+        mock_generate.return_value = {
+            "recommendations": [
+                {
+                    "dish_id": self.dish.dish_id,
+                    "dish_name": self.dish.dish_name,
+                    "hall_name": self.hall.name,
+                    "reason": "High protein",
+                    "calories": self.dish.calories,
+                    "meal_period": self.dish.meal_period,
+                },
+            ],
+            "tip": "Keep protein high today.",
+        }
+
+        first = self.client.post(
+            "/api/ai-recommend/",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Token {self.token.key}",
+        )
+        second = self.client.post(
+            "/api/ai-recommend/",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Token {self.token.key}",
+        )
+        forced = self.client.post(
+            "/api/ai-recommend/",
+            data=json.dumps({"force": True}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Token {self.token.key}",
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertFalse(first.json()["cached"])
+        self.assertEqual(second.status_code, 200)
+        self.assertTrue(second.json()["cached"])
+        self.assertEqual(forced.status_code, 200)
+        self.assertFalse(forced.json()["cached"])
+        self.assertEqual(mock_generate.call_count, 2)
+        self.assertEqual(DailyRecommendationSnapshot.objects.filter(user=self.user).count(), 1)
+
+    @patch("mealPlanning.views.ensure_user_profile")
+    def test_meal_reports_returns_summary_with_profile_context(self, mock_ensure_profile):
+        mock_ensure_profile.return_value = SimpleNamespace(netID=None)
+        response = self.client.get(
+            "/api/meal-reports/",
+            HTTP_AUTHORIZATION=f"Token {self.token.key}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mock_ensure_profile.assert_called_once()
+        self.assertEqual(response.json()["statistics"]["total_count"], 0)
+
+
 class ExportMealsViewTest(TestCase):
     def setUp(self):
         post_save.disconnect(create_user_profile, sender=User)
@@ -570,6 +668,7 @@ class AIChatServiceTest(TestCase):
                 "Show me lower-carb options",
                 "Show me lower-carb options",
                 "x" * 120,
+                "Are you looking for vegetarian options?",
                 "What if I need vegetarian?",
             ],
         })

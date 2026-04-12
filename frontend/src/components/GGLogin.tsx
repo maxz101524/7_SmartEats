@@ -1,11 +1,11 @@
-import { GoogleLogin } from "@react-oauth/google";
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 
 const GGLogin = () => {
   const navigate = useNavigate();
-  const handleGoogleSuccess = async (credentialResponse: any) => {
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     try {
       const res = await axios.post(`${API_BASE}/google-login/`, {
         id_token: credentialResponse.credential,
@@ -14,8 +14,9 @@ const GGLogin = () => {
       console.log("Login Success! Backend response:", res.data);
 
       localStorage.setItem("authToken", res.data.key);
+      localStorage.setItem("userFirstName", res.data.user?.first_name || "");
 
-      navigate("/dishes");
+      navigate("/menu");
     } catch (error) {
       console.error("Error authenticating with backend", error);
     }
