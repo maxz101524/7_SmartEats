@@ -161,7 +161,15 @@ def dish_text(dish):
         parts.extend(dish.allergens)
     if dish.nutrition_source:
         parts.extend(_nutrition_text(dish))
-    return " ".join(parts)
+    
+    text = " ".join(parts)
+    
+    # Bridge the vocabulary gap for the embedding model
+    veggie_indicators = r"\b(greens|salad|lettuce|spinach|kale|broccoli|carrot|cauliflower|mixed veg)\b"
+    if re.search(veggie_indicators, text.lower()):
+        text += " vegetables"
+        
+    return text
 
 
 def _nutrition_text(dish):
@@ -338,7 +346,13 @@ def _normalize_text(text):
 
 def _tokenize(text):
     tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9]*", _normalize_text(text))
-    return [_stem_token(token) for token in tokens if token not in STOPWORDS]
+    stemmed = [_stem_token(token) for token in tokens if token not in STOPWORDS]
+    
+    # Force a lexical match between generic queries and specific dish names
+    if any(v in text.lower() for v in ["vegetable", "veggie"]):
+        stemmed.extend(["green", "salad", "leafy", "lettuce", "spinach"])
+        
+    return list(set(stemmed))
 
 
 def _stem_token(token):
@@ -370,6 +384,11 @@ def _semantic_query_text(query):
         text = re.sub(pattern, " ", text)
 
     text = re.sub(r"\s+", " ", text).strip()
+    
+    # Shift the vector away from dietary labels and toward literal ingredients
+    if re.search(r"\b(vegetable|vegetables|veggie|veggies)\b", text):
+        text += " greens salad leafy"
+
     return text or query.strip()
 
 
@@ -623,6 +642,15 @@ def _score_weights(intent):
             "nutrition": 0.00,
             "lexical": 0.15,
             "dietary": 0.00,
+        }
+
+    # Catch the vegetable/plant intent and boost dietary/lexical weights
+    if "plant_forward" in intent["soft_preferences"]:
+        return {
+            "semantic": 0.35,  # Reduced from 0.55 to mitigate model bias
+            "nutrition": 0.15,
+            "lexical": 0.20,
+            "dietary": 0.30,   # Boosted to favor actual greens/salads
         }
 
     if _has_nutrition_intent(intent):
