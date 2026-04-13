@@ -23,7 +23,7 @@ smarteats_week5/
 │       ├── models.py               # DiningHall, Dish (w/ embedding field), UserProfile, Meal
 │       ├── views.py                # All API views incl. SemanticSearchView
 │       ├── urls.py                 # /api/ routes
-│       ├── tests.py                # 59 Django tests
+│       ├── tests.py                # 62 Django tests
 │       ├── services/
 │       │   ├── semantic_search.py  # A9: intent parsing + embeddings + blended ranking
 │       │   ├── gemini_client.py    # Gemini dish nutrition estimation
@@ -46,6 +46,8 @@ smarteats_week5/
 ## Setup
 
 ### Install dependencies
+
+All backend Python packages required to run the API (including A9 semantic search) are listed in `backend/requirements.txt`.
 
 ```bash
 # Backend
@@ -92,7 +94,7 @@ cd backend
 python manage.py test mealPlanning --settings=SmartEats_config.settings.development -v 2
 ```
 
-59 tests, all passing.
+62 tests, all passing.
 
 ---
 
