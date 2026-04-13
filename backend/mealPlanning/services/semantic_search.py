@@ -11,12 +11,6 @@ MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 HF_API_URL = f"https://api-inference.huggingface.co/models/{MODEL_NAME}"
 EMBEDDING_DIM = 384
 EMBEDDING_SCHEMA_VERSION = 2
-# MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
-# HF_API_URL = f"https://api-inference.huggingface.co/models/{MODEL_NAME}"
-# EMBEDDING_DIM = 768
-# EMBEDDING_SCHEMA_VERSION = 3
-
-
 
 EMBEDDING_ENCODER = "normalized-sentence-embedding"
 MIN_SCORE = 0.30
@@ -79,6 +73,49 @@ SEARCH_FIELDS = (
     "dining_hall_id",
 )
 
+# ---------------------------------------------------------------------------
+# FIX 1: Dish-name → vegetable category signals
+# Curated set of substrings that reliably indicate a dish IS a vegetable dish
+# when found in its name. Used by _inferred_category_tags() to augment the
+# embedding text with plain-language "vegetables / greens" tokens so that the
+# semantic model connects them to queries like "something with vegetables".
+# ---------------------------------------------------------------------------
+DISH_NAME_VEGETABLE_SIGNALS = {
+    "spring mix", "leafy green", "arugula", "spinach", "kale", "romaine",
+    "mixed greens", "baby greens", "collard", "chard", "lettuce", "cabbage",
+    "broccoli", "cauliflower", "zucchini", "squash", "carrot", "beet",
+    "asparagus", "green bean", "edamame", "pea", "corn", "cucumber",
+    "tomato", "pepper", "onion", "mushroom", "eggplant", "artichoke",
+    "brussels sprout", "bok choy", "leek", "celery", "radish", "turnip",
+    "parsnip", "fennel", "okra", "snap pea", "snow pea", "watercress",
+    "endive", "radicchio", "swiss chard",
+}
+
+# ---------------------------------------------------------------------------
+# FIX 2: Query-side soft expansions
+# Expands vague produce-related terms in the user's query so the query
+# embedding is pulled toward the same region of the vector space as actual
+# vegetable dish names. Applied inside _semantic_query_text().
+# ---------------------------------------------------------------------------
+SOFT_QUERY_EXPANSIONS = {
+    r"\bvegetables?\b": "vegetables greens leafy produce",
+    r"\bveggies?\b": "vegetables greens leafy produce",
+    r"\bgreens\b": "greens leafy vegetables salad",
+    r"\bsalad\b": "salad greens leafy vegetables",
+    # Intentionally NOT expanding "plant-based" here — we want the query for
+    # plant-based foods to stay near that semantic region, not vegetables.
+}
+
+# ---------------------------------------------------------------------------
+# FIX 4: Signals that a "plant-based" dish is a protein substitute, not a
+# vegetable dish. Used in _dietary_fit() to discount false plant_forward hits.
+# ---------------------------------------------------------------------------
+PROCESSED_SUBSTITUTE_SIGNALS = {
+    "fillet", "burger", "nugget", "sausage", "patty", "bacon",
+    "chicken", "beef", "pork", "fish", "steak", "meatball", "wing",
+    "rib", "drumstick", "tender", "strip", "schnitzel", "cutlet",
+}
+
 
 def _use_local_model():
     """Return True when USE_LOCAL_MODEL=true is set in the environment."""
@@ -101,8 +138,6 @@ def _normalize_vector(value, *, allow_token_matrix=False):
     vec = np.asarray(value, dtype=np.float32).squeeze()
 
     if vec.ndim == 2 and allow_token_matrix and vec.shape[-1] == EMBEDDING_DIM:
-        # Some HF feature-extraction backends return token embeddings. Mean-pooling
-        # keeps query semantics instead of accidentally using only the first token.
         vec = vec.mean(axis=0)
 
     if vec.ndim != 1 or vec.shape[0] != EMBEDDING_DIM:
@@ -144,6 +179,27 @@ def _encode(text):
     return _encode_via_hf_api(text)
 
 
+# ---------------------------------------------------------------------------
+# FIX 1 (continued): Infer plain-language category tags from the dish name.
+# These tags are appended to the embedding text so the vector space reflects
+# what the dish *is* rather than just what it's called.
+# ---------------------------------------------------------------------------
+def _inferred_category_tags(dish):
+    """
+    Emit plain-language category words derived from the dish name.
+
+    Problem solved: Dishes named "Spring Mix Leafy Greens" or "Roasted Broccoli"
+    don't contain the word "vegetables", so their embeddings don't land near
+    queries like "something with vegetables". By appending explicit category
+    tags to the embedding text we fix that gap without touching the model.
+    """
+    text = _normalize_text(dish.dish_name)
+    tags = []
+    if any(signal in text for signal in DISH_NAME_VEGETABLE_SIGNALS):
+        tags.extend(["vegetables", "vegetable dish", "greens", "produce"])
+    return tags
+
+
 def dish_text(dish):
     """Build a plain-text representation of a dish for embedding."""
     parts = [dish.dish_name]
@@ -161,15 +217,10 @@ def dish_text(dish):
         parts.extend(dish.allergens)
     if dish.nutrition_source:
         parts.extend(_nutrition_text(dish))
-    
-    text = " ".join(parts)
-    
-    # Bridge the vocabulary gap for the embedding model
-    veggie_indicators = r"\b(greens|salad|lettuce|spinach|kale|broccoli|carrot|cauliflower|mixed veg)\b"
-    if re.search(veggie_indicators, text.lower()):
-        text += " vegetables"
-        
-    return text
+    # FIX 1: append inferred category tags so vegetable dishes embed near
+    # vegetable queries even when the dish name uses produce-specific language.
+    parts.extend(_inferred_category_tags(dish))
+    return " ".join(parts)
 
 
 def _nutrition_text(dish):
@@ -346,13 +397,7 @@ def _normalize_text(text):
 
 def _tokenize(text):
     tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9]*", _normalize_text(text))
-    stemmed = [_stem_token(token) for token in tokens if token not in STOPWORDS]
-    
-    # Force a lexical match between generic queries and specific dish names
-    if any(v in text.lower() for v in ["vegetable", "veggie"]):
-        stemmed.extend(["green", "salad", "leafy", "lettuce", "spinach"])
-        
-    return list(set(stemmed))
+    return [_stem_token(token) for token in tokens if token not in STOPWORDS]
 
 
 def _stem_token(token):
@@ -364,6 +409,15 @@ def _stem_token(token):
 
 
 def _semantic_query_text(query):
+    """
+    Produce a cleaned, enriched query string for embedding.
+
+    Changes vs original:
+    - FIX 2: Apply SOFT_QUERY_EXPANSIONS to expand vague produce/vegetable terms
+      into richer vocabulary that overlaps with how actual vegetable dishes are
+      named. This moves the query vector toward "spring mix", "leafy greens" etc.
+      rather than only "plant-based", which is a sourcing label not a food category.
+    """
     text = _normalize_text(query)
     for synonyms in ALLERGEN_SYNONYMS.values():
         for synonym in sorted(synonyms, key=len, reverse=True):
@@ -383,12 +437,12 @@ def _semantic_query_text(query):
     for pattern in numeric_patterns:
         text = re.sub(pattern, " ", text)
 
-    text = re.sub(r"\s+", " ", text).strip()
-    
-    # Shift the vector away from dietary labels and toward literal ingredients
-    if re.search(r"\b(vegetable|vegetables|veggie|veggies)\b", text):
-        text += " greens salad leafy"
+    # FIX 2: Expand vague produce terms so the query vector lands near actual
+    # vegetable dish names rather than dietary-label space ("plant-based").
+    for pattern, expansion in SOFT_QUERY_EXPANSIONS.items():
+        text = re.sub(pattern, expansion, text)
 
+    text = re.sub(r"\s+", " ", text).strip()
     return text or query.strip()
 
 
@@ -644,15 +698,6 @@ def _score_weights(intent):
             "dietary": 0.00,
         }
 
-    # Catch the vegetable/plant intent and boost dietary/lexical weights
-    if "plant_forward" in intent["soft_preferences"]:
-        return {
-            "semantic": 0.35,  # Reduced from 0.55 to mitigate model bias
-            "nutrition": 0.15,
-            "lexical": 0.20,
-            "dietary": 0.30,   # Boosted to favor actual greens/salads
-        }
-
     if _has_nutrition_intent(intent):
         return {
             "semantic": 0.35,
@@ -668,7 +713,6 @@ def _score_weights(intent):
             "lexical": 0.15,
             "dietary": 0.35,
         }
- 
 
     return {
         "semantic": 0.55,
@@ -793,6 +837,18 @@ def _lexical_fit(dish, intent):
 
 
 def _dietary_fit(dish, intent):
+    """
+    Score how well a dish matches the dietary intent of the query.
+
+    FIX 4: The plant_forward branch now applies a discount factor to dishes
+    whose names contain protein-substitute signals (e.g. "Plant-Based Fish
+    Fillet"). These dishes are technically plant-based by sourcing but are NOT
+    vegetable dishes — they should rank below actual produce dishes when the
+    user asks for "something with vegetables" or "veggie sides".
+
+    The discount (×0.3) keeps them eligible (they are still plant-based) but
+    prevents them from outranking true vegetable dishes.
+    """
     scores = []
     reasons = []
 
@@ -819,10 +875,18 @@ def _dietary_fit(dish, intent):
         text = _normalize_text(dish_text(dish))
         plant_terms = ("vegetable", "veggie", "greens", "salad", "plant", "vegan", "vegetarian")
         plant_score = 1.0 if any(term in text for term in plant_terms) else 0.0
+
         if _dish_has_dietary_flag(dish, "vegetarian"):
             plant_score = max(plant_score, 0.8)
+
+        # FIX 4: Discount protein-substitute "plant-based" dishes so they don't
+        # outrank actual vegetable dishes for queries like "something with vegetables".
+        dish_name_lower = _normalize_text(dish.dish_name)
+        if any(sig in dish_name_lower for sig in PROCESSED_SUBSTITUTE_SIGNALS):
+            plant_score *= 0.3
+
         scores.append(plant_score)
-        if plant_score > 0:
+        if plant_score > 0.4:
             reasons.append("Plant-forward match")
 
     if intent["meal_period"]:
@@ -850,6 +914,12 @@ def search(query, hall_id=None, top_k=10):
     """
     Semantic search over today's dishes.
     Returns a ranked list of dish dicts with an added 'score' field.
+
+    FIX 3: For plant_forward queries, below-threshold candidates are no longer
+    silently dropped. If fewer than top_k results cleared MIN_SCORE, the
+    remainder are backfilled from the scored-but-thresholded pool. This
+    prevents genuine vegetable dishes from disappearing entirely when their
+    embedding similarity falls just below the cutoff due to naming conventions.
     """
     if not query or not query.strip():
         return []
@@ -890,9 +960,20 @@ def search(query, hall_id=None, top_k=10):
 
     scored.sort(key=lambda item: item[0], reverse=True)
     thresholded = [item for item in scored if item[0] >= MIN_SCORE]
+
     is_plant_forward = "plant_forward" in intent["soft_preferences"]
+
     if not thresholded and (constraints_relaxed or is_plant_forward):
+        # Nothing cleared the threshold at all — return best available.
         thresholded = scored
+    elif is_plant_forward and len(thresholded) < top_k:
+        # FIX 3: Some results cleared the threshold but there aren't enough.
+        # Backfill with below-threshold candidates so that vegetable dishes
+        # that narrowly miss the cutoff still surface rather than vanishing.
+        already_included = {item[1] for item in thresholded}
+        backfill = [item for item in scored if item[1] not in already_included]
+        thresholded = thresholded + backfill[:top_k - len(thresholded)]
+
     scored = thresholded[:top_k]
 
     results = []
