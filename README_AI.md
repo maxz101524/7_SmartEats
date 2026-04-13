@@ -220,7 +220,7 @@ Added a `PROCESSED_SUBSTITUTE_SIGNALS` table (e.g., `"fillet"`, `"burger"`, `"nu
 
 Because the system lacks access to raw ingredient lists, it must rely entirely on dish names and metadata. The baseline embedding model falsely equated the sourcing label `"plant-based"` with the physical ingredient `"vegetables"`.
 
-By injecting category tags \*) and expanding the query , we built a **lexical bridge** that shifts the AI's understanding, forcing the mathematical fingerprints of specific dishes and general queries to overlap correctly.
+By injecting category tags and expanding the query , we built a **lexical bridge** that shifts the AI's understanding, forcing the mathematical fingerprints of specific dishes and general queries to overlap correctly.
 
 Furthermore:
 
