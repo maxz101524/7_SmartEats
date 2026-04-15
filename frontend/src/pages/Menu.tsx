@@ -42,6 +42,51 @@ interface DiningHall {
 
 const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Halal", "Jain"];
 const ALLERGEN_FILTERS = ["Gluten", "Milk", "Eggs", "Soy", "Corn", "Wheat", "Fish"];
+const HALL_THUMBNAIL_BASE = "/dininghall_thumbnails/";
+
+const HALL_VISUALS = [
+  {
+    matcher: /field\s+of\s+greens/i,
+    src: `${HALL_THUMBNAIL_BASE}field-of-greens.png`,
+    accent: "#16a34a",
+  },
+  {
+    matcher: /ikenberry/i,
+    src: `${HALL_THUMBNAIL_BASE}Ikenberry.png`,
+    accent: "#dc2626",
+  },
+  {
+    matcher: /illinois\s+street|isr/i,
+    src: `${HALL_THUMBNAIL_BASE}ISR.png`,
+    accent: "#2563eb",
+  },
+  {
+    matcher: /kosher/i,
+    src: `${HALL_THUMBNAIL_BASE}kosher-kitchen.png`,
+    accent: "#7c3aed",
+  },
+  {
+    matcher: /lincoln|allen/i,
+    src: `${HALL_THUMBNAIL_BASE}Allen-hall.png`,
+    accent: "#ea580c",
+  },
+  {
+    matcher: /pennsylvania|par/i,
+    src: `${HALL_THUMBNAIL_BASE}PAR.png`,
+    accent: "#0891b2",
+  },
+];
+
+function getHallVisual(hall: DiningHall) {
+  const searchableText = `${hall.name} ${hall.location}`;
+
+  return (
+    HALL_VISUALS.find((visual) => visual.matcher.test(searchableText)) ?? {
+      src: "",
+      accent: "var(--se-primary)",
+    }
+  );
+}
 
 function getAiErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
@@ -101,13 +146,16 @@ function ChevronRight() {
 function HallSelectionCard({
   hall,
   selected,
+  compact = false,
   onClick,
 }: {
   hall: DiningHall;
   selected?: boolean;
+  compact?: boolean;
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const visual = getHallVisual(hall);
 
   return (
     <button
@@ -119,11 +167,11 @@ function HallSelectionCard({
       style={{
         ...panelStyle,
         display: "flex",
-        alignItems: "center",
-        gap: 16,
+        flexDirection: "column",
         width: "100%",
         textAlign: "left",
-        padding: "18px 20px",
+        padding: 0,
+        overflow: "hidden",
         cursor: "pointer",
         borderColor: selected || hovered ? "var(--se-primary)" : "var(--se-border)",
         background: selected ? "var(--se-primary-dim)" : "var(--se-bg-surface)",
@@ -134,54 +182,156 @@ function HallSelectionCard({
     >
       <div
         style={{
-          width: 14,
-          height: 14,
-          borderRadius: "50%",
-          flexShrink: 0,
-          background: selected ? "var(--se-primary)" : "var(--se-success)",
-          boxShadow: selected ? "0 0 0 5px rgba(var(--se-primary-rgb), 0.12)" : "none",
+          position: "relative",
+          width: "100%",
+          height: compact ? 116 : 164,
+          overflow: "hidden",
+          background: "var(--se-bg-subtle)",
         }}
-      />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p
+      >
+        {visual.src ? (
+          <img
+            src={visual.src}
+            alt=""
+            loading="lazy"
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              transform: hovered ? "scale(1.035)" : "scale(1)",
+              transition: "transform 180ms ease",
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--se-text-inverted)",
+              fontSize: compact ? 32 : 44,
+              fontWeight: "var(--se-weight-extrabold)",
+              background: visual.accent,
+            }}
+          >
+            {hall.name.slice(0, 1)}
+          </div>
+        )}
+        <div
           style={{
-            margin: "0 0 4px",
-            fontSize: "var(--se-text-base)",
-            fontWeight: "var(--se-weight-bold)",
-            color: "var(--se-text-main)",
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0) 42%, rgba(0,0,0,0.52) 100%)",
           }}
-        >
-          {hall.name}
-        </p>
-        <p
-          style={{
-            margin: 0,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: "var(--se-text-xs)",
-            color: "var(--se-text-muted)",
-          }}
-        >
-          <IconMapPin size={12} color="var(--se-text-faint)" />
-          {hall.location}
-        </p>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+        />
         <span
           style={{
-            padding: "4px 10px",
+            position: "absolute",
+            top: 12,
+            left: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "5px 9px",
             borderRadius: "var(--se-radius-full)",
-            background: selected ? "rgba(var(--se-primary-rgb), 0.14)" : "var(--se-bg-subtle)",
-            color: selected ? "var(--se-primary)" : "var(--se-text-muted)",
+            background: "rgba(255, 255, 255, 0.9)",
+            color: "var(--se-text-main)",
+            fontSize: 11,
+            fontWeight: 800,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: selected ? "var(--se-primary)" : "var(--se-success)",
+              boxShadow: selected ? "0 0 0 4px rgba(var(--se-primary-rgb), 0.14)" : "none",
+            }}
+          />
+          Live
+        </span>
+        <span
+          style={{
+            position: "absolute",
+            right: 12,
+            bottom: 12,
+            padding: "5px 10px",
+            borderRadius: "var(--se-radius-full)",
+            background: "rgba(255, 255, 255, 0.92)",
+            color: "var(--se-text-main)",
             fontSize: "var(--se-text-xs)",
-            fontWeight: "var(--se-weight-semibold)",
+            fontWeight: "var(--se-weight-bold)",
             whiteSpace: "nowrap",
           }}
         >
           {hall.dishes.length} dishes
         </span>
-        <span style={{ color: selected ? "var(--se-primary)" : "var(--se-text-faint)" }}>
+      </div>
+
+      <div
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: compact ? "14px 16px" : "17px 18px 18px",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p
+            style={{
+              margin: "0 0 5px",
+              fontSize: compact ? "var(--se-text-sm)" : "var(--se-text-base)",
+              fontWeight: "var(--se-weight-bold)",
+              color: "var(--se-text-main)",
+            }}
+          >
+            {hall.name}
+          </p>
+          <p
+            style={{
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: "var(--se-text-xs)",
+              color: "var(--se-text-muted)",
+              lineHeight: 1.35,
+            }}
+          >
+            <IconMapPin size={12} color="var(--se-text-faint)" />
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {hall.location}
+            </span>
+          </p>
+        </div>
+        <span
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: "50%",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            background: selected ? "var(--se-primary)" : "var(--se-bg-subtle)",
+            color: selected ? "var(--se-text-inverted)" : "var(--se-text-faint)",
+            transition: "background 140ms ease, color 140ms ease",
+          }}
+        >
           <ChevronRight />
         </span>
       </div>
@@ -669,8 +819,7 @@ export default function Menu() {
       <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 100 }}>
         <section
           style={{
-            ...panelStyle,
-            padding: "28px 28px 24px",
+            padding: "10px 4px 0",
           }}
         >
           <div
@@ -693,7 +842,8 @@ export default function Menu() {
           </div>
           <h1
             style={{
-              margin: "16px 0 8px",
+              margin: "18px 0 0",
+              maxWidth: 760,
               fontSize: "clamp(2rem, 4vw, 2.75rem)",
               lineHeight: 1,
               color: "var(--se-text-main)",
@@ -703,25 +853,12 @@ export default function Menu() {
           >
             Pick a dining hall and explore today&apos;s stations.
           </h1>
-          <p
-            style={{
-              margin: 0,
-              maxWidth: 620,
-              fontSize: "var(--se-text-sm)",
-              color: "var(--se-text-secondary)",
-              lineHeight: 1.6,
-            }}
-          >
-            SmartEats keeps the live hall menus, meal periods, nutrition stats,
-            and dietary filters intact. Choose a hall to jump into the new
-            browsing layout.
-          </p>
         </section>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[1, 2, 3].map((item) => (
-              <Skeleton key={item} variant="rect" height={112} />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <Skeleton key={item} variant="rect" height={246} />
             ))}
           </div>
         ) : hallsError ? (
@@ -744,7 +881,7 @@ export default function Menu() {
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {halls.map((hall) => (
               <HallSelectionCard
                 key={hall.Dining_Hall_ID}
@@ -939,6 +1076,7 @@ export default function Menu() {
                   key={hall.Dining_Hall_ID}
                   hall={hall}
                   selected={hall.Dining_Hall_ID === selectedHall.Dining_Hall_ID}
+                  compact
                   onClick={() => selectHall(hall)}
                 />
               ))}
