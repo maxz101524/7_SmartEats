@@ -54,6 +54,8 @@ from google.auth.transport import requests
 import os
 from django.conf import settings
 from allauth.socialaccount.models import SocialAccount
+from mealPlanning.services.uiuc_dining import DINING_OPTIONS
+from mealPlanning.services.uiuc_hours import compute_status, fetch_hours_html, parse_hours_rows
 
 
 def _recommendation_context_signature(goal, dietary_flags):
@@ -542,6 +544,27 @@ def dining_hall_view(request):
         })
 
     return JsonResponse(data, safe=False)
+
+
+def hall_status_view(_request):
+    """
+    Returns open/closed + current meal period for supported UIUC dining options.
+    Source of truth: https://web.housing.illinois.edu/diningmenus
+    """
+    html = fetch_hours_html()
+    if not html:
+        return JsonResponse({}, safe=False)
+
+    rows = parse_hours_rows(html)
+    if not rows:
+        return JsonResponse({}, safe=False)
+
+    option_ids = sorted(DINING_OPTIONS.keys())
+    status_map = compute_status(rows, option_ids=option_ids)
+
+    # Return as string keys for stable JSON.
+    payload = {str(option_id): status_map.get(option_id, {}) for option_id in option_ids}
+    return JsonResponse(payload, safe=False)
 
 class DishManagementView(View):
     @method_decorator(ensure_csrf_cookie)

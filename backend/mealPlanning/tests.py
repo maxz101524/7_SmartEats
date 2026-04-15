@@ -273,6 +273,57 @@ class GeminiClientTest(TestCase):
         self.assertIsNone(result)
 
 
+from mealPlanning.services.uiuc_hours import HoursRow, compute_status, parse_hours_rows
+
+
+class UiucHoursTest(TestCase):
+    def test_parse_hours_rows_extracts_expected_columns(self):
+        html = """
+        <html><body>
+          <table>
+            <tr>
+              <th>DiningOptionID</th><th>Date</th><th>Day</th><th>Time Period</th>
+              <th>Start24</th><th>End24</th><th>Start</th><th>End</th>
+            </tr>
+            <tr>
+              <td>1</td><td>2026-04-15</td><td>Wednesday</td><td>Lunch</td>
+              <td>10:30</td><td>13:30</td><td>10:30 AM</td><td>1:30 PM</td>
+            </tr>
+          </table>
+        </body></html>
+        """
+        rows = parse_hours_rows(html)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].dining_option_id, 1)
+        self.assertEqual(rows[0].date.isoformat(), "2026-04-15")
+        self.assertEqual(rows[0].time_period, "Lunch")
+        self.assertEqual(rows[0].start_24, "10:30")
+        self.assertEqual(rows[0].end_24, "13:30")
+        self.assertEqual(rows[0].end_label, "1:30 PM")
+
+    def test_compute_status_marks_open_and_sets_close_time(self):
+        import datetime as dt
+        from mealPlanning.services.uiuc_hours import CENTRAL_TZ
+
+        today = dt.date(2026, 4, 15)
+        rows = [
+            HoursRow(
+                dining_option_id=1,
+                date=today,
+                time_period="Lunch",
+                start_24="10:30",
+                end_24="13:30",
+                start_label="10:30 AM",
+                end_label="1:30 PM",
+            )
+        ]
+        now_dt = dt.datetime(2026, 4, 15, 12, 0, tzinfo=CENTRAL_TZ)
+        status = compute_status(rows, now_dt=now_dt, option_ids=[1])
+        self.assertTrue(status[1]["is_open"])
+        self.assertEqual(status[1]["meal_label"], "Lunch")
+        self.assertEqual(status[1]["closes_at"], "1:30 PM")
+
+
 from django.core.management import call_command
 from io import StringIO
 from datetime import date

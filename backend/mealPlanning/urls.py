@@ -5,6 +5,7 @@ from . import api_views
 urlpatterns = [
 
     path('halls/', views.dining_hall_view, name='dining_hall_list'),
+    path('hall-status/', views.hall_status_view, name='hall_status'),
     
 
     path('dishes/', views.dish_list_view, name='dish_list'),

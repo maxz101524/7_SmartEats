@@ -40,6 +40,14 @@ interface DiningHall {
   dishes: Dish[];
 }
 
+type HallStatus = {
+  is_open: boolean;
+  meal_label: string | null;
+  closes_at: string | null;
+};
+
+type HallStatusMap = Record<string, HallStatus>;
+
 const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Halal", "Jain"];
 const ALLERGEN_FILTERS = ["Gluten", "Milk", "Eggs", "Soy", "Corn", "Wheat", "Fish"];
 const HALL_THUMBNAIL_BASE = "/dininghall_thumbnails/";
@@ -145,17 +153,27 @@ function ChevronRight() {
 
 function HallSelectionCard({
   hall,
+  hallStatus,
   selected,
   compact = false,
   onClick,
 }: {
   hall: DiningHall;
+  hallStatus?: HallStatus;
   selected?: boolean;
   compact?: boolean;
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const visual = getHallVisual(hall);
+  const statusKnown = Boolean(hallStatus);
+  const isOpen = hallStatus?.is_open ?? false;
+  const statusDot = isOpen ? "var(--se-success)" : "var(--se-text-faint)";
+  const statusText = !statusKnown
+    ? "Hours unavailable"
+    : isOpen
+      ? `Open${hallStatus?.meal_label ? ` · ${hallStatus.meal_label}` : ""}${hallStatus?.closes_at ? ` until ${hallStatus.closes_at}` : ""}`
+      : "Closed";
 
   return (
     <button
@@ -198,7 +216,8 @@ function HallSelectionCard({
               width: "100%",
               height: "100%",
               objectFit: "cover",
-              transform: hovered ? "scale(1.035)" : "scale(1)",
+              objectPosition: "center",
+              transform: hovered ? "scale(1.095)" : "scale(1.06)",
               transition: "transform 180ms ease",
             }}
           />
@@ -237,13 +256,13 @@ function HallSelectionCard({
             gap: 7,
             padding: "5px 9px",
             borderRadius: "var(--se-radius-full)",
-            background: "rgba(255, 255, 255, 0.9)",
+            background: isOpen ? "rgba(236, 253, 245, 0.92)" : "rgba(255, 255, 255, 0.9)",
             color: "var(--se-text-main)",
             fontSize: 11,
             fontWeight: 800,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
+            letterSpacing: "0.04em",
             boxShadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
+            border: isOpen ? "1px solid rgba(16, 185, 129, 0.28)" : "1px solid rgba(0, 0, 0, 0.06)",
           }}
         >
           <span
@@ -251,11 +270,21 @@ function HallSelectionCard({
               width: 7,
               height: 7,
               borderRadius: "50%",
-              background: selected ? "var(--se-primary)" : "var(--se-success)",
+              background: selected ? "var(--se-primary)" : statusDot,
               boxShadow: selected ? "0 0 0 4px rgba(var(--se-primary-rgb), 0.14)" : "none",
             }}
           />
-          Live
+          <span
+            style={{
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: compact ? 175 : 220,
+            }}
+            title={statusText}
+          >
+            {statusText}
+          </span>
         </span>
         <span
           style={{
@@ -612,6 +641,7 @@ export default function Menu() {
   const [selectedHall, setSelectedHall] = useState<DiningHall | null>(null);
   const [loading, setLoading] = useState(true);
   const [hallsError, setHallsError] = useState<string | null>(null);
+  const [hallStatusMap, setHallStatusMap] = useState<HallStatusMap>({});
   const [search, setSearch] = useState("");
   const [searchMode, setSearchMode] = useState<"filter" | "ai">("filter");
   const [aiResults, setAiResults] = useState<Dish[] | null>(null);
@@ -650,6 +680,13 @@ export default function Menu() {
   useEffect(() => {
     fetchHalls();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    axios
+      .get<HallStatusMap>(`${API_BASE}/hall-status/`)
+      .then((res) => setHallStatusMap(res.data ?? {}))
+      .catch(() => setHallStatusMap({}));
+  }, []);
 
   useEffect(() => {
     if (!hallId) {
@@ -883,9 +920,23 @@ export default function Menu() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {halls.map((hall) => (
+              // UIUC DiningOptionIDs (hours endpoint) don’t necessarily equal DB IDs.
+              // We map by name to the known UIUC option IDs used for menus.
               <HallSelectionCard
                 key={hall.Dining_Hall_ID}
                 hall={hall}
+                hallStatus={(() => {
+                  const name = hall.name.toLowerCase();
+                  const optionId =
+                    name.includes("ikenberry") ? "1"
+                      : name.includes("pennsylvania") || name.includes("par") ? "2"
+                        : name.includes("illinois street") || name.includes("isr") ? "3"
+                          : name.includes("lincoln") || name.includes("allen") ? "5"
+                            : name.includes("field of greens") ? "12"
+                              : name.includes("kosher") ? "23"
+                                : null;
+                  return optionId ? hallStatusMap[optionId] : undefined;
+                })()}
                 onClick={() => selectHall(hall)}
               />
             ))}
@@ -1075,6 +1126,18 @@ export default function Menu() {
                 <HallSelectionCard
                   key={hall.Dining_Hall_ID}
                   hall={hall}
+                  hallStatus={(() => {
+                    const name = hall.name.toLowerCase();
+                    const optionId =
+                      name.includes("ikenberry") ? "1"
+                        : name.includes("pennsylvania") || name.includes("par") ? "2"
+                          : name.includes("illinois street") || name.includes("isr") ? "3"
+                            : name.includes("lincoln") || name.includes("allen") ? "5"
+                              : name.includes("field of greens") ? "12"
+                                : name.includes("kosher") ? "23"
+                                  : null;
+                    return optionId ? hallStatusMap[optionId] : undefined;
+                  })()}
                   selected={hall.Dining_Hall_ID === selectedHall.Dining_Hall_ID}
                   compact
                   onClick={() => selectHall(hall)}

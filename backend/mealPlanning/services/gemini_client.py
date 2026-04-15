@@ -22,7 +22,13 @@ def _get_client():
         import os
         api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not configured")
+        import sys
+        if getattr(settings, "DEBUG", False) or ("test" in sys.argv):
+            # In dev/test, allow a dummy key so unit tests that mock the client can
+            # exercise JSON handling without requiring secrets.
+            api_key = "DUMMY_GEMINI_API_KEY"
+        else:
+            raise ValueError("GEMINI_API_KEY not configured")
     return genai.Client(api_key=api_key)
 
 
