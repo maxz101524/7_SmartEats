@@ -781,12 +781,105 @@ class AIChatServiceTest(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["response"], "Try a lean option first.")
         self.assertEqual(result["recommended_dishes"], [
-            {"dish_id": 11, "dish_name": "Grilled Chicken", "reason": "High protein"},
+            {
+                "dish_id": 11,
+                "dish_name": "Grilled Chicken",
+                "reason": "High protein",
+                "dining_hall_name": "Illinois Street Dining Center",
+                "serving_unit": "Grill",
+            },
         ])
         self.assertEqual(result["follow_up_suggestions"], [
             "Show me lower-carb options",
             "What if I need vegetarian?",
         ])
+
+    @patch("mealPlanning.services.ai_chat._build_menu_context")
+    def test_goal_meal_plan_uses_exact_nutrition_and_filters_bakery(self, mock_build_context):
+        records = {
+            1: {
+                "dish_id": 1,
+                "dish_name": "Banana Nut Muffin",
+                "dining_hall_name": "Ikenberry Dining Center",
+                "hall_name": "Ikenberry Dining Center",
+                "serving_size": "1 piece",
+                "serving_unit": "Baked Expectations",
+                "calories": 500,
+                "protein": 6,
+                "carbohydrates": 62,
+                "fat": 26,
+            },
+            2: {
+                "dish_id": 2,
+                "dish_name": "Grilled Chicken Breast",
+                "dining_hall_name": "Ikenberry Dining Center",
+                "hall_name": "Ikenberry Dining Center",
+                "serving_size": "1 breast",
+                "serving_unit": "Grill",
+                "calories": 280,
+                "protein": 52,
+                "carbohydrates": 0,
+                "fat": 6,
+            },
+            3: {
+                "dish_id": 3,
+                "dish_name": "Turkey Patty",
+                "dining_hall_name": "Ikenberry Dining Center",
+                "hall_name": "Ikenberry Dining Center",
+                "serving_size": "1 patty",
+                "serving_unit": "Grill",
+                "calories": 250,
+                "protein": 30,
+                "carbohydrates": 2,
+                "fat": 12,
+            },
+            4: {
+                "dish_id": 4,
+                "dish_name": "Greek Yogurt",
+                "dining_hall_name": "Ikenberry Dining Center",
+                "hall_name": "Ikenberry Dining Center",
+                "serving_size": "1 cup",
+                "serving_unit": "Breakfast",
+                "calories": 140,
+                "protein": 18,
+                "carbohydrates": 8,
+                "fat": 0,
+            },
+        }
+        mock_build_context.return_value = (
+            ["Ikenberry Dining Center"],
+            "\n".join(f"- {record['dish_name']}" for record in records.values()),
+            records,
+            {ai_chat._normalize_name(record["dish_name"]): [record] for record in records.values()},
+        )
+
+        result = ai_chat.get_response(
+            "can you help me plan out a meal at ikenberry to hit my remaining goals?",
+            history=[],
+            user_context={
+                "today_remaining_goals": {
+                    "calories": 1303,
+                    "protein": 180,
+                    "carbohydrates": 64,
+                    "fat": 41,
+                }
+            },
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIn("meal_plan", result)
+        planned_names = [item["dish_name"] for item in result["meal_plan"]["items"]]
+        self.assertNotIn("Banana Nut Muffin", planned_names)
+        self.assertIn("Grilled Chicken Breast", planned_names)
+        self.assertIn("Turkey Patty", planned_names)
+        self.assertEqual(result["meal_plan"]["totals"], {
+            "calories": 1200,
+            "protein": 182,
+            "carbohydrates": 12,
+            "fat": 36,
+        })
+        chicken = next(item for item in result["meal_plan"]["items"] if item["dish_name"] == "Grilled Chicken Breast")
+        self.assertEqual(chicken["quantity"], 2)
 
 
 class NutritionEstimateViewTest(TestCase):

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
 import { useMealTray } from "../mealTray";
+import { useToast } from "../components/useToast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -10,6 +11,36 @@ interface RecommendedDish {
   dish_id: number;
   dish_name: string;
   reason: string;
+  dining_hall_name?: string;
+  hall_name?: string;
+  serving_unit?: string;
+  serving_size?: string;
+  meal_period?: string;
+  calories?: number;
+  protein?: number;
+  carbohydrates?: number;
+  fat?: number;
+  quantity?: number;
+}
+
+interface MealPlan {
+  title: string;
+  summary?: string;
+  note?: string;
+  action_label?: string;
+  items: RecommendedDish[];
+  totals?: {
+    calories: number;
+    protein: number;
+    carbohydrates: number;
+    fat: number;
+  };
+  remaining_after?: {
+    calories: number;
+    protein: number;
+    carbohydrates: number;
+    fat: number;
+  };
 }
 
 type MessageRole = "user" | "ai";
@@ -19,6 +50,7 @@ interface Message {
   role: MessageRole;
   text: string;
   recommendedDishes?: RecommendedDish[];
+  mealPlan?: MealPlan;
   followUpSuggestions?: string[];
   error?: boolean;
 }
@@ -97,47 +129,255 @@ function sanitizeFollowUpSuggestions(rawSuggestions: unknown): string[] | undefi
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
-// ─── Dish recommendation card ─────────────────────────────────────────────────
+function sanitizeRecommendedDishes(rawDishes: unknown): RecommendedDish[] | undefined {
+  if (!Array.isArray(rawDishes)) return undefined;
 
-function DishRecommendationCard({ dish, onClick }: { dish: RecommendedDish; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        background: "var(--se-bg-elevated)",
-        border: "1px solid var(--se-border)",
-        borderRadius: 12,
-        padding: "10px 14px",
-        marginTop: 8,
-        cursor: "pointer",
-        transition: "border-color 0.1s",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--se-primary)")}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--se-border)")}
-    >
-      <p
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: "var(--se-text-main)",
-          margin: "0 0 4px",
-        }}
-      >
-        {dish.dish_name}
-      </p>
-      <p style={{ fontSize: 12, color: "var(--se-text-muted)", margin: 0 }}>
-        {dish.reason}
-      </p>
-    </button>
+  const dishes = rawDishes
+    .map((raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const item = raw as Record<string, unknown>;
+      const dishId = Number(item.dish_id);
+      const dishName = String(item.dish_name || "").trim();
+      const reason = String(item.reason || "").trim();
+      if (!Number.isInteger(dishId) || dishId <= 0 || !dishName) return null;
+
+      const dish: RecommendedDish = {
+        dish_id: dishId,
+        dish_name: dishName,
+        reason,
+      };
+
+      const stringFields = [
+        "dining_hall_name",
+        "hall_name",
+        "serving_unit",
+        "serving_size",
+        "meal_period",
+      ] as const;
+      stringFields.forEach((field) => {
+        const value = item[field];
+        if (typeof value === "string" && value.trim()) {
+          dish[field] = value.trim();
+        }
+      });
+
+      const numberFields = ["calories", "protein", "carbohydrates", "fat", "quantity"] as const;
+      numberFields.forEach((field) => {
+        const value = Number(item[field]);
+        if (Number.isFinite(value)) {
+          dish[field] = value;
+        }
+      });
+
+      return dish;
+    })
+    .filter((dish): dish is RecommendedDish => dish !== null);
+
+  return dishes.length > 0 ? dishes : undefined;
+}
+
+function sanitizeMealPlan(rawPlan: unknown): MealPlan | undefined {
+  if (!rawPlan || typeof rawPlan !== "object") return undefined;
+
+  const plan = rawPlan as Record<string, unknown>;
+  const title = String(plan.title || "Suggested meal plan").trim();
+  const items = sanitizeRecommendedDishes(plan.items);
+  if (!items?.length) return undefined;
+
+  const totals =
+    plan.totals && typeof plan.totals === "object"
+      ? (plan.totals as Record<string, unknown>)
+      : null;
+  const remainingAfter =
+    plan.remaining_after && typeof plan.remaining_after === "object"
+      ? (plan.remaining_after as Record<string, unknown>)
+      : null;
+
+  return {
+    title,
+    summary: typeof plan.summary === "string" ? plan.summary : undefined,
+    note: typeof plan.note === "string" ? plan.note : undefined,
+    action_label: typeof plan.action_label === "string" ? plan.action_label : undefined,
+    items,
+    totals: totals
+      ? {
+          calories: Number(totals.calories) || 0,
+          protein: Number(totals.protein) || 0,
+          carbohydrates: Number(totals.carbohydrates) || 0,
+          fat: Number(totals.fat) || 0,
+        }
+      : undefined,
+    remaining_after: remainingAfter
+      ? {
+          calories: Number(remainingAfter.calories) || 0,
+          protein: Number(remainingAfter.protein) || 0,
+          carbohydrates: Number(remainingAfter.carbohydrates) || 0,
+          fat: Number(remainingAfter.fat) || 0,
+        }
+      : undefined,
+  };
+}
+
+function getDishHall(dish: RecommendedDish) {
+  return dish.hall_name || dish.dining_hall_name || "";
+}
+
+function hasDishNutrition(dish: RecommendedDish) {
+  return ["calories", "protein", "carbohydrates", "fat"].every(
+    (field) => Number.isFinite(Number(dish[field as keyof RecommendedDish])),
   );
 }
 
-// ─── Typing indicator ─────────────────────────────────────────────────────────
+// ─── Dish recommendation card ─────────────────────────────────────────────────
 
-function TypingDots() {
+function MacroPill({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        height: 24,
+        padding: "0 8px",
+        borderRadius: "var(--se-radius-full)",
+        background: "var(--se-bg-subtle)",
+        color,
+        fontSize: 11,
+        fontWeight: 800,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {value}
+      <span style={{ color: "var(--se-text-muted)", fontWeight: 700 }}>{label}</span>
+    </span>
+  );
+}
+
+function DishRecommendationCard({
+  dish,
+  onView,
+  onAdd,
+}: {
+  dish: RecommendedDish;
+  onView: () => void;
+  onAdd?: () => void;
+}) {
+  const hall = getDishHall(dish);
+  const canAdd = Boolean(onAdd && hall && hasDishNutrition(dish));
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        background: "var(--se-bg-elevated)",
+        border: "1px solid var(--se-border)",
+        borderRadius: 8,
+        padding: "10px 12px",
+        marginTop: 8,
+        transition: "border-color 0.1s, background 0.1s",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--se-border-strong)")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--se-border)")}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <p
+            style={{
+              fontSize: 13,
+              fontWeight: 800,
+              color: "var(--se-text-main)",
+              margin: "0 0 3px",
+            }}
+          >
+            {dish.quantity && dish.quantity > 1 ? `${dish.quantity}x ` : ""}
+            {dish.dish_name}
+          </p>
+          {(hall || dish.serving_size) && (
+            <p style={{ fontSize: 11, color: "var(--se-text-faint)", margin: "0 0 7px" }}>
+              {[dish.serving_size, hall].filter(Boolean).join(" · ")}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onView}
+          aria-label={`View ${dish.dish_name}`}
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: "50%",
+            border: "1px solid var(--se-border)",
+            background: "var(--se-bg-surface)",
+            color: "var(--se-text-secondary)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+
+      {hasDishNutrition(dish) && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+          <MacroPill label="kcal" value={Number(dish.calories) || 0} color="var(--se-primary)" />
+          <MacroPill label="P" value={Number(dish.protein) || 0} color="var(--se-macro-protein)" />
+          <MacroPill label="C" value={Number(dish.carbohydrates) || 0} color="var(--se-macro-carbs)" />
+          <MacroPill label="F" value={Number(dish.fat) || 0} color="var(--se-macro-fat)" />
+        </div>
+      )}
+
+      <p style={{ fontSize: 12, color: "var(--se-text-muted)", margin: "8px 0 0" }}>
+        {dish.reason}
+      </p>
+
+      {canAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          style={{
+            marginTop: 10,
+            width: "100%",
+            height: 34,
+            borderRadius: "var(--se-radius-full)",
+            border: "none",
+            background: "var(--se-text-main)",
+            color: "var(--se-text-inverted)",
+            fontSize: 12,
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          Add to tray
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Thinking indicator ───────────────────────────────────────────────────────
+
+const THINKING_STATES = [
+  "Reading your goals",
+  "Checking menu macros",
+  "Filtering weak matches",
+  "Building a tray",
+] as const;
+
+function ThinkingIndicator() {
+  const [stateIndex, setStateIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setStateIndex((prev) => (prev + 1) % THINKING_STATES.length);
+    }, 1300);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 16, paddingBottom: 8 }}>
       <div
@@ -151,6 +391,9 @@ function TypingDots() {
           justifyContent: "center",
           fontSize: 14,
           flexShrink: 0,
+          color: "var(--se-primary)",
+          fontWeight: 900,
+          animation: "ai-thinking-pulse 1.6s ease-in-out infinite",
         }}
       >
         ✦
@@ -160,26 +403,241 @@ function TypingDots() {
           background: "var(--se-bg-surface)",
           border: "1px solid var(--se-border)",
           borderRadius: "18px 18px 18px 4px",
-          padding: "12px 16px",
-          display: "flex",
-          gap: 5,
-          alignItems: "center",
+          padding: "11px 14px",
+          minWidth: 210,
           boxShadow: "var(--se-shadow-sm)",
+          overflow: "hidden",
+          position: "relative",
         }}
       >
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 2,
+            background: "linear-gradient(90deg, transparent, var(--se-primary), transparent)",
+            animation: "ai-thinking-sweep 1.4s ease-in-out infinite",
+          }}
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
             style={{
-              width: 6,
-              height: 6,
+              width: 8,
+              height: 8,
               borderRadius: "50%",
-              background: "var(--se-text-faint)",
-              animation: `dot-bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+              background: "var(--se-success)",
+              boxShadow: "0 0 0 4px rgba(34, 197, 94, 0.12)",
+              flexShrink: 0,
             }}
           />
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--se-text-secondary)" }}>
+            {THINKING_STATES[stateIndex]}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", marginTop: 8 }}>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "var(--se-text-faint)",
+                animation: `dot-bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormattedMessageText({ text }: { text: string }) {
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return null;
+
+  const blocks: React.ReactNode[] = [];
+  let bulletBuffer: string[] = [];
+
+  const flushBullets = () => {
+    if (bulletBuffer.length === 0) return;
+    blocks.push(
+      <ul key={`list-${blocks.length}`} style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+        {bulletBuffer.map((line) => (
+          <li key={line} style={{ marginTop: 4 }}>{line.replace(/^[-*]\s*/, "")}</li>
+        ))}
+      </ul>,
+    );
+    bulletBuffer = [];
+  };
+
+  lines.forEach((line) => {
+    if (/^[-*]\s+/.test(line)) {
+      bulletBuffer.push(line);
+      return;
+    }
+    flushBullets();
+    blocks.push(
+      <p key={`p-${blocks.length}`} style={{ margin: blocks.length === 0 ? 0 : "8px 0 0" }}>
+        {line}
+      </p>,
+    );
+  });
+  flushBullets();
+
+  return <>{blocks}</>;
+}
+
+function MealPlanCard({
+  plan,
+  onAddPlan,
+  onAddDish,
+  onViewDish,
+}: {
+  plan: MealPlan;
+  onAddPlan: () => void;
+  onAddDish: (dish: RecommendedDish) => void;
+  onViewDish: (dishId: number) => void;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        border: "1px solid var(--se-border)",
+        borderRadius: 8,
+        background: "var(--se-bg-elevated)",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ padding: "12px 12px 10px", borderBottom: "1px solid var(--se-border)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 900, color: "var(--se-text-main)" }}>
+              {plan.title}
+            </p>
+            {plan.summary && (
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--se-text-muted)" }}>
+                {plan.summary}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onAddPlan}
+            style={{
+              border: "none",
+              borderRadius: "var(--se-radius-full)",
+              background: "var(--se-primary)",
+              color: "white",
+              fontSize: 12,
+              fontWeight: 900,
+              padding: "8px 12px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {plan.action_label || "Add plan"}
+          </button>
+        </div>
+
+        {plan.totals && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            <MacroPill label="kcal" value={plan.totals.calories} color="var(--se-primary)" />
+            <MacroPill label="P" value={plan.totals.protein} color="var(--se-macro-protein)" />
+            <MacroPill label="C" value={plan.totals.carbohydrates} color="var(--se-macro-carbs)" />
+            <MacroPill label="F" value={plan.totals.fat} color="var(--se-macro-fat)" />
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {plan.items.map((dish) => (
+          <div
+            key={`${dish.dish_id}-${dish.quantity || 1}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr auto",
+              gap: 10,
+              padding: "10px 12px",
+              borderBottom: "1px solid var(--se-border)",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--se-text-main)" }}>
+                {dish.quantity && dish.quantity > 1 ? `${dish.quantity}x ` : ""}
+                {dish.dish_name}
+              </p>
+              <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--se-text-faint)" }}>
+                {[dish.serving_size, getDishHall(dish)].filter(Boolean).join(" · ")}
+              </p>
+              {hasDishNutrition(dish) && (
+                <p style={{ margin: "5px 0 0", fontSize: 11, color: "var(--se-text-muted)" }}>
+                  {dish.calories} kcal · {dish.protein}g P · {dish.carbohydrates}g C · {dish.fat}g F
+                </p>
+              )}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => onAddDish(dish)}
+                aria-label={`Add ${dish.dish_name} to tray`}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "var(--se-text-main)",
+                  color: "var(--se-text-inverted)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => onViewDish(dish.dish_id)}
+                aria-label={`View ${dish.dish_name}`}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "50%",
+                  border: "1px solid var(--se-border)",
+                  background: "var(--se-bg-surface)",
+                  color: "var(--se-text-secondary)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+          </div>
         ))}
       </div>
+
+      {plan.remaining_after && (
+        <p style={{ margin: "10px 12px 0", fontSize: 11, color: "var(--se-text-muted)" }}>
+          After this: {plan.remaining_after.calories} kcal, {plan.remaining_after.protein}g protein,{" "}
+          {plan.remaining_after.carbohydrates}g carbs, {plan.remaining_after.fat}g fat remaining.
+        </p>
+      )}
+      {plan.note && (
+        <p style={{ margin: "6px 12px 12px", fontSize: 11, color: "var(--se-text-faint)" }}>
+          {plan.note}
+        </p>
+      )}
     </div>
   );
 }
@@ -576,7 +1034,14 @@ function NutritionEstimator() {
 
 export default function AIMeals() {
   const navigate = useNavigate();
-  const { items: trayItems, totals: trayTotals, count: trayCount, uniqueCount } = useMealTray();
+  const toast = useToast();
+  const {
+    items: trayItems,
+    totals: trayTotals,
+    count: trayCount,
+    uniqueCount,
+    addItem,
+  } = useMealTray();
   const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -623,8 +1088,9 @@ export default function AIMeals() {
             role,
             text: String(item.text || ""),
             recommendedDishes: Array.isArray(item.recommendedDishes)
-              ? item.recommendedDishes
+              ? sanitizeRecommendedDishes(item.recommendedDishes)
               : undefined,
+            mealPlan: sanitizeMealPlan(item.mealPlan),
             followUpSuggestions: sanitizeFollowUpSuggestions(item.followUpSuggestions),
             error: Boolean(item.error),
           };
@@ -633,8 +1099,9 @@ export default function AIMeals() {
         .map((item) => ({
           ...item,
           recommendedDishes: Array.isArray(item.recommendedDishes)
-            ? item.recommendedDishes
+            ? sanitizeRecommendedDishes(item.recommendedDishes)
             : undefined,
+          mealPlan: sanitizeMealPlan(item.mealPlan),
           followUpSuggestions: sanitizeFollowUpSuggestions(item.followUpSuggestions),
         }));
 
@@ -721,6 +1188,57 @@ export default function AIMeals() {
     };
   }, [dailyIntake]);
 
+  const viewDish = (dishId: number) => {
+    navigate(`/dishes/${dishId}`, {
+      state: { from: "/aimeals" },
+    });
+  };
+
+  const addDishToTray = (dish: RecommendedDish, notify = true, fallbackToView = true) => {
+    const hall = getDishHall(dish);
+    if (!hall || !hasDishNutrition(dish)) {
+      if (fallbackToView) {
+        viewDish(dish.dish_id);
+      }
+      return 0;
+    }
+
+    const quantity = Math.max(1, Math.round(Number(dish.quantity) || 1));
+    addItem({
+      dish_id: dish.dish_id,
+      dish_name: dish.dish_name,
+      hall,
+      calories: Number(dish.calories) || 0,
+      protein: Number(dish.protein) || 0,
+      carbohydrates: Number(dish.carbohydrates) || 0,
+      fat: Number(dish.fat) || 0,
+      serving_size: dish.serving_size,
+    }, quantity);
+
+    if (notify) {
+      toast.success(
+        quantity > 1
+          ? `${quantity} servings of ${dish.dish_name} added to your tray.`
+          : `${dish.dish_name} added to your tray.`,
+      );
+    }
+
+    return quantity;
+  };
+
+  const addMealPlanToTray = (plan: MealPlan) => {
+    const addedServings = plan.items.reduce(
+      (count, dish) => count + addDishToTray(dish, false, false),
+      0,
+    );
+
+    if (addedServings > 0) {
+      toast.success(`${addedServings} planned serving${addedServings === 1 ? "" : "s"} added to your tray.`);
+    } else {
+      toast.info("Open a dish first to add it to your tray.");
+    }
+  };
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
 
@@ -751,7 +1269,8 @@ export default function AIMeals() {
           id: nextId.current++,
           role: "ai",
           text: data.response || "I'm not sure how to help with that.",
-          recommendedDishes: data.recommended_dishes?.length > 0 ? data.recommended_dishes : undefined,
+          recommendedDishes: sanitizeRecommendedDishes(data.recommended_dishes),
+          mealPlan: sanitizeMealPlan(data.meal_plan),
           followUpSuggestions: sanitizeFollowUpSuggestions(data.follow_up_suggestions),
         };
         setMessages((prev) => [...prev, aiMsg]);
@@ -785,6 +1304,17 @@ export default function AIMeals() {
         @keyframes dot-bounce {
           0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
           40%            { transform: translateY(-6px); opacity: 1; }
+        }
+
+        @keyframes ai-thinking-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.82; }
+          50%      { transform: scale(1.08); opacity: 1; }
+        }
+
+        @keyframes ai-thinking-sweep {
+          0%   { transform: translateX(-100%); opacity: 0; }
+          20%  { opacity: 1; }
+          100% { transform: translateX(100%); opacity: 0; }
         }
 
         /* Remove browser/Tailwind focus rings on the AI chatbox only */
@@ -1066,18 +1596,24 @@ export default function AIMeals() {
                           lineHeight: 1.5,
                         }}
                       >
-                        <p style={{ margin: 0 }}>{msg.text}</p>
-                        {msg.recommendedDishes?.map((dish) => (
-                          <DishRecommendationCard
-                            key={dish.dish_id}
-                            dish={dish}
-                            onClick={() =>
-                              navigate(`/dishes/${dish.dish_id}`, {
-                                state: { from: "/aimeals" },
-                              })
-                            }
+                        <FormattedMessageText text={msg.text} />
+                        {msg.mealPlan ? (
+                          <MealPlanCard
+                            plan={msg.mealPlan}
+                            onAddPlan={() => addMealPlanToTray(msg.mealPlan as MealPlan)}
+                            onAddDish={(dish) => addDishToTray(dish)}
+                            onViewDish={viewDish}
                           />
-                        ))}
+                        ) : (
+                          msg.recommendedDishes?.map((dish) => (
+                            <DishRecommendationCard
+                              key={dish.dish_id}
+                              dish={dish}
+                              onView={() => viewDish(dish.dish_id)}
+                              onAdd={() => addDishToTray(dish)}
+                            />
+                          ))
+                        )}
                         {msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
                             {msg.followUpSuggestions.map((suggestion) => (
@@ -1105,7 +1641,7 @@ export default function AIMeals() {
                     </div>
                   ))}
 
-                  {loading && <TypingDots />}
+                  {loading && <ThinkingIndicator />}
                 </div>
               )}
             </div>
