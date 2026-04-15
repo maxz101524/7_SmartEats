@@ -7,7 +7,6 @@ import type { FoodCategory } from "../components/FoodIcon";
 import { FilterChip } from "../components/FilterChip";
 import { Card } from "../components/Card";
 import { Button } from "../components/Button";
-import { MealTrayCard } from "../components/MealTrayCard";
 import Skeleton from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
 import { IconClose, IconMapPin, IconSearch } from "../components/Icons";
@@ -281,11 +280,11 @@ function CompactDishCard({
             minWidth: 64,
             height: 64,
             borderRadius: "18px",
-            background: "linear-gradient(180deg, var(--se-primary-dim) 0%, rgba(var(--se-primary-rgb), 0.08) 100%)",
+            background: "var(--se-bg-elevated)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            border: "1px solid rgba(var(--se-primary-rgb), 0.14)",
+            border: "1px solid var(--se-border)",
           }}
         >
           <FoodIcon dishName={dish.dish_name} category={dish.category as FoodCategory} size="lg" />
@@ -660,13 +659,11 @@ export default function Menu() {
 
   if (!selectedHall) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 100 }}>
         <section
           style={{
             ...panelStyle,
             padding: "28px 28px 24px",
-            background:
-              "linear-gradient(180deg, rgba(var(--se-primary-rgb), 0.12) 0%, var(--se-bg-surface) 100%)",
           }}
         >
           <div
@@ -675,14 +672,16 @@ export default function Menu() {
               alignItems: "center",
               padding: "6px 10px",
               borderRadius: "var(--se-radius-full)",
-              background: "rgba(var(--se-primary-rgb), 0.10)",
-              color: "var(--se-primary)",
+              background: "var(--se-bg-elevated)",
+              color: "var(--se-text-secondary)",
               fontSize: 11,
               fontWeight: 800,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
+              border: "1px solid var(--se-border)",
             }}
           >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--se-success)", marginRight: 8 }} />
             Live dining menus
           </div>
           <h1
@@ -753,13 +752,11 @@ export default function Menu() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 48 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, paddingBottom: 100 }}>
       <section
         style={{
           ...panelStyle,
-          padding: "28px",
-          background:
-            "linear-gradient(180deg, rgba(var(--se-primary-rgb), 0.14) 0%, var(--se-bg-surface) 58%, var(--se-bg-surface) 100%)",
+          padding: "26px 28px 24px",
         }}
       >
         <div
@@ -769,7 +766,6 @@ export default function Menu() {
             justifyContent: "space-between",
             alignItems: "flex-start",
             gap: 20,
-            marginBottom: 22,
           }}
         >
           <div style={{ minWidth: 0 }}>
@@ -777,17 +773,19 @@ export default function Menu() {
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 8,
-                padding: "6px 10px",
+                gap: 6,
+                padding: "5px 10px",
                 borderRadius: "var(--se-radius-full)",
-                background: "rgba(var(--se-primary-rgb), 0.10)",
-                color: "var(--se-primary)",
-                fontSize: 11,
+                background: "var(--se-bg-elevated)",
+                color: "var(--se-text-secondary)",
+                fontSize: 10,
                 fontWeight: 800,
-                letterSpacing: "0.08em",
+                letterSpacing: "0.1em",
                 textTransform: "uppercase",
+                border: "1px solid var(--se-border)",
               }}
             >
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--se-primary)" }} />
               UIUC Dining
             </div>
             <h1
@@ -941,12 +939,13 @@ export default function Menu() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
-          <div style={{ display: "flex", flexDirection: "column", gap: 24, minWidth: 0 }}>
+      </section>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
             <section
               style={{
                 ...panelStyle,
-                padding: 24,
+                padding: 22,
                 display: "flex",
                 flexDirection: "column",
                 gap: 18,
@@ -959,8 +958,8 @@ export default function Menu() {
                   gap: 10,
                   padding: 6,
                   borderRadius: "var(--se-radius-full)",
-                  background: "rgba(255,255,255,0.72)",
-                  border: "1px solid rgba(var(--se-primary-rgb), 0.10)",
+                  background: "var(--se-bg-elevated)",
+                  border: "1px solid var(--se-border)",
                   width: "fit-content",
                   maxWidth: "100%",
                 }}
@@ -1344,7 +1343,7 @@ export default function Menu() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {dishes.map((dish) => (
                         <CompactDishCard
                           key={dish.dish_id}
@@ -1360,13 +1359,7 @@ export default function Menu() {
                 ))}
               </div>
             )}
-          </div>
-
-          <div style={{ position: "sticky", top: 88 }}>
-            <MealTrayCard />
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
   );
 }

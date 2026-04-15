@@ -9,9 +9,6 @@ function Navbar() {
 
   const leftLinks = [
     { to: "/", label: "Home", icon: IconHome, isActive: () => location.pathname === "/" },
-    ...(isLoggedIn
-      ? [{ to: "/dashboard", label: "Dashboard", icon: IconGrid, isActive: () => location.pathname === "/dashboard" }]
-      : []),
     { to: "/menu", label: "Menu", icon: IconUtensils, isActive: () => location.pathname.startsWith("/menu") },
     { to: "/aimeals", label: "AI Meals", icon: IconSparkle, isActive: () => location.pathname.startsWith("/aimeals") },
   ];
@@ -21,6 +18,21 @@ function Navbar() {
     return name && name.length > 0 ? name.charAt(0).toUpperCase() : "U";
   })();
 
+  const linkBaseStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    padding: "6px 12px",
+    borderRadius: "9999px",
+    fontSize: "0.875rem",
+    fontWeight: 500,
+    textDecoration: "none",
+    whiteSpace: "nowrap",
+    color: active ? "var(--se-text-inverted)" : "var(--se-text-secondary)",
+    background: active ? "var(--se-primary)" : "transparent",
+    transition: "color 0.15s, background 0.15s",
+  });
+
   return (
     <nav
       style={{
@@ -28,39 +40,34 @@ function Navbar() {
         top: "12px",
         left: "50%",
         transform: "translateX(-50%)",
-        width: "min(800px, calc(100% - 48px))",
+        width: "min(860px, calc(100% - 48px))",
         height: "52px",
         background: "var(--se-bg-surface)",
         borderRadius: "9999px",
         boxShadow: "0 2px 16px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.04)",
         zIndex: 50,
-        display: "flex",
-        alignItems: "center",
         padding: "0 16px",
       }}
     >
-      {/* Left column — nav links */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "2px" }}>
+      {/* Left — primary nav links */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "2px",
+        }}
+      >
         {leftLinks.map((link) => {
           const active = link.isActive();
           return (
             <Link
               key={link.to}
               to={link.to}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "6px 12px",
-                borderRadius: "9999px",
-                fontSize: "0.875rem",
-                fontWeight: 500,
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-                color: active ? "var(--se-text-inverted)" : "var(--se-text-secondary)",
-                background: active ? "var(--se-primary)" : "transparent",
-                transition: "color 0.15s, background 0.15s",
-              }}
+              style={linkBaseStyle(active)}
               onMouseEnter={(e) => {
                 if (!active) {
                   e.currentTarget.style.color = "var(--se-text-main)";
@@ -81,34 +88,61 @@ function Navbar() {
         })}
       </div>
 
-      {/* Center column — logo */}
-      <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
+      {/* Center — logo, absolutely centered */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
         <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center" }}>
-          <span
-            style={{
-              color: "var(--se-primary)",
-              fontWeight: 900,
-              fontSize: "1.1rem",
-              letterSpacing: "-0.02em",
-            }}
-          >
+          <span style={{ color: "var(--se-primary)", fontWeight: 900, fontSize: "1.1rem", letterSpacing: "-0.02em" }}>
             Smart
           </span>
-          <span
-            style={{
-              color: "var(--se-text-main)",
-              fontWeight: 900,
-              fontSize: "1.1rem",
-              letterSpacing: "-0.02em",
-            }}
-          >
+          <span style={{ color: "var(--se-text-main)", fontWeight: 900, fontSize: "1.1rem", letterSpacing: "-0.02em" }}>
             Eats
           </span>
         </Link>
       </div>
 
-      {/* Right column — auth */}
-      <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+      {/* Right — Dashboard + auth */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          right: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "2px",
+        }}
+      >
+        {isLoggedIn && (
+          <Link
+            to="/dashboard"
+            style={linkBaseStyle(location.pathname === "/dashboard")}
+            onMouseEnter={(e) => {
+              if (location.pathname !== "/dashboard") {
+                e.currentTarget.style.color = "var(--se-text-main)";
+                e.currentTarget.style.background = "var(--se-bg-subtle)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (location.pathname !== "/dashboard") {
+                e.currentTarget.style.color = "var(--se-text-secondary)";
+                e.currentTarget.style.background = "transparent";
+              }
+            }}
+          >
+            <IconGrid size={15} />
+            Dashboard
+          </Link>
+        )}
         {!token ? (
           <Link
             to="/login"

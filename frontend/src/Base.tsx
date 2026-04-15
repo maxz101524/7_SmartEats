@@ -1,8 +1,11 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import FloatingMealTray from "./components/FloatingMealTray";
 
 function Base() {
   const location = useLocation();
+  const hideTrayOn = ["/login", "/register", "/gglogin"];
+  const showTray = !hideTrayOn.some((p) => location.pathname.startsWith(p));
 
   return (
     <div
@@ -10,6 +13,7 @@ function Base() {
       style={{ background: "var(--se-bg-base)", fontFamily: "var(--se-font-sans)" }}
     >
       <Navbar />
+      {showTray && <FloatingMealTray />}
 
       <main className="flex-grow w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6" style={{ paddingTop: "76px" }}>
         <div key={location.pathname} className="page-enter" style={{ animation: "fadeIn 200ms ease-out" }}>

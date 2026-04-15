@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
-import { Card } from "../components/Card";
-import { MealTrayCard } from "../components/MealTrayCard";
 import { useMealTray } from "../mealTray";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -782,7 +780,7 @@ export default function AIMeals() {
           display: "flex",
           flexDirection: "column",
           height: "calc(100vh - 76px - 48px)",
-          maxWidth: activeTab === "chat" ? 1180 : 720,
+          maxWidth: 720,
           margin: "0 auto",
           minHeight: 0,
         }}
@@ -836,11 +834,8 @@ export default function AIMeals() {
             <NutritionEstimator />
           </div>
         ) : (
-          <div
-            className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start"
-            style={{ flex: 1, minHeight: 0 }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
             {/* ── Chat messages area ──────────────────────────── */}
             <div
               ref={messagesContainerRef}
@@ -1054,8 +1049,7 @@ export default function AIMeals() {
             <div
               style={{
                 flexShrink: 0,
-                paddingTop: 12,
-                borderTop: "1px solid var(--se-border)",
+                paddingTop: 16,
               }}
             >
               {!isEmpty && (
@@ -1083,22 +1077,12 @@ export default function AIMeals() {
               <form
                 onSubmit={handleSubmit}
                 style={{
-                  display: "flex",
-                  gap: 10,
-                  alignItems: "center",
                   background: "var(--se-bg-surface)",
-                  border: "1.5px solid var(--se-border)",
-                  borderRadius: 9999,
-                  padding: "6px 6px 6px 18px",
-                  boxShadow: "var(--se-shadow-sm)",
-                }}
-                onFocus={(e) => {
-                  (e.currentTarget as HTMLFormElement).style.borderColor =
-                    "var(--se-primary)";
-                }}
-                onBlur={(e) => {
-                  (e.currentTarget as HTMLFormElement).style.borderColor =
-                    "var(--se-border)";
+                  border: "1px solid var(--se-border)",
+                  borderRadius: 22,
+                  padding: "14px 16px 10px",
+                  boxShadow: "0 4px 14px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)",
+                  transition: "border-color 150ms ease, box-shadow 150ms ease",
                 }}
               >
                 <input
@@ -1109,129 +1093,147 @@ export default function AIMeals() {
                   onChange={(e) => setInput(e.target.value)}
                   disabled={loading}
                   style={{
-                    flex: 1,
+                    width: "100%",
                     border: "none",
                     outline: "none",
                     background: "transparent",
                     fontSize: 14,
                     color: "var(--se-text-main)",
+                    padding: "4px 0 10px",
+                  }}
+                  onFocus={(e) => {
+                    const form = e.currentTarget.form;
+                    if (form) form.style.borderColor = "var(--se-border-strong)";
+                  }}
+                  onBlur={(e) => {
+                    const form = e.currentTarget.form;
+                    if (form) form.style.borderColor = "var(--se-border)";
                   }}
                 />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || loading}
+                <div
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background:
-                      input.trim() && !loading
-                        ? "var(--se-primary)"
-                        : "var(--se-bg-subtle)",
-                    border: "none",
-                    cursor: input.trim() && !loading ? "pointer" : "default",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    transition: "background 0.15s",
-                    boxShadow: "var(--se-shadow-sm)",
+                    justifyContent: "space-between",
+                    gap: 8,
                   }}
-                  aria-label="Send"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "var(--se-text-faint)",
+                    }}
                   >
-                    <path
-                      d="M3 8h10M9 4l4 4-4 4"
-                      stroke={input.trim() && !loading ? "white" : "var(--se-text-faint)"}
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
+                    {[
+                      { d: "M12 5v14M5 12h14", label: "Add" },
+                      { d: "M9 11.5V14a2 2 0 0 0 4 0V8a4 4 0 0 0-8 0v8a6 6 0 0 0 12 0V9", label: "Attach" },
+                      { d: "M4 4h16v6H4zM4 14h16v6H4z", label: "Saved" },
+                    ].map((icon) => (
+                      <button
+                        key={icon.label}
+                        type="button"
+                        aria-label={icon.label}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: "50%",
+                          border: "none",
+                          background: "transparent",
+                          color: "var(--se-text-faint)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          transition: "background 0.15s, color 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "var(--se-bg-elevated)";
+                          e.currentTarget.style.color = "var(--se-text-secondary)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.color = "var(--se-text-faint)";
+                        }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d={icon.d} />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || loading}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "7px 14px 7px 16px",
+                      borderRadius: "9999px",
+                      border: "none",
+                      background:
+                        input.trim() && !loading
+                          ? "var(--se-text-main)"
+                          : "var(--se-bg-subtle)",
+                      color:
+                        input.trim() && !loading
+                          ? "var(--se-text-inverted)"
+                          : "var(--se-text-faint)",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: input.trim() && !loading ? "pointer" : "default",
+                      transition: "all 0.15s",
+                    }}
+                    aria-label="Send"
+                  >
+                    Send
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                </div>
               </form>
 
-            </div>
-            </div>
-
-            <div className="hidden xl:block">
+              {/* AI Context strip */}
               <div
                 style={{
-                  position: "sticky",
-                  top: 88,
+                  marginTop: 10,
                   display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  fontSize: 11,
+                  color: "var(--se-text-muted)",
+                  fontWeight: 600,
                 }}
               >
-                <MealTrayCard onMealLogged={setDailyIntake} />
-
-                <Card padding="md">
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "var(--se-text-xs)",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        color: "var(--se-text-faint)",
-                      }}
-                    >
-                      AI Context
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "var(--se-text-sm)",
-                        color: "var(--se-text-secondary)",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      Logged today: {dailyIntake ? `${dailyIntake.consumed.calories} kcal` : "sign in to load"}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "var(--se-text-sm)",
-                        color: "var(--se-text-secondary)",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      Current tray: {trayCount === 0 ? "empty" : `${trayCount} servings across ${uniqueCount} dishes`}
-                    </p>
-                    {remainingSummary ? (
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "var(--se-text-sm)",
-                          color: "var(--se-primary)",
-                          lineHeight: 1.5,
-                          fontWeight: 600,
-                        }}
-                      >
-                        Remaining goals: {remainingSummary.calories} kcal · {remainingSummary.protein}P / {remainingSummary.carbs}C / {remainingSummary.fat}F
-                      </p>
-                    ) : (
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "var(--se-text-sm)",
-                          color: "var(--se-text-muted)",
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        Add goals in your profile for tighter macro-aware suggestions.
-                      </p>
-                    )}
-                  </div>
-                </Card>
+                <span>
+                  Logged today:{" "}
+                  <strong style={{ color: "var(--se-text-secondary)" }}>
+                    {dailyIntake ? `${dailyIntake.consumed.calories} kcal` : "sign in"}
+                  </strong>
+                </span>
+                <span style={{ color: "var(--se-text-faint)" }}>·</span>
+                <span>
+                  Tray:{" "}
+                  <strong style={{ color: "var(--se-text-secondary)" }}>
+                    {trayCount === 0 ? "empty" : `${trayCount} item${trayCount === 1 ? "" : "s"}`}
+                  </strong>
+                </span>
+                {remainingSummary && (
+                  <>
+                    <span style={{ color: "var(--se-text-faint)" }}>·</span>
+                    <span style={{ color: "var(--se-primary)", fontWeight: 700 }}>
+                      Remaining: {remainingSummary.calories} kcal
+                    </span>
+                  </>
+                )}
               </div>
+
+            </div>
             </div>
           </div>
         )}
