@@ -588,6 +588,19 @@ export default function AIMeals() {
 
   const suggestions = useMemo(() => pickRandom(ALL_PROMPTS, 3), []);
 
+  // Route-scoped scroll lock so the AI chat behaves like modern chat UIs:
+  // the shell owns scrolling, not the whole page (prevents reaching footer).
+  useEffect(() => {
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, []);
+
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
@@ -773,18 +786,46 @@ export default function AIMeals() {
           0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
           40%            { transform: translateY(-6px); opacity: 1; }
         }
+
+        /* Remove browser/Tailwind focus rings on the AI chatbox only */
+        .ai-chatbox-input:focus,
+        .ai-chatbox-input:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+
+        .ai-chatbox-form:focus,
+        .ai-chatbox-form:focus-visible,
+        .ai-chatbox-form:focus-within {
+          outline: none !important;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04) !important;
+        }
       `}</style>
 
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "calc(100vh - 76px - 48px)",
-          maxWidth: 720,
-          margin: "0 auto",
-          minHeight: 0,
+          position: "fixed",
+          top: 76,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          background: "var(--se-bg-base)",
+          overflow: "hidden",
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            maxWidth: 720,
+            margin: "0 auto",
+            padding: "0 16px",
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
         {/* ── Tab bar ──────────────────────────────────────── */}
         <div
           style={{
@@ -826,21 +867,45 @@ export default function AIMeals() {
               </button>
             ))}
           </div>
+
+          {activeTab === "chat" && !isEmpty && (
+            <button
+              type="button"
+              onClick={() => {
+                setMessages([]);
+                nextId.current = 1;
+                sessionStorage.removeItem(CHAT_STORAGE_KEY);
+              }}
+              style={{
+                border: "1px solid var(--se-border)",
+                background: "var(--se-bg-surface)",
+                color: "var(--se-text-muted)",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                padding: "8px 12px",
+                borderRadius: "var(--se-radius-full)",
+                boxShadow: "var(--se-shadow-sm)",
+              }}
+            >
+              New chat
+            </button>
+          )}
         </div>
 
         {/* ── Estimator tab ──────────────────────────────────── */}
         {activeTab === "estimator" ? (
-          <div style={{ flex: 1, overflowY: "auto", padding: "8px 0 16px" }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 0 16px" }}>
             <NutritionEstimator />
           </div>
         ) : (
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-            {/* ── Chat messages area ──────────────────────────── */}
+            {/* ── Chat messages area (ONLY scroll region) ───────────────── */}
             <div
               ref={messagesContainerRef}
               style={{
                 flex: 1,
+                minHeight: 0,
                 overflowY: "auto",
                 padding: isEmpty ? "0" : "8px 0 16px",
               }}
@@ -1045,37 +1110,18 @@ export default function AIMeals() {
               )}
             </div>
 
-            {/* ── Input bar ─────────────────────────────────────────── */}
+            {/* ── Composer (pinned bottom, non-scrolling) ───────────────── */}
             <div
               style={{
                 flexShrink: 0,
-                paddingTop: 16,
+                paddingTop: 12,
+                paddingBottom: 12,
+                background: "var(--se-bg-base)",
               }}
             >
-              {!isEmpty && (
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMessages([]);
-                      nextId.current = 1;
-                      sessionStorage.removeItem(CHAT_STORAGE_KEY);
-                    }}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      color: "var(--se-text-faint)",
-                      fontSize: 12,
-                      cursor: "pointer",
-                      padding: "2px 4px",
-                    }}
-                  >
-                    New chat
-                  </button>
-                </div>
-              )}
               <form
                 onSubmit={handleSubmit}
+                className="ai-chatbox-form"
                 style={{
                   background: "var(--se-bg-surface)",
                   border: "1px solid var(--se-border)",
@@ -1083,6 +1129,7 @@ export default function AIMeals() {
                   padding: "14px 16px 10px",
                   boxShadow: "0 4px 14px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)",
                   transition: "border-color 150ms ease, box-shadow 150ms ease",
+                  outline: "none",
                 }}
               >
                 <input
@@ -1092,6 +1139,7 @@ export default function AIMeals() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   disabled={loading}
+                  className="ai-chatbox-input"
                   style={{
                     width: "100%",
                     border: "none",
@@ -1234,9 +1282,9 @@ export default function AIMeals() {
               </div>
 
             </div>
-            </div>
           </div>
         )}
+        </div>
       </div>
     </>
   );

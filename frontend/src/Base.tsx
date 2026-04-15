@@ -32,7 +32,7 @@ function Base() {
         <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 24px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 24 }}>
             {/* Left: Logo + tagline */}
-            <div>
+            <div style={{ flex: "1 1 0" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
                 <span style={{ color: "var(--se-primary)", fontWeight: 900, fontSize: "1.1rem" }}>Smart</span>
                 <span style={{ color: "var(--se-text-main)", fontWeight: 900, fontSize: "1.1rem" }}>Eats</span>
@@ -43,7 +43,17 @@ function Base() {
             </div>
 
             {/* Center: Quick links */}
-            <div style={{ display: "flex", gap: 20 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "clamp(10px, 2.2vw, 18px)",
+                justifyContent: "center",
+                flex: "1 1 0",
+                minWidth: 0,
+                flexWrap: "nowrap",
+                whiteSpace: "nowrap",
+              }}
+            >
               {[
                 { to: "/menu", label: "Menu" },
                 { to: "/dashboard", label: "Dashboard" },
@@ -54,10 +64,11 @@ function Base() {
                   key={link.to}
                   to={link.to}
                   style={{
-                    fontSize: "var(--se-text-sm)",
+                    fontSize: "clamp(12px, 1.7vw, 14px)",
                     color: "var(--se-text-muted)",
                     textDecoration: "none",
                     fontWeight: 500,
+                    flexShrink: 1,
                   }}
                 >
                   {link.label}
@@ -65,10 +76,9 @@ function Base() {
               ))}
             </div>
 
-            {/* Right: Credit */}
-            <p style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-faint)", margin: 0 }}>
-              Built with React + Django
-            </p>
+            {/* Right spacer (balances centered links on wide screens) */}
+            <div style={{ flex: "1 1 0" }} />
+
           </div>
 
           {/* Bottom divider + copyright */}

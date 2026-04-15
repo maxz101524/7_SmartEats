@@ -360,14 +360,20 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
             {featureCards.map((card) => (
               <div
                 key={card.route}
                 onMouseEnter={() => setHoveredCard(card.route)}
                 onMouseLeave={() => setHoveredCard(null)}
+                className="h-full"
               >
-                <Card hover padding="md" onClick={() => navigate(card.route)}>
+                <Card
+                  hover
+                  padding="md"
+                  onClick={() => navigate(card.route)}
+                  className="h-full flex flex-col"
+                >
                   <div
                     style={{
                       width: 48,
