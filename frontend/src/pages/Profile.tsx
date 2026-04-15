@@ -9,6 +9,7 @@ import { EmptyState } from "../components/EmptyState";
 import { MacroProgressBar } from "../components/MacroProgressBar";
 import { IconDownload, IconSparkle } from "../components/Icons";
 import Skeleton from "../components/Skeleton";
+import { useToast } from "../components/useToast";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 
@@ -200,16 +201,23 @@ const sectionStyle: React.CSSProperties = {
 const ACTIVITY_OPTIONS = [
   { value: "", label: "Select..." },
   { value: "sedentary", label: "Sedentary" },
-  { value: "lightly_active", label: "Lightly Active" },
-  { value: "moderately_active", label: "Moderately Active" },
+  { value: "light", label: "Lightly Active" },
+  { value: "moderate", label: "Moderately Active" },
+  { value: "active", label: "Active" },
   { value: "very_active", label: "Very Active" },
-  { value: "extra_active", label: "Extra Active" },
 ];
+
+const GOAL_LABELS: Record<string, string> = {
+  fat_loss: "Fat Loss",
+  muscle_gain: "Muscle Gain",
+  maintain: "Maintain",
+};
 
 /* ─── Main component ─────────────────────────────────────────────────── */
 
 function Profile() {
   const navigate = useNavigate();
+  const toast = useToast();
 
   /* ── Profile state ── */
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -373,7 +381,7 @@ function Profile() {
       link.click();
       link.remove();
     } catch {
-      alert("Failed to download file.");
+      toast.error("Failed to download the export.");
     }
   };
 
@@ -389,7 +397,7 @@ function Profile() {
       setEditingIdentity(false);
       fetchProfile();
     } catch {
-      alert("Failed to update profile.");
+      toast.error("Failed to update profile.");
     } finally {
       setSavingIdentity(false);
     }
@@ -414,7 +422,7 @@ function Profile() {
       setEditingGoals(false);
       fetchProfile();
     } catch {
-      alert("Failed to update goals.");
+      toast.error("Failed to update goals.");
     } finally {
       setSavingGoals(false);
     }
@@ -450,7 +458,20 @@ function Profile() {
   const activityLabel = (val?: string) => {
     if (!val) return null;
     const found = ACTIVITY_OPTIONS.find((o) => o.value === val);
-    return found ? found.label : val;
+    if (found) return found.label;
+
+    const legacyLabels: Record<string, string> = {
+      lightly_active: "Lightly Active",
+      moderately_active: "Moderately Active",
+      extra_active: "Extra Active",
+    };
+
+    return legacyLabels[val] || val;
+  };
+
+  const goalLabel = (val?: string) => {
+    if (!val) return null;
+    return GOAL_LABELS[val] || val;
   };
 
   /* ── Input style helper ── */
@@ -768,9 +789,9 @@ function Profile() {
                 <Button variant="ghost" size="sm" onClick={startEditGoals}>
                   Edit Goals
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate("/aimeals?tab=estimator&returnTo=profile")}>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/aimeals")}>
                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <IconSparkle size={14} /> Calculate with AI
+                    <IconSparkle size={14} /> Open AI Meals
                   </span>
                 </Button>
               </div>
@@ -796,9 +817,9 @@ function Profile() {
                   <Button variant="secondary" size="sm" onClick={startEditGoals}>
                     Set Goals Manually
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => navigate("/aimeals?tab=estimator&returnTo=profile")}>
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/aimeals")}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <IconSparkle size={14} /> Calculate with AI
+                      <IconSparkle size={14} /> Open AI Meals
                     </span>
                   </Button>
                 </div>
@@ -837,7 +858,7 @@ function Profile() {
                   : null
               }
             />
-            <StatTile label="Goal" value={profile.goal} />
+            <StatTile label="Goal" value={goalLabel(profile.goal)} />
             <StatTile label="Activity" value={activityLabel(profile.activity_level)} />
           </div>
         </section>

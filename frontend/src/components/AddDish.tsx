@@ -20,6 +20,16 @@ const labelStyle: React.CSSProperties = {
   marginBottom: "8px",
 };
 
+interface DiningHallOption {
+  Dining_Hall_ID: number;
+  name: string;
+  location?: string | null;
+}
+
+interface DishManageErrorResponse {
+  error?: string;
+}
+
 function AddDish() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
@@ -28,7 +38,7 @@ function AddDish() {
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
   const [diningHall, setDiningHall] = useState("");
-  const [diningHalls, setDiningHalls] = useState<any[]>([]);
+  const [diningHalls, setDiningHalls] = useState<DiningHallOption[]>([]);
   const [hallsLoading, setHallsLoading] = useState(true);
   const [hallsError, setHallsError] = useState<string | null>(null);
   const [csrfToken, setCsrfToken] = useState("");
@@ -51,13 +61,9 @@ function AddDish() {
       method: "GET",
       credentials: "include",
     })
-      .then((response) => {
-        console.log("Hall response status:", response.status);
-        return response.json();
-      })
-      .then((data) => {
-        console.log("Dining halls received:", data);
-        setDiningHalls(data);
+      .then((response) => response.json())
+      .then((data: unknown) => {
+        setDiningHalls(Array.isArray(data) ? (data as DiningHallOption[]) : []);
         setHallsLoading(false);
         setHallsError(null);
       })
@@ -116,8 +122,6 @@ function AddDish() {
         dining_hall: parseInt(diningHall),
       };
 
-      console.log("Submitting payload:", payload);
-
       const response = await fetch(`${API_BASE}/dishes-manage/`, {
         method: "POST",
         headers: {
@@ -138,11 +142,9 @@ function AddDish() {
         setDiningHall("");
         setMessage("success:Dish added successfully!");
       } else {
-        const errorData = await response.json();
+        const errorData: DishManageErrorResponse = await response.json();
         console.error("Backend error:", errorData);
-        setMessage(
-          `error:${errorData.error || "Failed to add dish"}`,
-        );
+        setMessage(`error:${errorData.error || "Failed to add dish"}`);
       }
     } catch (error) {
       console.error("Fetch error:", error);
@@ -170,7 +172,7 @@ function AddDish() {
       <h2
         style={{
           fontSize: "var(--se-text-h2)",
-          fontWeight: "var(--se-weight-bold)" as any,
+          fontWeight: 700,
           marginBottom: "var(--se-space-6)",
           color: "var(--se-text-main)",
           borderBottom: "1px solid var(--se-border)",
@@ -349,7 +351,7 @@ function AddDish() {
               ? "Loading dining halls..."
               : "-- Select a Dining Hall --"}
           </option>
-          {diningHalls.map((hall: any) => (
+          {diningHalls.map((hall) => (
             <option key={hall.Dining_Hall_ID} value={hall.Dining_Hall_ID}>
               {hall.name}
               {hall.location ? ` (${hall.location})` : ""}

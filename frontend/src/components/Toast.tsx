@@ -1,26 +1,5 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
-
-type ToastType = "success" | "error" | "info";
-
-interface ToastItem {
-  id: number;
-  message: string;
-  type: ToastType;
-}
-
-interface ToastAPI {
-  success: (msg: string) => void;
-  error: (msg: string) => void;
-  info: (msg: string) => void;
-}
-
-const ToastContext = createContext<ToastAPI | null>(null);
-
-export function useToast(): ToastAPI {
-  const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used within ToastProvider");
-  return ctx;
-}
+import { useState, useCallback, useRef, useEffect } from "react";
+import { ToastContext, type ToastAPI, type ToastItem, type ToastType } from "./useToast";
 
 const TYPE_STYLES: Record<ToastType, { bg: string; border: string; color: string }> = {
   success: {

@@ -2,13 +2,16 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import vegaEmbed from "vega-embed";
+import type { TopLevelSpec } from "vega-lite";
 import { API_BASE } from "../config";
 import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 import Skeleton from "../components/Skeleton";
-import { useToast } from "../components/Toast";
+import { useToast } from "../components/useToast";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
+import { MealTrayCard } from "../components/MealTrayCard";
 import { IconArrowLeft, IconSparkle, IconDatabase, IconPlus, IconChartPie } from "../components/Icons";
+import { useMealTray } from "../mealTray";
 
 interface Dish {
   dish_id: number;
@@ -87,32 +90,35 @@ function DishDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const [dish, setDish] = useState<Dish | null>(null);
-  const token = localStorage.getItem("authToken");
   const toast = useToast();
-  const [adding, setAdding] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
+  const { addItem, isInTray } = useMealTray();
 
   async function handleAddToMeal() {
-    if (!token || !dish) {
-      navigate("/login");
+    if (!dish) {
       return;
     }
-    setAdding(true);
-    try {
-      await axios.post(
-        `${API_BASE}/meals/`,
-        { dish_ids: [dish.dish_id] },
-        { headers: { Authorization: `Token ${token}` } }
-      );
-      toast.success(`${dish.dish_name} added to today's meal!`);
-    } catch {
-      toast.error("Failed to add dish to meal. Please try again.");
-    } finally {
-      setAdding(false);
+
+    const result = addItem({
+      dish_id: dish.dish_id,
+      dish_name: dish.dish_name,
+      hall: dish.dining_hall__name,
+      calories: dish.calories,
+      protein: dish.protein,
+      carbohydrates: dish.carbohydrates,
+      fat: dish.fat,
+      serving_size: dish.serving_size,
+    });
+
+    if (result.added) {
+      toast.success(`${dish.dish_name} added to your tray.`);
+    } else {
+      toast.info(`${dish.dish_name} is already in your tray.`);
     }
   }
 
   const hasMacros = dish ? (dish.protein ?? 0) + (dish.carbohydrates ?? 0) + (dish.fat ?? 0) > 0 : false;
+  const dishInTray = dish ? isInTray(dish.dish_id) : false;
 
   useEffect(() => {
     axios.get(`${API_BASE}/dishes/${id}`).then((res) => setDish(res.data));
@@ -126,7 +132,7 @@ function DishDetail() {
       if (cancelled || !el.isConnected) return;
       const w = el.offsetWidth;
       const width = Math.min(w > 0 ? w : 400, 560);
-      const spec = {
+      const spec: TopLevelSpec = {
         $schema: "https://vega.github.io/schema/vega-lite/v5.json",
         width,
         height: 200,
@@ -135,7 +141,7 @@ function DishDetail() {
             { macro: "Protein", grams: dish.protein },
             { macro: "Carbs", grams: dish.carbohydrates },
             { macro: "Fat", grams: dish.fat },
-          ].filter(d => d.grams > 0),
+          ].filter((d) => d.grams > 0),
         },
         mark: { type: "arc", innerRadius: 50, cornerRadius: 4 },
         encoding: {
@@ -158,7 +164,7 @@ function DishDetail() {
         },
       };
       el.innerHTML = "";
-      vegaEmbed(el, spec as any, { actions: false, renderer: "svg" });
+      vegaEmbed(el, spec, { actions: false, renderer: "svg" });
     };
     requestAnimationFrame(() => requestAnimationFrame(run));
     return () => {
@@ -400,19 +406,23 @@ function DishDetail() {
         )}
       </div>
 
-      {/* Add to Meal CTA */}
       <div style={{ marginTop: "var(--se-space-6)" }}>
-        {token ? (
-          <Button variant="primary" size="lg" loading={adding} onClick={handleAddToMeal} className="w-full">
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <IconPlus size={18} /> Add to Today's Meal
-            </span>
-          </Button>
-        ) : (
-          <Button variant="secondary" size="lg" onClick={() => navigate("/login")} className="w-full">
-            Sign in to track meals
-          </Button>
-        )}
+        <MealTrayCard compact />
+      </div>
+
+      {/* Add to Tray CTA */}
+      <div style={{ marginTop: "var(--se-space-4)" }}>
+        <Button
+          variant={dishInTray ? "secondary" : "primary"}
+          size="lg"
+          disabled={dishInTray}
+          onClick={handleAddToMeal}
+          className="w-full"
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <IconPlus size={18} /> {dishInTray ? "Already in Tray" : "Add to Meal Tray"}
+          </span>
+        </Button>
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import { Card } from "../components/Card";
 import { Button } from "../components/Button";
 import { MacroProgressBar } from "../components/MacroProgressBar";
 import { FoodIcon } from "../components/FoodIcon";
-import { useToast } from "../components/Toast";
+import { useToast } from "../components/useToast";
 import Skeleton from "../components/Skeleton";
 import { IconMapPin, IconSparkle, IconPlus, IconGrid } from "../components/Icons";
 

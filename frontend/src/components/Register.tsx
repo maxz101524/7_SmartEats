@@ -4,7 +4,11 @@ import { useNavigate, Link } from "react-router-dom";
 import { API_BASE } from "../config";
 import { Button } from "./Button";
 import { Card } from "./Card";
-import { useToast } from "./Toast";
+import { useToast } from "./useToast";
+
+interface AuthErrorResponse {
+  error?: string;
+}
 
 const inputStyle: React.CSSProperties = {
   background: "var(--se-bg-input)",
@@ -43,10 +47,14 @@ const Register = () => {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const handleFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleFocus = (
+    e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     e.currentTarget.style.borderColor = "var(--se-border-strong)";
   };
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleBlur = (
+    e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     e.currentTarget.style.borderColor = "var(--se-border)";
   };
 
@@ -68,11 +76,12 @@ const Register = () => {
       });
 
       localStorage.setItem("authToken", response.data.token);
+      localStorage.setItem("userFirstName", firstName);
       toast.success("Account created successfully!");
       navigate("/menu");
-    } catch (err: any) {
-      if (err.response) {
-        toast.error(err.response.data.error || "Registration failed");
+    } catch (error: unknown) {
+      if (axios.isAxiosError<AuthErrorResponse>(error) && error.response?.data) {
+        toast.error(error.response.data.error || "Registration failed");
       } else {
         toast.error("Something went wrong");
       }
@@ -80,9 +89,15 @@ const Register = () => {
   };
 
   return (
-    <div style={{ background: "var(--se-bg-base)", minHeight: "100vh", padding: "40px 16px" }}>
+    <div
+      style={{
+        background: "var(--se-bg-base)",
+        minHeight: "100vh",
+        padding: "40px 16px",
+      }}
+    >
       <div style={{ maxWidth: 480, margin: "0 auto" }}>
-      <Card padding="lg">
+        <Card padding="lg">
           <h2
             style={{
               color: "var(--se-text-main)",

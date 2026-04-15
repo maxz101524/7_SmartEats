@@ -3,12 +3,10 @@ import userEvent from "@testing-library/user-event";
 import axios from "axios";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ToastProvider } from "../components/Toast.tsx";
 import Menu from "./Menu.tsx";
 
 vi.mock("axios");
-vi.mock("../components/AddDish", () => ({
-  default: () => <div data-testid="add-dish" />,
-}));
 
 const halls = [
   {
@@ -77,14 +75,16 @@ const halls = [
 
 function renderMenu(initialEntry = "/menu/1") {
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <RouteControls />
-      <Routes>
-        <Route path="/menu" element={<Menu />} />
-        <Route path="/menu/:hallId" element={<Menu />} />
-        <Route path="/dishes/:id" element={<div>Dish detail page</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <RouteControls />
+        <Routes>
+          <Route path="/menu" element={<Menu />} />
+          <Route path="/menu/:hallId" element={<Menu />} />
+          <Route path="/dishes/:id" element={<div>Dish detail page</div>} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 
@@ -99,7 +99,9 @@ function RouteControls() {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   vi.mocked(axios.get).mockResolvedValue({ data: halls });
+  vi.mocked(axios.post).mockResolvedValue({ data: {} });
 });
 
 afterEach(() => {
@@ -278,5 +280,70 @@ describe("Menu redesign", () => {
     );
 
     await screen.findByText("Query must be 200 characters or fewer.", {}, { timeout: 2000 });
+  });
+
+  it("does not render the old dish management block", async () => {
+    renderMenu();
+
+    await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
+    expect(screen.queryByText("Dish management")).not.toBeInTheDocument();
+    expect(screen.queryByText("Need something missing?")).not.toBeInTheDocument();
+  });
+
+  it("adds dishes to the tray and keeps them after rerendering on a different route", async () => {
+    const user = userEvent.setup();
+    const firstRender = renderMenu();
+
+    await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
+    await user.click(screen.getAllByRole("button", { name: "Add" })[0]);
+
+    expect(screen.getByText("1 item ready to log")).toBeInTheDocument();
+    expect(screen.getAllByText("Herb Focaccia Bread").length).toBeGreaterThan(1);
+
+    firstRender.unmount();
+    renderMenu("/menu/2");
+
+    await screen.findByRole("heading", { name: "ISR Dining Center" });
+    expect(screen.getByText("1 item ready to log")).toBeInTheDocument();
+    expect(screen.getByText("1 item ready to log")).toBeInTheDocument();
+  });
+
+  it("logs the full tray as a single meal for authenticated users", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("authToken", "test-token");
+
+    vi.mocked(axios.get).mockImplementation((url) => {
+      if (typeof url === "string" && url.includes("/daily-intake/")) {
+        return Promise.resolve({
+          data: {
+            consumed: { calories: 320, protein: 20, carbs: 30, fat: 10 },
+            goals: { calories: 2000, protein: 150, carbs: 220, fat: 70 },
+            goals_set: true,
+          },
+        });
+      }
+
+      return Promise.resolve({ data: halls });
+    });
+
+    renderMenu();
+
+    await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
+    const addButtons = screen.getAllByRole("button", { name: "Add" });
+    await user.click(addButtons[0]);
+    await user.click(addButtons[1]);
+    await user.click(screen.getByRole("button", { name: "Log tray as meal" }));
+
+    await waitFor(() => {
+      expect(vi.mocked(axios.post)).toHaveBeenCalledWith(
+        expect.stringContaining("/meals/"),
+        { dish_ids: [101, 102] },
+        { headers: { Authorization: "Token test-token" } },
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Start building your meal")).toBeInTheDocument();
+    });
   });
 });

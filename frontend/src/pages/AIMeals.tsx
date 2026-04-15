@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
+import { MealTrayStatusPill } from "../components/MealTrayCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -720,9 +721,12 @@ export default function AIMeals() {
         <div
           style={{
             display: "flex",
-            justifyContent: "center",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
             paddingBottom: 16,
             flexShrink: 0,
+            flexWrap: "wrap",
           }}
         >
           <div style={{
@@ -754,6 +758,7 @@ export default function AIMeals() {
               </button>
             ))}
           </div>
+          <MealTrayStatusPill />
         </div>
 
         {/* ── Estimator tab ──────────────────────────────────── */}

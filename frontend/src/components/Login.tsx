@@ -4,8 +4,12 @@ import { Link, useNavigate } from "react-router-dom";
 import GGLogin from "./GGLogin";
 import { Button } from "./Button";
 import { Card } from "./Card";
-import { useToast } from "./Toast";
+import { useToast } from "./useToast";
 import { API_BASE } from "../config";
+
+interface AuthErrorResponse {
+  error?: string;
+}
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -47,11 +51,10 @@ const Login = () => {
 
       toast.success("Logged in successfully!");
       navigate("/menu");
-    } catch (err: any) {
-      if (err.response && err.response.data) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError<AuthErrorResponse>(error) && error.response?.data) {
         toast.error(
-          err.response.data.error ||
-            "Login failed. Please check your credentials.",
+          error.response.data.error || "Login failed. Please check your credentials.",
         );
       } else {
         toast.error("Network error. Is the server running?");
