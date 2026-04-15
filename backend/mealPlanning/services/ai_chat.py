@@ -117,6 +117,8 @@ def _format_user_context(user_context):
 
     ordered_keys = [
         "name", "goal", "sex", "age", "height_cm", "weight_kg",
+        "activity_level", "daily_goals", "today_logged_totals",
+        "today_remaining_goals", "logged_meals_today", "current_meal_tray",
         "dietary_preferences", "allergy_avoidances",
     ]
     lines = []
@@ -124,6 +126,8 @@ def _format_user_context(user_context):
         value = user_context.get(key)
         if value in ("", None, [], {}):
             continue
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value, ensure_ascii=True)
         lines.append(f"- {key}: {value}")
     return "\n".join(lines) if lines else "No authenticated user profile context."
 

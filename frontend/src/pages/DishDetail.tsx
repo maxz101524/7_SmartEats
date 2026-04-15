@@ -92,7 +92,7 @@ function DishDetail() {
   const [dish, setDish] = useState<Dish | null>(null);
   const toast = useToast();
   const chartRef = useRef<HTMLDivElement>(null);
-  const { addItem, isInTray } = useMealTray();
+  const { addItem, getItemQuantity } = useMealTray();
 
   async function handleAddToMeal() {
     if (!dish) {
@@ -110,15 +110,18 @@ function DishDetail() {
       serving_size: dish.serving_size,
     });
 
-    if (result.added) {
+    const nextQuantity =
+      result.items.find((item) => item.dish_id === dish.dish_id)?.quantity || 1;
+
+    if (result.added || nextQuantity === 1) {
       toast.success(`${dish.dish_name} added to your tray.`);
     } else {
-      toast.info(`${dish.dish_name} is already in your tray.`);
+      toast.info(`${dish.dish_name} now has ${nextQuantity} servings in your tray.`);
     }
   }
 
   const hasMacros = dish ? (dish.protein ?? 0) + (dish.carbohydrates ?? 0) + (dish.fat ?? 0) > 0 : false;
-  const dishInTray = dish ? isInTray(dish.dish_id) : false;
+  const dishQuantity = dish ? getItemQuantity(dish.dish_id) : 0;
 
   useEffect(() => {
     axios.get(`${API_BASE}/dishes/${id}`).then((res) => setDish(res.data));
@@ -410,17 +413,28 @@ function DishDetail() {
         <MealTrayCard compact />
       </div>
 
+      {dishQuantity > 0 && (
+        <p
+          style={{
+            margin: "12px 0 0",
+            fontSize: "var(--se-text-xs)",
+            color: "var(--se-text-muted)",
+          }}
+        >
+          {dishQuantity} serving{dishQuantity === 1 ? "" : "s"} currently in your tray.
+        </p>
+      )}
+
       {/* Add to Tray CTA */}
       <div style={{ marginTop: "var(--se-space-4)" }}>
         <Button
-          variant={dishInTray ? "secondary" : "primary"}
+          variant={dishQuantity > 0 ? "secondary" : "primary"}
           size="lg"
-          disabled={dishInTray}
           onClick={handleAddToMeal}
           className="w-full"
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <IconPlus size={18} /> {dishInTray ? "Already in Tray" : "Add to Meal Tray"}
+            <IconPlus size={18} /> {dishQuantity > 0 ? "Add Another Serving" : "Add to Meal Tray"}
           </span>
         </Button>
       </div>

@@ -9,6 +9,7 @@ export interface MealTrayItem {
   carbohydrates: number;
   fat: number;
   serving_size?: string;
+  quantity: number;
 }
 
 export interface MealTrayTotals {
@@ -44,6 +45,7 @@ function sanitizeItem(raw: unknown): MealTrayItem | null {
     protein: Number(item.protein) || 0,
     carbohydrates: Number(item.carbohydrates) || 0,
     fat: Number(item.fat) || 0,
+    quantity: Math.max(1, Number(item.quantity) || 1),
     serving_size:
       typeof item.serving_size === "string" && item.serving_size.trim()
         ? item.serving_size.trim()
@@ -93,15 +95,52 @@ function writeMealTray(items: MealTrayItem[]) {
   emitMealTrayChange();
 }
 
-export function addToMealTray(item: MealTrayItem) {
+export function addToMealTray(item: Omit<MealTrayItem, "quantity">, quantity = 1) {
   const current = readMealTray();
-  if (current.some((existing) => existing.dish_id === item.dish_id)) {
-    return { added: false, items: current };
+  const amount = Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
+  const existingIndex = current.findIndex(
+    (existing) => existing.dish_id === item.dish_id,
+  );
+
+  if (existingIndex >= 0) {
+    const next = current.map((existing, index) =>
+      index === existingIndex
+        ? { ...existing, quantity: existing.quantity + amount }
+        : existing,
+    );
+    writeMealTray(next);
+    return { added: false, items: next };
   }
 
-  const next = [...current, item];
+  const next = [...current, { ...item, quantity: amount }];
   writeMealTray(next);
   return { added: true, items: next };
+}
+
+export function incrementMealTrayItem(dishId: number, amount = 1) {
+  const current = readMealTray();
+  const increment = Number.isInteger(amount) && amount > 0 ? amount : 1;
+  const next = current.map((item) =>
+    item.dish_id === dishId
+      ? { ...item, quantity: item.quantity + increment }
+      : item,
+  );
+  writeMealTray(next);
+  return next;
+}
+
+export function decrementMealTrayItem(dishId: number, amount = 1) {
+  const current = readMealTray();
+  const decrement = Number.isInteger(amount) && amount > 0 ? amount : 1;
+  const next = current
+    .map((item) =>
+      item.dish_id === dishId
+        ? { ...item, quantity: Math.max(0, item.quantity - decrement) }
+        : item,
+    )
+    .filter((item) => item.quantity > 0);
+  writeMealTray(next);
+  return next;
 }
 
 export function removeFromMealTray(dishId: number) {
@@ -117,13 +156,17 @@ export function clearMealTray() {
 export function getMealTrayTotals(items: MealTrayItem[]): MealTrayTotals {
   return items.reduce(
     (totals, item) => ({
-      calories: totals.calories + item.calories,
-      protein: totals.protein + item.protein,
-      carbohydrates: totals.carbohydrates + item.carbohydrates,
-      fat: totals.fat + item.fat,
+      calories: totals.calories + item.calories * item.quantity,
+      protein: totals.protein + item.protein * item.quantity,
+      carbohydrates: totals.carbohydrates + item.carbohydrates * item.quantity,
+      fat: totals.fat + item.fat * item.quantity,
     }),
     { calories: 0, protein: 0, carbohydrates: 0, fat: 0 },
   );
+}
+
+export function getMealTrayDishIds(items: MealTrayItem[]) {
+  return items.flatMap((item) => Array.from({ length: item.quantity }, () => item.dish_id));
 }
 
 function subscribe(callback: () => void) {
@@ -146,14 +189,20 @@ function subscribe(callback: () => void) {
 export function useMealTray() {
   const items = useSyncExternalStore(subscribe, readMealTray, () => EMPTY_TRAY);
   const totals = getMealTrayTotals(items);
+  const totalServings = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return {
     items,
     totals,
-    count: items.length,
+    count: totalServings,
+    uniqueCount: items.length,
     isInTray: (dishId: number) =>
       items.some((item) => item.dish_id === dishId),
+    getItemQuantity: (dishId: number) =>
+      items.find((item) => item.dish_id === dishId)?.quantity || 0,
     addItem: addToMealTray,
+    incrementItem: incrementMealTrayItem,
+    decrementItem: decrementMealTrayItem,
     removeItem: removeFromMealTray,
     clear: clearMealTray,
   };

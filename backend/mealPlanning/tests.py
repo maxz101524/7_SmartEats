@@ -17,6 +17,7 @@ from mealPlanning.models import (
     Dish,
     Meal,
     create_user_profile,
+    ensure_user_profile,
     save_user_profile,
 )
 from mealPlanning.services import ai_chat, semantic_search
@@ -490,6 +491,20 @@ class MealLoggingAndRecommendationsViewTest(TestCase):
         self.assertEqual(payload["dishes"][0]["dish_name"], "Grilled Salmon")
         self.assertEqual(Meal.objects.filter(user=self.user).count(), 1)
 
+    def test_post_meals_keeps_duplicate_servings_in_totals(self):
+        response = self.client.post(
+            "/api/meals/",
+            data=json.dumps({"dish_ids": [self.dish.dish_id, self.dish.dish_id]}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Token {self.token.key}",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["total_calories"], 860)
+        self.assertEqual(payload["total_protein"], 76)
+        self.assertEqual(len(payload["dishes"]), 1)
+
     @patch("mealPlanning.views._generate_recommendation_payload")
     @patch("mealPlanning.views.ensure_user_profile")
     def test_ai_recommend_reuses_daily_snapshot_until_forced(self, mock_ensure_profile, mock_generate):
@@ -629,6 +644,88 @@ class AIChatViewTest(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+
+    @patch("mealPlanning.views.ensure_user_profile")
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_ai_chat_passes_authenticated_meal_context(self, mock_get_response, mock_ensure_profile):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+
+        mock_get_response.return_value = {"response": "hello", "recommended_dishes": []}
+        mock_ensure_profile.return_value = SimpleNamespace(
+            goal="fat_loss",
+            activity_level="light",
+            sex="female",
+            age=20,
+            height_cm=165,
+            weight_kg=60,
+            daily_cal_goal=1800,
+            daily_protein_goal=140,
+            daily_carbs_goal=180,
+            daily_fat_goal=60,
+        )
+
+        user = User.objects.create_user(username="chat_user", password="pw123456")
+        token = Token.objects.create(user=user)
+        hall = DiningHall.objects.create(name="ISR Dining Center", location="ISR")
+        dish = Dish.objects.create(
+            dish_name="Greek Yogurt Parfait",
+            category="Breakfast",
+            calories=220,
+            protein=18,
+            carbohydrates=24,
+            fat=5,
+            meal_period="Breakfast",
+            dining_hall=hall,
+            last_seen=date.today(),
+        )
+
+        meal = Meal.objects.create(user=user, category="Breakfast")
+        meal.contain_dish.set([dish])
+        meal.total_calories = dish.calories
+        meal.total_protein = dish.protein
+        meal.total_carbohydrates = dish.carbohydrates
+        meal.total_fat = dish.fat
+        meal.save()
+
+        payload = {
+            "message": "What fits the rest of my macros?",
+            "history": [],
+            "tray_context": {
+                "item_count": 2,
+                "unique_dishes": 1,
+                "totals": {"calories": 440, "protein": 36, "carbohydrates": 48, "fat": 10},
+                "items": [
+                    {
+                        "dish_id": dish.dish_id,
+                        "dish_name": dish.dish_name,
+                        "hall": hall.name,
+                        "quantity": 2,
+                        "calories": dish.calories,
+                        "protein": dish.protein,
+                        "carbohydrates": dish.carbohydrates,
+                        "fat": dish.fat,
+                    }
+                ],
+            },
+        }
+        response = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Token {token.key}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mock_get_response.assert_called_once()
+        _, kwargs = mock_get_response.call_args
+        self.assertEqual(kwargs["history"], [])
+        self.assertEqual(kwargs["user_context"]["goal"], "fat_loss")
+        self.assertEqual(kwargs["user_context"]["today_logged_totals"]["calories"], 220)
+        self.assertEqual(kwargs["user_context"]["today_remaining_goals"]["protein"], 122)
+        self.assertEqual(kwargs["user_context"]["current_meal_tray"]["item_count"], 2)
 
 
 class AIChatServiceTest(TestCase):

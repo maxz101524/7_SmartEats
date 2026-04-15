@@ -93,6 +93,65 @@ def _derive_meal_category(dishes):
     return "Logged Meal"
 
 
+def _sanitize_tray_context(raw_tray_context):
+    if not isinstance(raw_tray_context, dict):
+        return None
+
+    raw_items = raw_tray_context.get("items", [])
+    items = []
+    if isinstance(raw_items, list):
+        for raw_item in raw_items[:8]:
+            if not isinstance(raw_item, dict):
+                continue
+
+            dish_name = str(raw_item.get("dish_name", "")).strip()
+            if not dish_name:
+                continue
+
+            try:
+                quantity = max(1, int(raw_item.get("quantity", 1)))
+            except (TypeError, ValueError):
+                quantity = 1
+
+            items.append({
+                "dish_id": raw_item.get("dish_id"),
+                "dish_name": dish_name,
+                "hall": str(raw_item.get("hall", "")).strip(),
+                "quantity": quantity,
+                "calories": int(raw_item.get("calories") or 0),
+                "protein": int(raw_item.get("protein") or 0),
+                "carbohydrates": int(raw_item.get("carbohydrates") or 0),
+                "fat": int(raw_item.get("fat") or 0),
+                "serving_size": str(raw_item.get("serving_size", "")).strip(),
+            })
+
+    totals = raw_tray_context.get("totals", {})
+    if not isinstance(totals, dict):
+        totals = {}
+
+    try:
+        item_count = int(raw_tray_context.get("item_count", 0))
+    except (TypeError, ValueError):
+        item_count = 0
+
+    try:
+        unique_dishes = int(raw_tray_context.get("unique_dishes", len(items)))
+    except (TypeError, ValueError):
+        unique_dishes = len(items)
+
+    return {
+        "item_count": item_count,
+        "unique_dishes": unique_dishes,
+        "totals": {
+            "calories": int(totals.get("calories") or 0),
+            "protein": int(totals.get("protein") or 0),
+            "carbohydrates": int(totals.get("carbohydrates") or 0),
+            "fat": int(totals.get("fat") or 0),
+        },
+        "items": items,
+    }
+
+
 def _generate_recommendation_payload(goal, dietary_flags, today):
     from mealPlanning.services.gemini_client import _get_client
 
@@ -631,7 +690,7 @@ class MealListView(APIView):
 
         dishes = list(
             Dish.objects
-            .filter(dish_id__in=dish_ids)
+            .filter(dish_id__in=set(dish_ids))
             .select_related("dining_hall")
         )
         if len(dishes) != len(set(dish_ids)):
@@ -642,14 +701,35 @@ class MealListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        category = str(request.data.get("category", "")).strip() or _derive_meal_category(dishes)
+        dish_lookup = {dish.dish_id: dish for dish in dishes}
+        ordered_dishes = [dish_lookup[dish_id] for dish_id in dish_ids]
+        unique_dishes = []
+        seen_ids = set()
+        for dish in ordered_dishes:
+            if dish.dish_id in seen_ids:
+                continue
+            seen_ids.add(dish.dish_id)
+            unique_dishes.append(dish)
+
+        category = str(request.data.get("category", "")).strip() or _derive_meal_category(ordered_dishes)
 
         meal = Meal.objects.create(
             user=request.user,
             category=category,
         )
-        meal.contain_dish.set(dishes)
-        meal.update_nutrition()
+        meal.contain_dish.set(unique_dishes)
+        meal.total_calories = sum(dish.calories for dish in ordered_dishes)
+        meal.total_protein = sum(dish.protein for dish in ordered_dishes)
+        meal.total_carbohydrates = sum(dish.carbohydrates for dish in ordered_dishes)
+        meal.total_fat = sum(dish.fat for dish in ordered_dishes)
+        meal.save(
+            update_fields=[
+                "total_calories",
+                "total_protein",
+                "total_carbohydrates",
+                "total_fat",
+            ]
+        )
         meal.refresh_from_db()
 
         return Response(_serialize_meal(meal), status=status.HTTP_201_CREATED)
@@ -1366,7 +1446,7 @@ class MealReportsView(APIView):
 class AIChatView(View):
     """Gemini-powered AI chat endpoint for dining recommendations."""
 
-    def _extract_user_context(self, request):
+    def _extract_user_context(self, request, tray_context=None):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Token "):
             return {}
@@ -1395,6 +1475,8 @@ class AIChatView(View):
 
         if profile.goal:
             context["goal"] = profile.goal
+        if profile.activity_level:
+            context["activity_level"] = profile.activity_level
         if profile.sex:
             context["sex"] = profile.sex
         if profile.age is not None:
@@ -1403,6 +1485,66 @@ class AIChatView(View):
             context["height_cm"] = str(profile.height_cm)
         if profile.weight_kg is not None:
             context["weight_kg"] = str(profile.weight_kg)
+
+        goals_set = profile.daily_cal_goal is not None
+        if goals_set:
+            context["daily_goals"] = {
+                "calories": profile.daily_cal_goal or 0,
+                "protein": profile.daily_protein_goal or 0,
+                "carbohydrates": profile.daily_carbs_goal or 0,
+                "fat": profile.daily_fat_goal or 0,
+            }
+
+        today = timezone.localdate()
+        meals_today = (
+            Meal.objects
+            .filter(user=user, date=today)
+            .prefetch_related(
+                Prefetch(
+                    "contain_dish",
+                    queryset=Dish.objects.select_related("dining_hall").order_by("dish_name"),
+                )
+            )
+            .order_by("-meal_id")
+        )
+
+        consumed = meals_today.aggregate(
+            calories=Sum("total_calories"),
+            protein=Sum("total_protein"),
+            carbohydrates=Sum("total_carbohydrates"),
+            fat=Sum("total_fat"),
+        )
+        context["today_logged_totals"] = {
+            "calories": consumed["calories"] or 0,
+            "protein": consumed["protein"] or 0,
+            "carbohydrates": consumed["carbohydrates"] or 0,
+            "fat": consumed["fat"] or 0,
+        }
+
+        if goals_set:
+            context["today_remaining_goals"] = {
+                "calories": max(0, (profile.daily_cal_goal or 0) - context["today_logged_totals"]["calories"]),
+                "protein": max(0, (profile.daily_protein_goal or 0) - context["today_logged_totals"]["protein"]),
+                "carbohydrates": max(0, (profile.daily_carbs_goal or 0) - context["today_logged_totals"]["carbohydrates"]),
+                "fat": max(0, (profile.daily_fat_goal or 0) - context["today_logged_totals"]["fat"]),
+            }
+
+        if meals_today.exists():
+            context["logged_meals_today"] = [
+                {
+                    "category": meal.category or "Logged Meal",
+                    "calories": meal.total_calories,
+                    "protein": meal.total_protein,
+                    "carbohydrates": meal.total_carbohydrates,
+                    "fat": meal.total_fat,
+                    "dishes": [dish.dish_name for dish in meal.contain_dish.all()[:5]],
+                }
+                for meal in meals_today[:5]
+            ]
+
+        sanitized_tray = _sanitize_tray_context(tray_context)
+        if sanitized_tray is not None:
+            context["current_meal_tray"] = sanitized_tray
 
         return context
 
@@ -1420,7 +1562,10 @@ class AIChatView(View):
 
         raw_history = body.get("history", [])
         history = raw_history if isinstance(raw_history, list) else []
-        user_context = self._extract_user_context(request)
+        user_context = self._extract_user_context(
+            request,
+            tray_context=body.get("tray_context"),
+        )
 
         result = ai_chat.get_response(
             message,

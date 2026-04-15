@@ -229,17 +229,18 @@ function StationJumpLink({
 function CompactDishCard({
   dish,
   station,
-  inTray,
+  trayQuantity,
   onClick,
   onAddToTray,
 }: {
   dish: Dish;
   station: string;
-  inTray: boolean;
+  trayQuantity: number;
   onClick: () => void;
   onAddToTray: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const hasExtraFlags = Boolean(dish.dietary_flags && dish.dietary_flags.length > 1);
 
   return (
     <div
@@ -248,10 +249,10 @@ function CompactDishCard({
       style={{
         ...panelStyle,
         display: "flex",
-        alignItems: "center",
-        gap: 16,
+        flexDirection: "column",
+        gap: 14,
         width: "100%",
-        padding: 14,
+        padding: 16,
         borderColor: hovered ? "var(--se-border-strong)" : "var(--se-border)",
         boxShadow: hovered ? "var(--se-shadow-md)" : "var(--se-shadow-sm)",
         transform: hovered ? "translateY(-2px)" : "translateY(0)",
@@ -262,10 +263,10 @@ function CompactDishCard({
         type="button"
         onClick={onClick}
         style={{
-          flex: 1,
+          width: "100%",
           minWidth: 0,
           display: "flex",
-          alignItems: "stretch",
+          alignItems: "flex-start",
           gap: 16,
           textAlign: "left",
           border: "none",
@@ -291,15 +292,23 @@ function CompactDishCard({
         </div>
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
             <div style={{ minWidth: 0 }}>
               <h3
                 style={{
                   margin: 0,
-                  fontSize: "var(--se-text-base)",
+                  fontSize: "1.12rem",
                   fontWeight: "var(--se-weight-bold)",
                   color: "var(--se-text-main)",
-                  lineHeight: 1.2,
+                  lineHeight: 1.16,
                 }}
               >
                 {dish.dish_name}
@@ -311,8 +320,8 @@ function CompactDishCard({
                   color: "var(--se-text-muted)",
                 }}
               >
-                {station}
-                {dish.serving_size ? ` · ${dish.serving_size}` : ""}
+                {dish.serving_size || "Serving size unavailable"}
+                {dish.meal_period ? ` · ${dish.meal_period}` : ""}
               </p>
             </div>
 
@@ -341,7 +350,7 @@ function CompactDishCard({
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
             <span
               style={{
-                fontSize: "var(--se-text-xs)",
+              fontSize: "var(--se-text-xs)",
                 color: "var(--se-text-muted)",
                 fontWeight: "var(--se-weight-semibold)",
               }}
@@ -357,11 +366,19 @@ function CompactDishCard({
             <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-fat)" }}>
               {dish.fat}g F
             </span>
+            <span
+              style={{
+                fontSize: "var(--se-text-xs)",
+                color: "var(--se-text-muted)",
+              }}
+            >
+              {station}
+            </span>
           </div>
 
-          {dish.dietary_flags && dish.dietary_flags.length > 1 && (
+          {hasExtraFlags && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {dish.dietary_flags.slice(1).map((flag) => {
+              {(dish.dietary_flags ?? []).slice(1).map((flag) => {
                 const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
                 return (
                   <span
@@ -384,15 +401,47 @@ function CompactDishCard({
         </div>
       </button>
 
-      <div style={{ flexShrink: 0 }}>
-        <Button
-          variant={inTray ? "secondary" : "primary"}
-          size="sm"
-          disabled={inTray}
-          onClick={onAddToTray}
-          style={{ minWidth: 88 }}
+      <div
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          style={{
+            minHeight: 24,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
         >
-          {inTray ? "In tray" : "Add"}
+          {trayQuantity > 0 && (
+            <span
+              style={{
+                padding: "4px 10px",
+                borderRadius: "var(--se-radius-full)",
+                background: "rgba(var(--se-primary-rgb), 0.12)",
+                color: "var(--se-primary)",
+                fontSize: "var(--se-text-xs)",
+                fontWeight: "var(--se-weight-bold)",
+              }}
+            >
+              {trayQuantity} in tray
+            </span>
+          )}
+        </div>
+        <Button
+          variant={trayQuantity > 0 ? "secondary" : "primary"}
+          size="sm"
+          onClick={onAddToTray}
+          className="min-w-[112px]"
+        >
+          {trayQuantity > 0 ? "Add another" : "Add"}
         </Button>
       </div>
     </div>
@@ -402,7 +451,7 @@ function CompactDishCard({
 export default function Menu() {
   const { hallId } = useParams<{ hallId: string }>();
   const navigate = useNavigate();
-  const { addItem, isInTray } = useMealTray();
+  const { addItem, getItemQuantity } = useMealTray();
 
   const [halls, setHalls] = useState<DiningHall[]>([]);
   const [selectedHall, setSelectedHall] = useState<DiningHall | null>(null);
@@ -892,7 +941,7 @@ export default function Menu() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
           <div style={{ display: "flex", flexDirection: "column", gap: 24, minWidth: 0 }}>
             <section
               style={{
@@ -1295,13 +1344,13 @@ export default function Menu() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
                       {dishes.map((dish) => (
                         <CompactDishCard
                           key={dish.dish_id}
                           dish={dish}
                           station={station}
-                          inTray={isInTray(dish.dish_id)}
+                          trayQuantity={getItemQuantity(dish.dish_id)}
                           onClick={() => navigate(`/dishes/${dish.dish_id}`)}
                           onAddToTray={() => handleAddDishToTray(dish)}
                         />

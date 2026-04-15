@@ -4,9 +4,11 @@ import axios from "axios";
 import { API_BASE } from "../config";
 import { Card } from "../components/Card";
 import { Button } from "../components/Button";
+import { MealTrayCard } from "../components/MealTrayCard";
 import { MacroProgressBar } from "../components/MacroProgressBar";
 import { FoodIcon } from "../components/FoodIcon";
 import { useToast } from "../components/useToast";
+import { useMealTray } from "../mealTray";
 import Skeleton from "../components/Skeleton";
 import { IconMapPin, IconSparkle, IconPlus, IconGrid } from "../components/Icons";
 
@@ -32,6 +34,17 @@ interface Recommendation {
   reason: string;
   calories: number;
   meal_period: string;
+}
+
+interface DishDetailPayload {
+  dish_id: number;
+  dish_name: string;
+  dining_hall__name: string;
+  calories: number;
+  protein: number;
+  carbohydrates: number;
+  fat: number;
+  serving_size?: string;
 }
 
 interface RecommendationResponse {
@@ -135,6 +148,7 @@ function formatRecommendationTimestamp(timestamp?: string): string | null {
 export default function Dashboard() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { addItem, getItemQuantity } = useMealTray();
 
   /* Auth guard */
   useEffect(() => {
@@ -154,6 +168,7 @@ export default function Dashboard() {
   const [recLoading, setRecLoading] = useState(true);
   const [recError, setRecError] = useState(false);
   const [recRefreshing, setRecRefreshing] = useState(false);
+  const [addingDishId, setAddingDishId] = useState<number | null>(null);
 
   const firstName = localStorage.getItem("userFirstName") ?? "";
   const recUpdatedLabel = formatRecommendationTimestamp(recData?.generated_at);
@@ -236,6 +251,43 @@ export default function Dashboard() {
     } finally {
       setRecRefreshing(false);
       setRecLoading(false);
+    }
+  };
+
+  const handleAddRecommendationToTray = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    rec: Recommendation,
+  ) => {
+    event.stopPropagation();
+    if (addingDishId === rec.dish_id) return;
+
+    setAddingDishId(rec.dish_id);
+    try {
+      const { data } = await axios.get<DishDetailPayload>(
+        `${API_BASE}/dishes/${rec.dish_id}`,
+      );
+      const result = addItem({
+        dish_id: data.dish_id,
+        dish_name: data.dish_name,
+        hall: data.dining_hall__name || rec.hall_name,
+        calories: data.calories,
+        protein: data.protein,
+        carbohydrates: data.carbohydrates,
+        fat: data.fat,
+        serving_size: data.serving_size,
+      });
+      const quantity =
+        result.items.find((item) => item.dish_id === rec.dish_id)?.quantity || 1;
+
+      if (result.added || quantity === 1) {
+        toast.success(`${rec.dish_name} added to your tray.`);
+      } else {
+        toast.info(`${rec.dish_name} now has ${quantity} servings in your tray.`);
+      }
+    } catch {
+      toast.error("Could not add this dish to the tray.");
+    } finally {
+      setAddingDishId(null);
     }
   };
 
@@ -501,27 +553,42 @@ export default function Dashboard() {
                         <div
                           style={{
                             flexShrink: 0,
-                            textAlign: "right",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-end",
+                            gap: 8,
                           }}
                         >
-                          <span
-                            style={{
-                              fontSize: "var(--se-text-sm)",
-                              fontWeight: "var(--se-weight-bold)",
-                              color: "var(--se-text-main)",
-                            }}
+                          <div style={{ textAlign: "right" }}>
+                            <span
+                              style={{
+                                fontSize: "var(--se-text-sm)",
+                                fontWeight: "var(--se-weight-bold)",
+                                color: "var(--se-text-main)",
+                              }}
+                            >
+                              {rec.calories}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "var(--se-text-xs)",
+                                color: "var(--se-text-muted)",
+                                marginLeft: 2,
+                              }}
+                            >
+                              cal
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant={getItemQuantity(rec.dish_id) > 0 ? "secondary" : "primary"}
+                            size="sm"
+                            loading={addingDishId === rec.dish_id}
+                            onClick={(event) => handleAddRecommendationToTray(event, rec)}
+                            className="min-w-[112px]"
                           >
-                            {rec.calories}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "var(--se-text-xs)",
-                              color: "var(--se-text-muted)",
-                              marginLeft: 2,
-                            }}
-                          >
-                            cal
-                          </span>
+                            {getItemQuantity(rec.dish_id) > 0 ? "Add another" : "Add to tray"}
+                          </Button>
                         </div>
                       </div>
                     </Card>
@@ -563,6 +630,11 @@ export default function Dashboard() {
 
         {/* ═══════════════════════ SIDEBAR ═══════════════════════ */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <section>
+            <p style={sectionLabelStyle}>Current Meal Tray</p>
+            <MealTrayCard onMealLogged={setIntake} />
+          </section>
+
           {/* ── 4. Daily Macros ── */}
           <section>
             <p style={sectionLabelStyle}>Today's Macros</p>

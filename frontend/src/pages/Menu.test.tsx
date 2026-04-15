@@ -297,15 +297,27 @@ describe("Menu redesign", () => {
     await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
     await user.click(screen.getAllByRole("button", { name: "Add" })[0]);
 
-    expect(screen.getByText("1 item ready to log")).toBeInTheDocument();
+    expect(screen.getByText("1 serving ready to log")).toBeInTheDocument();
     expect(screen.getAllByText("Herb Focaccia Bread").length).toBeGreaterThan(1);
 
     firstRender.unmount();
     renderMenu("/menu/2");
 
     await screen.findByRole("heading", { name: "ISR Dining Center" });
-    expect(screen.getByText("1 item ready to log")).toBeInTheDocument();
-    expect(screen.getByText("1 item ready to log")).toBeInTheDocument();
+    expect(screen.getByText("1 serving ready to log")).toBeInTheDocument();
+  });
+
+  it("supports adding multiple servings of the same dish", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+
+    await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
+    await user.click(screen.getAllByRole("button", { name: "Add" })[0]);
+    await user.click(screen.getByRole("button", { name: "Add another" }));
+
+    expect(screen.getByText("2 servings ready to log")).toBeInTheDocument();
+    expect(screen.getByText("2 in tray")).toBeInTheDocument();
+    expect(screen.getByText("320 kcal")).toBeInTheDocument();
   });
 
   it("logs the full tray as a single meal for authenticated users", async () => {

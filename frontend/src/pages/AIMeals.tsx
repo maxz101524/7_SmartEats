@@ -2,7 +2,9 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
-import { MealTrayStatusPill } from "../components/MealTrayCard";
+import { Card } from "../components/Card";
+import { MealTrayCard } from "../components/MealTrayCard";
+import { useMealTray } from "../mealTray";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,12 @@ interface NutritionResult {
   goal: string;
   model: string;
   used_fallback: boolean;
+}
+
+interface DailyIntake {
+  consumed: { calories: number; protein: number; carbs: number; fat: number };
+  goals: { calories: number; protein: number; carbs: number; fat: number } | null;
+  goals_set: boolean;
 }
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
@@ -570,10 +578,12 @@ function NutritionEstimator() {
 
 export default function AIMeals() {
   const navigate = useNavigate();
+  const { items: trayItems, totals: trayTotals, count: trayCount, uniqueCount } = useMealTray();
   const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [dailyIntake, setDailyIntake] = useState<DailyIntake | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
@@ -627,6 +637,34 @@ export default function AIMeals() {
   }, []);
 
   useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      setDailyIntake(null);
+      return;
+    }
+
+    let cancelled = false;
+    axios
+      .get<DailyIntake>(`${API_BASE}/daily-intake/`, {
+        headers: { Authorization: `Token ${token}` },
+      })
+      .then((res) => {
+        if (!cancelled) {
+          setDailyIntake(res.data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDailyIntake(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (messages.length === 0) {
       sessionStorage.removeItem(CHAT_STORAGE_KEY);
       return;
@@ -641,6 +679,36 @@ export default function AIMeals() {
         role: m.role === "ai" ? "assistant" : "user",
         content: m.text,
       }));
+
+  const trayContext = useMemo(() => ({
+    item_count: trayCount,
+    unique_dishes: uniqueCount,
+    totals: trayTotals,
+    items: trayItems.slice(0, 8).map((item) => ({
+      dish_id: item.dish_id,
+      dish_name: item.dish_name,
+      hall: item.hall,
+      quantity: item.quantity,
+      calories: item.calories,
+      protein: item.protein,
+      carbohydrates: item.carbohydrates,
+      fat: item.fat,
+      serving_size: item.serving_size,
+    })),
+  }), [trayCount, trayItems, trayTotals, uniqueCount]);
+
+  const remainingSummary = useMemo(() => {
+    if (!dailyIntake?.goals_set || !dailyIntake.goals) {
+      return null;
+    }
+
+    return {
+      calories: Math.max(0, dailyIntake.goals.calories - dailyIntake.consumed.calories),
+      protein: Math.max(0, dailyIntake.goals.protein - dailyIntake.consumed.protein),
+      carbs: Math.max(0, dailyIntake.goals.carbs - dailyIntake.consumed.carbs),
+      fat: Math.max(0, dailyIntake.goals.fat - dailyIntake.consumed.fat),
+    };
+  }, [dailyIntake]);
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
@@ -657,6 +725,7 @@ export default function AIMeals() {
       const res = await axios.post(`${API_BASE}/ai-chat/`, {
         message: trimmed,
         history,
+        tray_context: trayContext,
       }, token ? { headers: { Authorization: `Token ${token}` } } : undefined);
 
       const data = res.data;
@@ -713,8 +782,9 @@ export default function AIMeals() {
           display: "flex",
           flexDirection: "column",
           height: "calc(100vh - 76px - 48px)",
-          maxWidth: 720,
+          maxWidth: activeTab === "chat" ? 1180 : 720,
           margin: "0 auto",
+          minHeight: 0,
         }}
       >
         {/* ── Tab bar ──────────────────────────────────────── */}
@@ -758,7 +828,6 @@ export default function AIMeals() {
               </button>
             ))}
           </div>
-          <MealTrayStatusPill />
         </div>
 
         {/* ── Estimator tab ──────────────────────────────────── */}
@@ -767,7 +836,11 @@ export default function AIMeals() {
             <NutritionEstimator />
           </div>
         ) : (
-          <>
+          <div
+            className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start"
+            style={{ flex: 1, minHeight: 0 }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
             {/* ── Chat messages area ──────────────────────────── */}
             <div
               ref={messagesContainerRef}
@@ -1084,7 +1157,83 @@ export default function AIMeals() {
               </form>
 
             </div>
-          </>
+            </div>
+
+            <div className="hidden xl:block">
+              <div
+                style={{
+                  position: "sticky",
+                  top: 88,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <MealTrayCard onMealLogged={setDailyIntake} />
+
+                <Card padding="md">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "var(--se-text-xs)",
+                        fontWeight: 800,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "var(--se-text-faint)",
+                      }}
+                    >
+                      AI Context
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "var(--se-text-sm)",
+                        color: "var(--se-text-secondary)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Logged today: {dailyIntake ? `${dailyIntake.consumed.calories} kcal` : "sign in to load"}
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "var(--se-text-sm)",
+                        color: "var(--se-text-secondary)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Current tray: {trayCount === 0 ? "empty" : `${trayCount} servings across ${uniqueCount} dishes`}
+                    </p>
+                    {remainingSummary ? (
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "var(--se-text-sm)",
+                          color: "var(--se-primary)",
+                          lineHeight: 1.5,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Remaining goals: {remainingSummary.calories} kcal · {remainingSummary.protein}P / {remainingSummary.carbs}C / {remainingSummary.fat}F
+                      </p>
+                    ) : (
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "var(--se-text-sm)",
+                          color: "var(--se-text-muted)",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Add goals in your profile for tighter macro-aware suggestions.
+                      </p>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </>

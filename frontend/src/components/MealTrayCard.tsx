@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
-import { useMealTray } from "../mealTray";
+import { getMealTrayDishIds, useMealTray } from "../mealTray";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { useToast } from "./useToast";
@@ -92,12 +92,23 @@ export function MealTrayStatusPill() {
 
 export function MealTrayCard({
   compact = false,
+  onMealLogged,
 }: {
   compact?: boolean;
+  onMealLogged?: (intake: DailyIntake | null) => void;
 }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const { items, totals, count, removeItem, clear } = useMealTray();
+  const {
+    items,
+    totals,
+    count,
+    uniqueCount,
+    incrementItem,
+    decrementItem,
+    removeItem,
+    clear,
+  } = useMealTray();
   const token = localStorage.getItem("authToken");
 
   const [intake, setIntake] = useState<DailyIntake | null>(null);
@@ -150,6 +161,8 @@ export function MealTrayCard({
       : "";
 
   const visibleItems = compact ? items.slice(0, 2) : items;
+  const servingsLabel = `${count} serving${count === 1 ? "" : "s"}`;
+  const dishesLabel = `${uniqueCount} dish${uniqueCount === 1 ? "" : "es"}`;
 
   const handlePrimaryAction = async () => {
     if (count === 0 || loggingMeal) return;
@@ -164,7 +177,7 @@ export function MealTrayCard({
     try {
       await axios.post(
         `${API_BASE}/meals/`,
-        { dish_ids: items.map((item) => item.dish_id) },
+        { dish_ids: getMealTrayDishIds(items) },
         { headers: { Authorization: `Token ${token}` } },
       );
 
@@ -175,6 +188,7 @@ export function MealTrayCard({
         headers: { Authorization: `Token ${token}` },
       });
       setIntake(res.data);
+      onMealLogged?.(res.data);
     } catch {
       toast.error("Could not log the meal tray. Please try again.");
     } finally {
@@ -209,8 +223,19 @@ export function MealTrayCard({
             >
               {count === 0
                 ? "Start building your meal"
-                : `${count} item${count === 1 ? "" : "s"} ready to log`}
+                : `${servingsLabel} ready to log`}
             </h2>
+            {count > 0 && (
+              <p
+                style={{
+                  margin: "6px 0 0",
+                  fontSize: "var(--se-text-xs)",
+                  color: "var(--se-text-muted)",
+                }}
+              >
+                {dishesLabel} in your tray
+              </p>
+            )}
           </div>
 
           {count > 0 && (
@@ -264,7 +289,8 @@ export function MealTrayCard({
                   key={item.dish_id}
                   style={{
                     display: "flex",
-                    alignItems: "center",
+                    flexDirection: compact ? "column" : "row",
+                    alignItems: compact ? "stretch" : "center",
                     justifyContent: "space-between",
                     gap: 12,
                     padding: "10px 12px",
@@ -273,23 +299,44 @@ export function MealTrayCard({
                     border: "1px solid var(--se-border)",
                   }}
                 >
-                  <div style={{ minWidth: 0 }}>
-                    <p
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div
                       style={{
-                        margin: "0 0 2px",
-                        fontSize: "var(--se-text-sm)",
-                        fontWeight: "var(--se-weight-semibold)",
-                        color: "var(--se-text-main)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        marginBottom: 2,
                       }}
                     >
-                      {item.dish_name}
-                    </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "var(--se-text-sm)",
+                          fontWeight: "var(--se-weight-semibold)",
+                          color: "var(--se-text-main)",
+                        }}
+                      >
+                        {item.dish_name}
+                      </p>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: "var(--se-radius-full)",
+                          background: "rgba(var(--se-primary-rgb), 0.12)",
+                          color: "var(--se-primary)",
+                          fontSize: 10,
+                          fontWeight: 800,
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        x{item.quantity}
+                      </span>
+                    </div>
                     <p
                       style={{
-                        margin: 0,
+                        margin: "0 0 8px",
                         fontSize: "var(--se-text-xs)",
                         color: "var(--se-text-muted)",
                       }}
@@ -297,17 +344,86 @@ export function MealTrayCard({
                       {item.hall}
                       {item.serving_size ? ` · ${item.serving_size}` : ""}
                     </p>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                    <span
+                    <p
                       style={{
+                        margin: 0,
                         fontSize: "var(--se-text-xs)",
                         fontWeight: 700,
                         color: "var(--se-text-secondary)",
                       }}
                     >
-                      {item.calories} kcal
-                    </span>
+                      {item.calories * item.quantity} kcal
+                      {" · "}
+                      {item.protein * item.quantity}P / {item.carbohydrates * item.quantity}C / {item.fat * item.quantity}F
+                    </p>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: compact ? "space-between" : "flex-end",
+                      gap: 8,
+                      flexShrink: 0,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "4px",
+                        borderRadius: "var(--se-radius-full)",
+                        background: "var(--se-bg-surface)",
+                        border: "1px solid var(--se-border)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => decrementItem(item.dish_id)}
+                        aria-label={`Decrease ${item.dish_name} quantity`}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: "50%",
+                          border: "none",
+                          background: "var(--se-bg-subtle)",
+                          color: "var(--se-text-main)",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        -
+                      </button>
+                      <span
+                        style={{
+                          minWidth: 18,
+                          textAlign: "center",
+                          fontSize: "var(--se-text-xs)",
+                          fontWeight: 800,
+                          color: "var(--se-text-main)",
+                        }}
+                      >
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => incrementItem(item.dish_id)}
+                        aria-label={`Increase ${item.dish_name} quantity`}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: "50%",
+                          border: "none",
+                          background: "var(--se-primary)",
+                          color: "var(--se-text-inverted)",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => removeItem(item.dish_id)}
@@ -328,7 +444,7 @@ export function MealTrayCard({
                 </div>
               ))}
 
-              {compact && count > visibleItems.length && (
+              {compact && uniqueCount > visibleItems.length && (
                 <p
                   style={{
                     margin: 0,
@@ -336,7 +452,8 @@ export function MealTrayCard({
                     color: "var(--se-text-muted)",
                   }}
                 >
-                  +{count - visibleItems.length} more item{count - visibleItems.length === 1 ? "" : "s"} in your tray
+                  +{uniqueCount - visibleItems.length} more dish
+                  {uniqueCount - visibleItems.length === 1 ? "" : "es"} in your tray
                 </p>
               )}
             </div>

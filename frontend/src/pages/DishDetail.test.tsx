@@ -48,18 +48,19 @@ afterEach(() => {
 });
 
 describe("DishDetail tray flow", () => {
-  it("adds the dish to the shared tray and reflects existing tray state", async () => {
+  it("adds the dish to the shared tray and supports extra servings", async () => {
     const user = userEvent.setup();
     renderDishDetail();
 
     await screen.findByRole("heading", { name: "Herb Focaccia Bread" });
     await user.click(screen.getByRole("button", { name: "Add to Meal Tray" }));
+    await user.click(screen.getByRole("button", { name: "Add Another Serving" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Already in Tray" })).toBeDisabled();
+      expect(screen.getByText("2 servings ready to log")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("1 item ready to log")).toBeInTheDocument();
+    expect(screen.getByText("2 servings currently in your tray.")).toBeInTheDocument();
     expect(screen.getAllByText("Herb Focaccia Bread").length).toBeGreaterThan(1);
   });
 });
