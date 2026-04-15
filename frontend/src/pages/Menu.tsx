@@ -295,7 +295,7 @@ function DishRow({
           : hovered
             ? "var(--se-bg-elevated)"
             : "transparent",
-        borderLeft: hovered ? "3px solid var(--se-primary)" : "3px solid transparent",
+        borderLeft: "none",
         cursor: "pointer",
         transition: "background 120ms ease, border-color 120ms ease",
         animation: "slideInRow 150ms ease both",
