@@ -225,224 +225,227 @@ function StationJumpLink({
   );
 }
 
-function CompactDishCard({
+function MacroBar({ protein, carbs, fat }: { protein: number; carbs: number; fat: number }) {
+  const pCal = protein * 4;
+  const cCal = carbs * 4;
+  const fCal = fat * 9;
+  const total = pCal + cCal + fCal || 1;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        width: "100%",
+        maxWidth: 160,
+        height: 4,
+        borderRadius: 2,
+        overflow: "hidden",
+        background: "var(--se-bg-subtle)",
+      }}
+    >
+      <div style={{ width: `${(pCal / total) * 100}%`, background: "var(--se-macro-protein)" }} />
+      <div style={{ width: `${(cCal / total) * 100}%`, background: "var(--se-macro-carbs)" }} />
+      <div style={{ width: `${(fCal / total) * 100}%`, background: "var(--se-macro-fat)" }} />
+    </div>
+  );
+}
+
+function DishRow({
   dish,
   station,
   trayQuantity,
+  index,
   onClick,
   onAddToTray,
 }: {
   dish: Dish;
   station: string;
   trayQuantity: number;
+  index: number;
   onClick: () => void;
   onAddToTray: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const hasExtraFlags = Boolean(dish.dietary_flags && dish.dietary_flags.length > 1);
+  const [justAdded, setJustAdded] = useState(false);
+  const inTray = trayQuantity > 0;
+
+  const handleAdd = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAddToTray();
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 600);
+  };
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === "Enter") onClick(); }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        ...panelStyle,
         display: "flex",
-        flexDirection: "column",
-        gap: 14,
-        width: "100%",
-        padding: 16,
-        borderColor: hovered ? "var(--se-border-strong)" : "var(--se-border)",
-        boxShadow: hovered ? "var(--se-shadow-md)" : "var(--se-shadow-sm)",
-        transform: hovered ? "translateY(-2px)" : "translateY(0)",
-        transition: "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease",
+        alignItems: "center",
+        gap: 12,
+        padding: "8px 12px",
+        borderRadius: "var(--se-radius-md)",
+        background: inTray
+          ? "rgba(var(--se-primary-rgb), 0.04)"
+          : hovered
+            ? "var(--se-bg-elevated)"
+            : "transparent",
+        borderLeft: hovered ? "3px solid var(--se-primary)" : "3px solid transparent",
+        cursor: "pointer",
+        transition: "background 120ms ease, border-color 120ms ease",
+        animation: "slideInRow 150ms ease both",
+        animationDelay: `${Math.min(index, 15) * 30}ms`,
       }}
     >
-      <button
-        type="button"
-        onClick={onClick}
-        style={{
-          width: "100%",
-          minWidth: 0,
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 16,
-          textAlign: "left",
-          border: "none",
-          background: "transparent",
-          padding: 0,
-          cursor: "pointer",
-        }}
-      >
-        <div
-          style={{
-            width: 64,
-            minWidth: 64,
-            height: 64,
-            borderRadius: "18px",
-            background: "var(--se-bg-elevated)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "1px solid var(--se-border)",
-          }}
-        >
-          <FoodIcon dishName={dish.dish_name} category={dish.category as FoodCategory} size="lg" />
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "1.12rem",
-                  fontWeight: "var(--se-weight-bold)",
-                  color: "var(--se-text-main)",
-                  lineHeight: 1.16,
-                }}
-              >
-                {dish.dish_name}
-              </h3>
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: "var(--se-text-xs)",
-                  color: "var(--se-text-muted)",
-                }}
-              >
-                {dish.serving_size || "Serving size unavailable"}
-                {dish.meal_period ? ` · ${dish.meal_period}` : ""}
-              </p>
-            </div>
-
-            {dish.dietary_flags?.[0] && (() => {
-              const colors = FLAG_COLORS[dish.dietary_flags[0]] || FLAG_FALLBACK;
-              return (
-                <span
-                  style={{
-                    flexShrink: 0,
-                    padding: "4px 8px",
-                    borderRadius: "var(--se-radius-full)",
-                    background: colors.bg,
-                    color: colors.text,
-                    fontSize: 10,
-                    fontWeight: 800,
-                    letterSpacing: "0.04em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {dish.dietary_flags[0]}
-                </span>
-              );
-            })()}
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-            <span
-              style={{
-              fontSize: "var(--se-text-xs)",
-                color: "var(--se-text-muted)",
-                fontWeight: "var(--se-weight-semibold)",
-              }}
-            >
-              {dish.calories} kcal
-            </span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-protein)" }}>
-              {dish.protein}g P
-            </span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-carbs)" }}>
-              {dish.carbohydrates}g C
-            </span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-fat)" }}>
-              {dish.fat}g F
-            </span>
-            <span
-              style={{
-                fontSize: "var(--se-text-xs)",
-                color: "var(--se-text-muted)",
-              }}
-            >
-              {station}
-            </span>
-          </div>
-
-          {hasExtraFlags && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {(dish.dietary_flags ?? []).slice(1).map((flag) => {
-                const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
-                return (
-                  <span
-                    key={flag}
-                    style={{
-                      padding: "3px 8px",
-                      borderRadius: "var(--se-radius-full)",
-                      background: colors.bg,
-                      color: colors.text,
-                      fontSize: 10,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {flag}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </button>
-
+      {/* Icon */}
       <div
         style={{
-          width: "100%",
+          width: 44,
+          minWidth: 44,
+          height: 44,
+          borderRadius: 12,
+          background: "var(--se-bg-elevated)",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
+          justifyContent: "center",
+          border: "1px solid var(--se-border)",
+          flexShrink: 0,
         }}
       >
-        <div
+        <FoodIcon dishName={dish.dish_name} category={dish.category as FoodCategory} size="md" />
+      </div>
+
+      {/* Name + serving + MacroBar */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+        <span
           style={{
-            minHeight: 24,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
+            margin: 0,
+            fontSize: "var(--se-text-sm)",
+            fontWeight: "var(--se-weight-bold)",
+            color: "var(--se-text-main)",
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
-          {trayQuantity > 0 && (
-            <span
-              style={{
-                padding: "4px 10px",
-                borderRadius: "var(--se-radius-full)",
-                background: "rgba(var(--se-primary-rgb), 0.12)",
-                color: "var(--se-primary)",
-                fontSize: "var(--se-text-xs)",
-                fontWeight: "var(--se-weight-bold)",
-              }}
-            >
-              {trayQuantity} in tray
-            </span>
-          )}
-        </div>
-        <Button
-          variant={trayQuantity > 0 ? "secondary" : "primary"}
-          size="sm"
-          onClick={onAddToTray}
-          className="min-w-[112px]"
+          {dish.dish_name}
+        </span>
+        <span
+          style={{
+            fontSize: "var(--se-text-xs)",
+            color: "var(--se-text-muted)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
         >
-          {trayQuantity > 0 ? "Add another" : "Add"}
-        </Button>
+          {dish.serving_size || "Serving size unavailable"}
+          {dish.meal_period ? ` · ${dish.meal_period}` : ""}
+          {station ? ` · ${station}` : ""}
+        </span>
+        <MacroBar protein={dish.protein} carbs={dish.carbohydrates} fat={dish.fat} />
       </div>
+
+      {/* Macro text pills — hidden on mobile */}
+      <div
+        className="hidden md:flex"
+        style={{
+          alignItems: "center",
+          gap: 8,
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-cal)" }}>
+          {dish.calories}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-protein)" }}>
+          {dish.protein}P
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-carbs)" }}>
+          {dish.carbohydrates}C
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-fat)" }}>
+          {dish.fat}F
+        </span>
+      </div>
+
+      {/* Dietary badge — first flag only, hidden on very small screens */}
+      {dish.dietary_flags?.[0] && (() => {
+        const colors = FLAG_COLORS[dish.dietary_flags[0]] || FLAG_FALLBACK;
+        return (
+          <span
+            className="hidden sm:inline-flex"
+            style={{
+              flexShrink: 0,
+              padding: "3px 7px",
+              borderRadius: "var(--se-radius-full)",
+              background: colors.bg,
+              color: colors.text,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}
+          >
+            {dish.dietary_flags[0]}
+          </span>
+        );
+      })()}
+
+      {/* Tray quantity badge */}
+      {inTray && (
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: "rgba(var(--se-primary-rgb), 0.12)",
+            color: "var(--se-primary)",
+            fontSize: 11,
+            fontWeight: 800,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          {trayQuantity}
+        </span>
+      )}
+
+      {/* Add button */}
+      <button
+        type="button"
+        onClick={handleAdd}
+        style={{
+          width: justAdded ? "auto" : 32,
+          minWidth: 32,
+          height: 32,
+          borderRadius: justAdded ? "var(--se-radius-full)" : "50%",
+          border: "none",
+          background: justAdded
+            ? "var(--se-success)"
+            : "var(--se-primary)",
+          color: "var(--se-text-inverted)",
+          fontSize: "var(--se-text-sm)",
+          fontWeight: "var(--se-weight-bold)",
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          padding: justAdded ? "0 10px" : 0,
+          transition: "background 120ms ease, width 120ms ease",
+        }}
+      >
+        {justAdded ? "\u2713" : "+"}
+      </button>
     </div>
   );
 }
@@ -465,6 +468,7 @@ export default function Menu() {
   const [activeMealPeriod, setActiveMealPeriod] = useState("All");
   const [activeDietary, setActiveDietary] = useState<Set<string>>(new Set());
   const [excludedAllergens, setExcludedAllergens] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const fetchHalls = () => {
     setHallsError(null);
@@ -1194,56 +1198,114 @@ export default function Menu() {
                 </p>
               )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 6px",
-                      fontSize: 11,
-                      fontWeight: 800,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: "var(--se-text-faint)",
-                    }}
-                  >
-                    Dietary
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {DIETARY_FILTERS.map((flag) => (
-                      <FilterChip
-                        key={flag}
-                        label={flag}
-                        active={activeDietary.has(flag)}
-                        onClick={() => toggleDietary(flag)}
-                        tint="success"
-                      />
-                    ))}
-                  </div>
-                </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen((o) => !o)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "6px 14px",
+                    borderRadius: "var(--se-radius-full)",
+                    border: "1px solid var(--se-border)",
+                    background: "var(--se-bg-surface)",
+                    color: "var(--se-text-secondary)",
+                    fontSize: "var(--se-text-sm)",
+                    fontWeight: "var(--se-weight-semibold)",
+                    cursor: "pointer",
+                    transition: "all 140ms ease",
+                  }}
+                >
+                  Dietary &amp; Allergens
+                  <span style={{
+                    display: "inline-flex",
+                    transition: "transform 200ms ease",
+                    transform: filtersOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  }}>
+                    &#9662;
+                  </span>
+                  {(activeDietary.size + excludedAllergens.size) > 0 && (
+                    <span
+                      style={{
+                        minWidth: 20,
+                        height: 20,
+                        borderRadius: "50%",
+                        background: "var(--se-primary)",
+                        color: "var(--se-text-inverted)",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {activeDietary.size + excludedAllergens.size}
+                    </span>
+                  )}
+                </button>
 
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 6px",
-                      fontSize: 11,
-                      fontWeight: 800,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: "var(--se-text-faint)",
-                    }}
-                  >
-                    Exclude Allergens
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {ALLERGEN_FILTERS.map((allergen) => (
-                      <FilterChip
-                        key={allergen}
-                        label={allergen}
-                        active={excludedAllergens.has(allergen)}
-                        onClick={() => toggleAllergen(allergen)}
-                        tint="error"
-                      />
-                    ))}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateRows: filtersOpen ? "1fr" : "0fr",
+                    transition: "grid-template-rows 200ms ease",
+                  }}
+                >
+                  <div style={{ overflow: "hidden" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 14 }}>
+                      <div>
+                        <p
+                          style={{
+                            margin: "0 0 6px",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            color: "var(--se-text-faint)",
+                          }}
+                        >
+                          Dietary
+                        </p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {DIETARY_FILTERS.map((flag) => (
+                            <FilterChip
+                              key={flag}
+                              label={flag}
+                              active={activeDietary.has(flag)}
+                              onClick={() => toggleDietary(flag)}
+                              tint="success"
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p
+                          style={{
+                            margin: "0 0 6px",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            letterSpacing: "0.08em",
+                            textTransform: "uppercase",
+                            color: "var(--se-text-faint)",
+                          }}
+                        >
+                          Exclude Allergens
+                        </p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {ALLERGEN_FILTERS.map((allergen) => (
+                            <FilterChip
+                              key={allergen}
+                              label={allergen}
+                              active={excludedAllergens.has(allergen)}
+                              onClick={() => toggleAllergen(allergen)}
+                              tint="error"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1296,41 +1358,27 @@ export default function Menu() {
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "flex-end",
+                        alignItems: "center",
                         justifyContent: "space-between",
                         gap: 16,
-                        paddingBottom: 12,
-                        borderBottom: "1px solid var(--se-border)",
+                        paddingLeft: 14,
+                        borderLeft: "4px solid var(--se-primary)",
                       }}
                     >
-                      <div>
-                        <p
-                          style={{
-                            margin: "0 0 6px",
-                            fontSize: 11,
-                            fontWeight: 800,
-                            letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                            color: "var(--se-text-faint)",
-                          }}
-                        >
-                          Serving station
-                        </p>
-                        <h2
-                          style={{
-                            margin: 0,
-                            fontSize: "var(--se-text-h3)",
-                            fontWeight: "var(--se-weight-extrabold)",
-                            color: "var(--se-text-main)",
-                            letterSpacing: "-0.03em",
-                          }}
-                        >
-                          {station}
-                        </h2>
-                      </div>
+                      <h2
+                        style={{
+                          margin: 0,
+                          fontSize: "var(--se-text-base)",
+                          fontWeight: "var(--se-weight-extrabold)",
+                          color: "var(--se-text-main)",
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {station}
+                      </h2>
                       <span
                         style={{
-                          padding: "6px 10px",
+                          padding: "4px 10px",
                           borderRadius: "var(--se-radius-full)",
                           background: "var(--se-bg-subtle)",
                           color: "var(--se-text-muted)",
@@ -1343,12 +1391,13 @@ export default function Menu() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {dishes.map((dish) => (
-                        <CompactDishCard
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {dishes.map((dish, i) => (
+                        <DishRow
                           key={dish.dish_id}
                           dish={dish}
                           station={station}
+                          index={i}
                           trayQuantity={getItemQuantity(dish.dish_id)}
                           onClick={() => navigate(`/dishes/${dish.dish_id}`)}
                           onAddToTray={() => handleAddDishToTray(dish)}
