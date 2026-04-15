@@ -424,15 +424,17 @@ function DishRow({
         type="button"
         onClick={handleAdd}
         style={{
-          width: justAdded ? "auto" : 32,
+          width: justAdded || hovered ? "auto" : 32,
           minWidth: 32,
           height: 32,
-          borderRadius: justAdded ? "var(--se-radius-full)" : "50%",
-          border: "none",
+          borderRadius: "var(--se-radius-full)",
+          border: "1.5px solid var(--se-border)",
           background: justAdded
             ? "var(--se-success)"
-            : "var(--se-primary)",
-          color: "var(--se-text-inverted)",
+            : "var(--se-bg-surface)",
+          color: justAdded
+            ? "var(--se-text-inverted)"
+            : "var(--se-text-main)",
           fontSize: "var(--se-text-sm)",
           fontWeight: "var(--se-weight-bold)",
           cursor: "pointer",
@@ -440,11 +442,12 @@ function DishRow({
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          padding: justAdded ? "0 10px" : 0,
-          transition: "background 120ms ease, width 120ms ease",
+          padding: justAdded ? "0 12px" : hovered ? "0 14px" : 0,
+          transition: "all 120ms ease",
+          animation: justAdded ? "addBounce 200ms ease" : "none",
         }}
       >
-        {justAdded ? "\u2713" : "+"}
+        {justAdded ? "\u2713" : hovered ? "Add" : "+"}
       </button>
     </div>
   );

@@ -134,28 +134,36 @@ export default function Home() {
   ];
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px" }}>
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px", position: "relative" }}>
+      {/* Aurora gradient background — spans full page width, fades out */}
+      <div
+        style={{
+          position: "absolute",
+          top: -76,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "100vw",
+          height: "520px",
+          background: "linear-gradient(135deg, #fde8e2 0%, #f5f3f0 25%, #e8e0f0 50%, #fef9c3 75%, #fde8e2 100%)",
+          backgroundSize: "400% 400%",
+          animation: "auroraShift 15s ease infinite",
+          opacity: 0.7,
+          maskImage: "linear-gradient(to bottom, black 50%, transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to bottom, black 50%, transparent 100%)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+
       {/* ── Section 1: Hero ── */}
       <div
         style={{
           margin: "0 -24px",
           padding: "0 24px",
           position: "relative",
-          overflow: "hidden",
+          zIndex: 1,
         }}
       >
-        {/* Aurora gradient background */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "linear-gradient(135deg, #fde8e2 0%, #f5f3f0 25%, #e8e0f0 50%, #fef9c3 75%, #fde8e2 100%)",
-            backgroundSize: "400% 400%",
-            animation: "auroraShift 15s ease infinite",
-            opacity: 0.7,
-          }}
-        />
-        <div style={{ position: "relative", zIndex: 1 }}>
         <section
           className="hero-stagger"
           style={{ padding: "48px 24px 40px", textAlign: "center" }}
@@ -272,7 +280,6 @@ export default function Home() {
             )}
           </div>
         </section>
-        </div>
       </div>
 
       {/* ── Section 2: Quick stats (logged-in only) ── */}
