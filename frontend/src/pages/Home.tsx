@@ -7,10 +7,52 @@ import { Card } from "../components/Card";
 import Skeleton from "../components/Skeleton";
 import { IconUtensils, IconSparkle, IconChartPie } from "../components/Icons";
 import { API_BASE } from "../config";
+import { FoodIcon } from "../components/FoodIcon";
+import type { FoodCategory } from "../components/FoodIcon";
+import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 
 interface DishStats {
   total_dishes?: number;
   total_halls?: number;
+}
+
+function AnimatedCounter({ target, duration = 1500 }: { target: number; duration?: number }) {
+  const [count, setCount] = useState(0);
+  const [ref, setRef] = useState<HTMLSpanElement | null>(null);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    if (!ref) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !started) {
+          setStarted(true);
+        }
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(ref);
+    return () => observer.disconnect();
+  }, [ref, started]);
+
+  useEffect(() => {
+    if (!started || target <= 0) return;
+    const start = performance.now();
+    let raf: number;
+
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(eased * target));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [started, target, duration]);
+
+  return <span ref={setRef}>{started ? count.toLocaleString() : "0"}</span>;
 }
 
 export default function Home() {
@@ -19,6 +61,7 @@ export default function Home() {
   const [stats, setStats] = useState<DishStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [tickerDishes, setTickerDishes] = useState<{ dish_id: number; dish_name: string; calories: number; dietary_flags?: string[]; category?: string }[]>([]);
 
   const fetchStats = () => {
     if (!isLoggedIn) return;
@@ -52,6 +95,18 @@ export default function Home() {
       });
   }, [isLoggedIn]);
 
+  useEffect(() => {
+    axios
+      .get(`${API_BASE}/dishes/`, { params: { limit: 16 } })
+      .then((res) => {
+        const data = Array.isArray(res.data) ? res.data : (res.data.results ?? []);
+        setTickerDishes(data.slice(0, 16));
+      })
+      .catch(() => {
+        // Ticker is decorative — silent fail is fine
+      });
+  }, []);
+
   const featureCards: {
     icon: ComponentType<{ size?: number; color?: string }>;
     title: string;
@@ -81,7 +136,26 @@ export default function Home() {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px" }}>
       {/* ── Section 1: Hero ── */}
-      <div style={{ margin: "0 -24px", padding: "0 24px", background: "var(--se-bg-base)" }}>
+      <div
+        style={{
+          margin: "0 -24px",
+          padding: "0 24px",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        {/* Aurora gradient background */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(135deg, #fde8e2 0%, #f5f3f0 25%, #e8e0f0 50%, #fef9c3 75%, #fde8e2 100%)",
+            backgroundSize: "400% 400%",
+            animation: "auroraShift 15s ease infinite",
+            opacity: 0.7,
+          }}
+        />
+        <div style={{ position: "relative", zIndex: 1 }}>
         <section
           className="hero-stagger"
           style={{ padding: "48px 24px 40px", textAlign: "center" }}
@@ -198,6 +272,7 @@ export default function Home() {
             )}
           </div>
         </section>
+        </div>
       </div>
 
       {/* ── Section 2: Quick stats (logged-in only) ── */}
@@ -260,7 +335,7 @@ export default function Home() {
                     color: "var(--se-text-main)",
                   }}
                 >
-                  {stats.total_dishes ?? "—"}
+                  {stats.total_dishes ? <AnimatedCounter target={stats.total_dishes} /> : "—"}
                 </div>
                 <div
                   style={{
@@ -282,7 +357,7 @@ export default function Home() {
                     color: "var(--se-text-main)",
                   }}
                 >
-                  {stats.total_halls ?? "—"}
+                  {stats.total_halls ? <AnimatedCounter target={stats.total_halls} duration={800} /> : "—"}
                 </div>
                 <div
                   style={{
@@ -317,6 +392,110 @@ export default function Home() {
                 </div>
               </div>
             </Card>
+          </div>
+        </section>
+      )}
+
+      {/* ── Serving Right Now ticker ── */}
+      {tickerDishes.length > 0 && (
+        <section style={{ marginBottom: 32, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <span style={{ position: "relative", display: "inline-flex", width: 8, height: 8 }}>
+              <span
+                className="animate-ping"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  borderRadius: "50%",
+                  background: "var(--se-success)",
+                  opacity: 0.6,
+                }}
+              />
+              <span
+                style={{
+                  position: "relative",
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "var(--se-success)",
+                  display: "block",
+                }}
+              />
+            </span>
+            <span
+              style={{
+                fontSize: "var(--se-text-xs)",
+                fontWeight: "var(--se-weight-bold)",
+                color: "var(--se-text-secondary)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Serving right now
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              width: "max-content",
+              animation: "tickerScroll 30s linear infinite",
+              gap: 12,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.animationPlayState = "paused"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.animationPlayState = "running"; }}
+          >
+            {[...tickerDishes, ...tickerDishes].map((dish, i) => (
+              <button
+                key={`${dish.dish_id}-${i}`}
+                type="button"
+                onClick={() => navigate(`/dishes/${dish.dish_id}`)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 16px",
+                  borderRadius: "var(--se-radius-full)",
+                  background: "var(--se-bg-surface)",
+                  border: "1px solid var(--se-border)",
+                  boxShadow: "var(--se-shadow-sm)",
+                  whiteSpace: "nowrap",
+                  cursor: "pointer",
+                  transition: "box-shadow 120ms ease, border-color 120ms ease",
+                  fontSize: "var(--se-text-sm)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--se-primary)";
+                  e.currentTarget.style.boxShadow = "var(--se-shadow-md)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--se-border)";
+                  e.currentTarget.style.boxShadow = "var(--se-shadow-sm)";
+                }}
+              >
+                <FoodIcon dishName={dish.dish_name} category={dish.category as FoodCategory} size="sm" />
+                <span style={{ fontWeight: "var(--se-weight-semibold)", color: "var(--se-text-main)" }}>
+                  {dish.dish_name}
+                </span>
+                <span style={{ color: "var(--se-text-muted)", fontSize: 12 }}>
+                  {dish.calories} kcal
+                </span>
+                {dish.dietary_flags?.[0] && (
+                  <span
+                    style={{
+                      padding: "2px 6px",
+                      borderRadius: "var(--se-radius-full)",
+                      background: (FLAG_COLORS[dish.dietary_flags[0]] || FLAG_FALLBACK).bg,
+                      color: (FLAG_COLORS[dish.dietary_flags[0]] || FLAG_FALLBACK).text,
+                      fontSize: 9,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {dish.dietary_flags[0]}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </section>
       )}
