@@ -14,6 +14,7 @@ import { ComposerBar } from "./aimeals/ComposerBar";
 import { SlashMenu, type SlashCommand } from "./aimeals/SlashMenu";
 import { EstimatorModal } from "./aimeals/EstimatorModal";
 import { HistoryDrawer } from "./aimeals/HistoryDrawer";
+import { MessageActions } from "./aimeals/MessageActions";
 import { useKeyboardShortcuts } from "./aimeals/useKeyboardShortcuts";
 import {
   sendChatMessage,
@@ -565,9 +566,72 @@ export default function AIMeals() {
     }
   };
 
+  const regenerate = async (fromMessageId: number) => {
+    const idx = messages.findIndex((m) => m.id === fromMessageId);
+    if (idx <= 0) return;
+    const userMsg = messages[idx - 1];
+    if (userMsg.role !== "user") return;
+
+    const priorMessages = messages.slice(0, idx - 1);
+    const history = toHistory(priorMessages);
+
+    setMessages((prev) => prev.filter((m) => m.id !== fromMessageId));
+    setLoading(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const data = await sendChatMessage(
+        {
+          message: userMsg.text,
+          history,
+          tray_context: trayContext,
+          conversation_id: activeConvoId,
+          regenerate: true,
+        },
+        controller.signal,
+      );
+
+      if (data.error) {
+        setMessages((prev) => [
+          ...prev,
+          { id: nextId.current++, role: "ai", text: data.error as string, error: true },
+        ]);
+      } else {
+        const aiMsg: Message = {
+          id: nextId.current++,
+          role: "ai",
+          text: data.response || "I'm not sure how to help with that.",
+          recommendedDishes: sanitizeRecommendedDishes(data.recommended_dishes),
+          mealPlan: sanitizeMealPlan(data.meal_plan),
+          followUpSuggestions: sanitizeFollowUpSuggestions(data.follow_up_suggestions),
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+      }
+    } catch (err) {
+      if (axios.isCancel(err) || (err as Error).name === "CanceledError") {
+        // User pressed stop; stay quiet.
+      } else {
+        toast.error("Couldn't regenerate.");
+      }
+    } finally {
+      setLoading(false);
+      abortRef.current = null;
+    }
+  };
+
   const stopGeneration = () => {
     abortRef.current?.abort();
   };
+
+  const lastAiMsgId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "ai" && !m.error && !m.aborted) return m.id;
+    }
+    return null;
+  })();
 
   const isEmpty = messages.length === 0;
 
@@ -706,75 +770,95 @@ export default function AIMeals() {
                       )}
 
                       <div
+                        className={
+                          msg.role === "ai" && !msg.error && !msg.aborted
+                            ? "ai-message-actions-wrap"
+                            : undefined
+                        }
                         style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: msg.role === "user" ? "flex-end" : "flex-start",
                           maxWidth: "75%",
-                          padding: "11px 15px",
-                          borderRadius:
-                            msg.role === "user"
-                              ? "var(--se-radius-xl) var(--se-radius-xl) var(--se-radius-sm) var(--se-radius-xl)"
-                              : "18px 18px 18px 4px",
-                          background:
-                            msg.role === "user"
-                              ? "var(--se-primary)"
-                              : msg.error
-                                ? "var(--se-error-dim)"
-                                : "var(--se-bg-surface)",
-                          border:
-                            msg.role === "user"
-                              ? "none"
-                              : `1px solid ${msg.error ? "var(--se-error)" : "var(--se-border)"}`,
-                          boxShadow:
-                            msg.role === "ai" ? "var(--se-shadow-sm)" : "none",
-                          color:
-                            msg.role === "user"
-                              ? "white"
-                              : msg.error
-                                ? "var(--se-error)"
-                                : "var(--se-text-main)",
-                          fontSize: 14,
-                          lineHeight: 1.5,
                         }}
                       >
-                        <FormattedMessageText text={msg.text} />
-                        {msg.mealPlan ? (
-                          <MealPlanCard
-                            plan={msg.mealPlan}
-                            onAddPlan={() => addMealPlanToTray(msg.mealPlan as MealPlan)}
-                            onAddDish={(dish) => addDishToTray(dish)}
-                            onViewDish={viewDish}
-                          />
-                        ) : (
-                          msg.recommendedDishes?.map((dish) => (
-                            <DishRecommendationCard
-                              key={dish.dish_id}
-                              dish={dish}
-                              onView={() => viewDish(dish.dish_id)}
-                              onAdd={() => addDishToTray(dish)}
+                        <div
+                          style={{
+                            padding: "11px 15px",
+                            borderRadius:
+                              msg.role === "user"
+                                ? "var(--se-radius-xl) var(--se-radius-xl) var(--se-radius-sm) var(--se-radius-xl)"
+                                : "18px 18px 18px 4px",
+                            background:
+                              msg.role === "user"
+                                ? "var(--se-primary)"
+                                : msg.error
+                                  ? "var(--se-error-dim)"
+                                  : "var(--se-bg-surface)",
+                            border:
+                              msg.role === "user"
+                                ? "none"
+                                : `1px solid ${msg.error ? "var(--se-error)" : "var(--se-border)"}`,
+                            boxShadow:
+                              msg.role === "ai" ? "var(--se-shadow-sm)" : "none",
+                            color:
+                              msg.role === "user"
+                                ? "white"
+                                : msg.error
+                                  ? "var(--se-error)"
+                                  : "var(--se-text-main)",
+                            fontSize: 14,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          <FormattedMessageText text={msg.text} />
+                          {msg.mealPlan ? (
+                            <MealPlanCard
+                              plan={msg.mealPlan}
+                              onAddPlan={() => addMealPlanToTray(msg.mealPlan as MealPlan)}
+                              onAddDish={(dish) => addDishToTray(dish)}
+                              onViewDish={viewDish}
                             />
-                          ))
-                        )}
-                        {msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                            {msg.followUpSuggestions.map((suggestion) => (
-                              <button
-                                key={`${msg.id}-${suggestion}`}
-                                type="button"
-                                disabled={loading}
-                                onClick={() => sendMessage(suggestion)}
-                                style={{
-                                  fontSize: "var(--se-text-sm)",
-                                  borderRadius: "var(--se-radius-full)",
-                                  border: "1px solid var(--se-border)",
-                                  background: "var(--se-bg-elevated)",
-                                  color: "var(--se-text-secondary)",
-                                  padding: "6px 14px",
-                                  cursor: loading ? "default" : "pointer",
-                                }}
-                              >
-                                {suggestion}
-                              </button>
-                            ))}
-                          </div>
+                          ) : (
+                            msg.recommendedDishes?.map((dish) => (
+                              <DishRecommendationCard
+                                key={dish.dish_id}
+                                dish={dish}
+                                onView={() => viewDish(dish.dish_id)}
+                                onAdd={() => addDishToTray(dish)}
+                              />
+                            ))
+                          )}
+                          {msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                              {msg.followUpSuggestions.map((suggestion) => (
+                                <button
+                                  key={`${msg.id}-${suggestion}`}
+                                  type="button"
+                                  disabled={loading}
+                                  onClick={() => sendMessage(suggestion)}
+                                  style={{
+                                    fontSize: "var(--se-text-sm)",
+                                    borderRadius: "var(--se-radius-full)",
+                                    border: "1px solid var(--se-border)",
+                                    background: "var(--se-bg-elevated)",
+                                    color: "var(--se-text-secondary)",
+                                    padding: "6px 14px",
+                                    cursor: loading ? "default" : "pointer",
+                                  }}
+                                >
+                                  {suggestion}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {msg.role === "ai" && !msg.error && !msg.aborted && (
+                          <MessageActions
+                            text={msg.text}
+                            onRegenerate={() => regenerate(msg.id)}
+                            canRegenerate={msg.id === lastAiMsgId && !loading}
+                          />
                         )}
                       </div>
                     </div>

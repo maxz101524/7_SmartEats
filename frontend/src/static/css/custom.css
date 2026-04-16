@@ -178,3 +178,9 @@ select:focus-visible {
 button:active:not(:disabled) {
   transform: scale(0.97);
 }
+
+/* AI message hover actions reveal */
+.ai-message-actions-wrap:hover .ai-message-actions,
+.ai-message-actions-wrap:focus-within .ai-message-actions {
+  opacity: 1;
+}
