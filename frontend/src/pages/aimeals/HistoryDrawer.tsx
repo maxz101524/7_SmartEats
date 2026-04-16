@@ -53,12 +53,6 @@ export function HistoryDrawer({
 
   return (
     <>
-      <style>{`
-        @keyframes drawerSlideIn {
-          from { transform: translateX(-100%); }
-          to   { transform: translateX(0); }
-        }
-      `}</style>
       <div
         onClick={onClose}
         style={{
@@ -69,9 +63,9 @@ export function HistoryDrawer({
         }}
       />
       <aside
+        className="ai-history-drawer"
         style={{
           position: "fixed", top: 0, left: 0, bottom: 0,
-          width: "min(320px, 100vw)",
           background: "var(--se-bg-surface)",
           borderRight: "1px solid var(--se-border)",
           zIndex: 61,

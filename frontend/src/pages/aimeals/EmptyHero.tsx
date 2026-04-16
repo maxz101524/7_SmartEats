@@ -25,6 +25,10 @@ export function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
   const [key, setKey] = useState(0);
 
   useEffect(() => {
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) return;
     const timer = window.setInterval(() => {
       setSuggestions(pickRandom(ALL_PROMPTS, 3));
       setKey((k) => k + 1);

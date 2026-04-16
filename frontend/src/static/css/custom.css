@@ -134,21 +134,6 @@ select:focus-visible {
   100% { transform: translate(-30px, -20px) scale(1); }
 }
 
-@keyframes composerMorph {
-  from { transform: translateY(calc(45vh - 50%)) scale(1); }
-  to   { transform: translateY(0) scale(1); }
-}
-
-@keyframes bubbleRise {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes heroFadeOut {
-  from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0; transform: scale(0.96); visibility: hidden; }
-}
-
 @keyframes drawerSlideIn {
   from { transform: translateX(-100%); }
   to   { transform: translateX(0); }
@@ -159,12 +144,29 @@ select:focus-visible {
   100% { opacity: 1; transform: translateY(0); }
 }
 
+/* History drawer default width */
+.ai-history-drawer {
+  width: min(320px, 100vw);
+}
+
+/* Mobile: full-width drawer on small phones */
+@media (max-width: 500px) {
+  .ai-history-drawer {
+    width: 100vw;
+  }
+}
+
+/* Mobile: tighten composer padding */
+@media (max-width: 768px) {
+  .ai-chatbox-form {
+    padding: 10px 12px 6px !important;
+    border-radius: 18px !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ai-aurora-layer,
   .ai-orb-layer {
-    animation: none !important;
-  }
-  .ai-composer-morph {
     animation: none !important;
   }
 }
