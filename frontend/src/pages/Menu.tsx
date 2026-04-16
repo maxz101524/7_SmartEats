@@ -208,19 +208,64 @@ function HallSelectionCard({
         }}
       >
         {visual.src ? (
-          <img
-            src={visual.src}
-            alt=""
-            loading="lazy"
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition: "center",
-              transform: hovered ? "scale(1.095)" : "scale(1.06)",
-              transition: "transform 180ms ease",
-            }}
-          />
+          <>
+            {/* Background: blurred edge-fill */}
+            <img
+              src={visual.src}
+              alt=""
+              loading="lazy"
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                objectPosition: "center",
+                transform: hovered ? "scale(1.3)" : "scale(1.22)",
+                filter: "blur(18px) saturate(1.12)",
+                opacity: 0.95,
+                transition: "transform 220ms ease, filter 220ms ease",
+              }}
+            />
+            {/* Foreground: crisp, preserve full composition */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: compact ? 10 : 12,
+              }}
+            >
+              <img
+                src={visual.src}
+                alt=""
+                loading="lazy"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  objectPosition: "center",
+                  borderRadius: compact ? 14 : 16,
+                  boxShadow: "0 20px 45px rgba(0,0,0,0.22)",
+                  transform: hovered ? "scale(1.02)" : "scale(1)",
+                  transition: "transform 220ms ease",
+                }}
+              />
+            </div>
+            {/* Subtle vignette to keep edges intentional */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "radial-gradient(110% 90% at 50% 38%, rgba(0,0,0,0) 58%, rgba(0,0,0,0.16) 100%)",
+                opacity: 0.9,
+              }}
+            />
+          </>
         ) : (
           <div
             style={{
