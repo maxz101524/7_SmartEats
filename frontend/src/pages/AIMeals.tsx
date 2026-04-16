@@ -11,6 +11,8 @@ import { ThinkingIndicator } from "./aimeals/ThinkingIndicator";
 import { NutritionEstimator } from "./aimeals/NutritionEstimator";
 import { BackgroundOrb } from "./aimeals/BackgroundOrb";
 import { EmptyHero } from "./aimeals/EmptyHero";
+import { ComposerBar } from "./aimeals/ComposerBar";
+import { sendChatMessage } from "./aimeals/api";
 import { getDishHall, hasDishNutrition } from "./aimeals/dishHelpers";
 import type { RecommendedDish, MealPlan, Message, MessageRole } from "./aimeals/types";
 
@@ -164,9 +166,13 @@ export default function AIMeals() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [dailyIntake, setDailyIntake] = useState<DailyIntake | null>(null);
+  const [activeConvoId, setActiveConvoId] = useState<number | null>(null);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const nextId = useRef(1);
+  // slashMenuOpen is consumed by SlashMenu in Task 13; keep the reference to satisfy lint.
+  void slashMenuOpen;
 
   // Route-scoped scroll lock so the AI chat behaves like modern chat UIs:
   // the shell owns scrolling, not the whole page (prevents reaching footer).
@@ -364,20 +370,28 @@ export default function AIMeals() {
     setInput("");
     setLoading(true);
 
-    try {
-      const token = localStorage.getItem("authToken");
-      const res = await axios.post(`${API_BASE}/ai-chat/`, {
-        message: trimmed,
-        history,
-        tray_context: trayContext,
-      }, token ? { headers: { Authorization: `Token ${token}` } } : undefined);
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-      const data = res.data;
+    try {
+      const data = await sendChatMessage(
+        {
+          message: trimmed,
+          history,
+          tray_context: trayContext,
+          conversation_id: activeConvoId,
+        },
+        controller.signal,
+      );
+
+      if (data.conversation_id) {
+        setActiveConvoId(data.conversation_id);
+      }
 
       if (data.error) {
         setMessages((prev) => [
           ...prev,
-          { id: nextId.current++, role: "ai", text: data.error, error: true },
+          { id: nextId.current++, role: "ai", text: data.error as string, error: true },
         ]);
       } else {
         const aiMsg: Message = {
@@ -390,25 +404,36 @@ export default function AIMeals() {
         };
         setMessages((prev) => [...prev, aiMsg]);
       }
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextId.current++,
-          role: "ai",
-          text: "Something went wrong reaching the server. Make sure the backend is running.",
-          error: true,
-        },
-      ]);
+    } catch (err) {
+      if (axios.isCancel(err) || (err as Error).name === "CanceledError") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: nextId.current++,
+            role: "ai",
+            text: "Generation stopped.",
+            aborted: true,
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: nextId.current++,
+            role: "ai",
+            text: "Something went wrong reaching the server. Make sure the backend is running.",
+            error: true,
+          },
+        ]);
+      }
     } finally {
       setLoading(false);
-      inputRef.current?.focus();
+      abortRef.current = null;
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage(input);
+  const stopGeneration = () => {
+    abortRef.current?.abort();
   };
 
   const isEmpty = messages.length === 0;
@@ -692,130 +717,16 @@ export default function AIMeals() {
               }}
             >
               {isEmpty && <EmptyHero onPick={sendMessage} />}
-              <form
-                onSubmit={handleSubmit}
-                className="ai-chatbox-form"
-                style={{
-                  background: "var(--se-bg-surface)",
-                  border: "1px solid var(--se-border)",
-                  borderRadius: 22,
-                  padding: "14px 16px 10px",
-                  boxShadow: "0 4px 14px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)",
-                  transition: "border-color 150ms ease, box-shadow 150ms ease",
-                  outline: "none",
-                }}
-              >
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder="Ask about dining halls, dishes, or nutrition…"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  disabled={loading}
-                  className="ai-chatbox-input"
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    fontSize: 14,
-                    color: "var(--se-text-main)",
-                    padding: "4px 0 10px",
-                  }}
-                  onFocus={(e) => {
-                    const form = e.currentTarget.form;
-                    if (form) form.style.borderColor = "var(--se-border-strong)";
-                  }}
-                  onBlur={(e) => {
-                    const form = e.currentTarget.form;
-                    if (form) form.style.borderColor = "var(--se-border)";
-                  }}
-                />
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                      color: "var(--se-text-faint)",
-                    }}
-                  >
-                    {[
-                      { d: "M12 5v14M5 12h14", label: "Add" },
-                      { d: "M9 11.5V14a2 2 0 0 0 4 0V8a4 4 0 0 0-8 0v8a6 6 0 0 0 12 0V9", label: "Attach" },
-                      { d: "M4 4h16v6H4zM4 14h16v6H4z", label: "Saved" },
-                    ].map((icon) => (
-                      <button
-                        key={icon.label}
-                        type="button"
-                        aria-label={icon.label}
-                        style={{
-                          width: 30,
-                          height: 30,
-                          borderRadius: "50%",
-                          border: "none",
-                          background: "transparent",
-                          color: "var(--se-text-faint)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                          transition: "background 0.15s, color 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--se-bg-elevated)";
-                          e.currentTarget.style.color = "var(--se-text-secondary)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "var(--se-text-faint)";
-                        }}
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d={icon.d} />
-                        </svg>
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={!input.trim() || loading}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "7px 14px 7px 16px",
-                      borderRadius: "9999px",
-                      border: "none",
-                      background:
-                        input.trim() && !loading
-                          ? "var(--se-text-main)"
-                          : "var(--se-bg-subtle)",
-                      color:
-                        input.trim() && !loading
-                          ? "var(--se-text-inverted)"
-                          : "var(--se-text-faint)",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: input.trim() && !loading ? "pointer" : "default",
-                      transition: "all 0.15s",
-                    }}
-                    aria-label="Send"
-                  >
-                    Send
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </button>
-                </div>
-              </form>
+              <ComposerBar
+                value={input}
+                onChange={setInput}
+                onSubmit={() => sendMessage(input)}
+                onStop={stopGeneration}
+                onSlashTrigger={() => setSlashMenuOpen(true)}
+                loading={loading}
+                autoFocus={isEmpty}
+                compact={isEmpty}
+              />
 
               {/* AI Context strip */}
               <div
