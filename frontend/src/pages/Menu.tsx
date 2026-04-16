@@ -55,32 +55,32 @@ const HALL_THUMBNAIL_BASE = "/dininghall_thumbnails/";
 const HALL_VISUALS = [
   {
     matcher: /field\s+of\s+greens/i,
-    src: `${HALL_THUMBNAIL_BASE}field-of-greens.png`,
+    src: `${HALL_THUMBNAIL_BASE}greens.png`,
     accent: "#16a34a",
   },
   {
     matcher: /ikenberry/i,
-    src: `${HALL_THUMBNAIL_BASE}Ikenberry.png`,
+    src: `${HALL_THUMBNAIL_BASE}ikenberry_.png`,
     accent: "#dc2626",
   },
   {
     matcher: /illinois\s+street|isr/i,
-    src: `${HALL_THUMBNAIL_BASE}ISR.png`,
+    src: `${HALL_THUMBNAIL_BASE}ISRhall.png`,
     accent: "#2563eb",
   },
   {
     matcher: /kosher/i,
-    src: `${HALL_THUMBNAIL_BASE}kosher-kitchen.png`,
+    src: `${HALL_THUMBNAIL_BASE}kosher.png`,
     accent: "#7c3aed",
   },
   {
     matcher: /lincoln|allen/i,
-    src: `${HALL_THUMBNAIL_BASE}Allen-hall.png`,
+    src: `${HALL_THUMBNAIL_BASE}allen.png`,
     accent: "#ea580c",
   },
   {
     matcher: /pennsylvania|par/i,
-    src: `${HALL_THUMBNAIL_BASE}PAR.png`,
+    src: `${HALL_THUMBNAIL_BASE}PAR_.png`,
     accent: "#0891b2",
   },
 ];
@@ -202,70 +202,27 @@ function HallSelectionCard({
         style={{
           position: "relative",
           width: "100%",
-          height: compact ? 116 : 164,
+          height: compact ? 124 : 172,
           overflow: "hidden",
           background: "var(--se-bg-subtle)",
         }}
       >
         {visual.src ? (
-          <>
-            {/* Background: blurred edge-fill */}
-            <img
-              src={visual.src}
-              alt=""
-              loading="lazy"
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                objectPosition: "center",
-                transform: hovered ? "scale(1.3)" : "scale(1.22)",
-                filter: "blur(18px) saturate(1.12)",
-                opacity: 0.95,
-                transition: "transform 220ms ease, filter 220ms ease",
-              }}
-            />
-            {/* Foreground: crisp, preserve full composition */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: compact ? 10 : 12,
-              }}
-            >
-              <img
-                src={visual.src}
-                alt=""
-                loading="lazy"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                  objectPosition: "center",
-                  borderRadius: compact ? 14 : 16,
-                  boxShadow: "0 20px 45px rgba(0,0,0,0.22)",
-                  transform: hovered ? "scale(1.02)" : "scale(1)",
-                  transition: "transform 220ms ease",
-                }}
-              />
-            </div>
-            {/* Subtle vignette to keep edges intentional */}
-            <div
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "radial-gradient(110% 90% at 50% 38%, rgba(0,0,0,0) 58%, rgba(0,0,0,0.16) 100%)",
-                opacity: 0.9,
-              }}
-            />
-          </>
+          <img
+            src={visual.src}
+            alt=""
+            loading="lazy"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "center",
+              transform: hovered ? "scale(1.045)" : "scale(1)",
+              transition: "transform 260ms ease",
+            }}
+          />
         ) : (
           <div
             style={{
@@ -283,12 +240,15 @@ function HallSelectionCard({
             {hall.name.slice(0, 1)}
           </div>
         )}
+        {/* Soft top + bottom gradient for pill legibility without darkening the photo */}
         <div
+          aria-hidden="true"
           style={{
             position: "absolute",
             inset: 0,
             background:
-              "linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0) 42%, rgba(0,0,0,0.52) 100%)",
+              "linear-gradient(180deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0) 32%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.42) 100%)",
+            pointerEvents: "none",
           }}
         />
         <span
@@ -296,18 +256,20 @@ function HallSelectionCard({
             position: "absolute",
             top: 12,
             left: 12,
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             gap: 7,
-            padding: "5px 9px",
+            padding: "5px 10px 5px 9px",
             borderRadius: "var(--se-radius-full)",
-            background: isOpen ? "rgba(236, 253, 245, 0.92)" : "rgba(255, 255, 255, 0.9)",
+            background: "rgba(255, 255, 255, 0.78)",
+            backdropFilter: "saturate(1.2) blur(10px)",
+            WebkitBackdropFilter: "saturate(1.2) blur(10px)",
             color: "var(--se-text-main)",
             fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: "0.04em",
-            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
-            border: isOpen ? "1px solid rgba(16, 185, 129, 0.28)" : "1px solid rgba(0, 0, 0, 0.06)",
+            fontWeight: 700,
+            letterSpacing: "0.02em",
+            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.14)",
+            border: "1px solid rgba(255, 255, 255, 0.55)",
           }}
         >
           <span
@@ -316,7 +278,7 @@ function HallSelectionCard({
               height: 7,
               borderRadius: "50%",
               background: selected ? "var(--se-primary)" : statusDot,
-              boxShadow: selected ? "0 0 0 4px rgba(var(--se-primary-rgb), 0.14)" : "none",
+              boxShadow: isOpen && !selected ? "0 0 0 3px rgba(16, 185, 129, 0.18)" : "none",
             }}
           />
           <span
@@ -338,11 +300,15 @@ function HallSelectionCard({
             bottom: 12,
             padding: "5px 10px",
             borderRadius: "var(--se-radius-full)",
-            background: "rgba(255, 255, 255, 0.92)",
+            background: "rgba(255, 255, 255, 0.78)",
+            backdropFilter: "saturate(1.2) blur(10px)",
+            WebkitBackdropFilter: "saturate(1.2) blur(10px)",
             color: "var(--se-text-main)",
             fontSize: "var(--se-text-xs)",
             fontWeight: "var(--se-weight-bold)",
             whiteSpace: "nowrap",
+            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.14)",
+            border: "1px solid rgba(255, 255, 255, 0.55)",
           }}
         >
           {hall.dishes.length} dishes
