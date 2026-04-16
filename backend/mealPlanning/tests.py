@@ -1603,3 +1603,69 @@ class ChatMessageModelTest(TestCase):
         self.assertEqual(ChatMessage.objects.count(), 2)
         self.convo.delete()
         self.assertEqual(ChatMessage.objects.count(), 0)
+
+
+class ConversationsEndpointTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.token = Token.objects.create(user=self.user)
+        self.auth = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+
+    def test_get_returns_401_when_unauthenticated(self):
+        resp = self.client.get("/api/conversations/")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_get_returns_empty_list_initially(self):
+        resp = self.client.get("/api/conversations/", **self.auth)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_get_returns_user_conversations_with_message_count(self):
+        c1 = Conversation.objects.create(user=self.user, title="One")
+        ChatMessage.objects.create(conversation=c1, role="user", content="hi")
+        ChatMessage.objects.create(conversation=c1, role="assistant", content="hello")
+        Conversation.objects.create(user=self.user, title="Two")
+
+        resp = self.client.get("/api/conversations/", **self.auth)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 2)
+        titles = [c["title"] for c in data]
+        self.assertIn("One", titles)
+        self.assertIn("Two", titles)
+        one = next(c for c in data if c["title"] == "One")
+        self.assertEqual(one["message_count"], 2)
+        self.assertIn("updated_at", one)
+        self.assertIn("id", one)
+
+    def test_get_does_not_leak_other_users_conversations(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        try:
+            other = User.objects.create_user(username="eve", password="pw")
+        finally:
+            post_save.connect(create_user_profile, sender=User)
+            post_save.connect(save_user_profile, sender=User)
+        Conversation.objects.create(user=other, title="Secret")
+        Conversation.objects.create(user=self.user, title="Mine")
+
+        resp = self.client.get("/api/conversations/", **self.auth)
+        titles = [c["title"] for c in resp.json()]
+        self.assertEqual(titles, ["Mine"])
+
+    def test_post_creates_empty_conversation(self):
+        resp = self.client.post(
+            "/api/conversations/",
+            data=json.dumps({}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertIn("id", data)
+        self.assertEqual(data["title"], "New chat")
+        self.assertEqual(Conversation.objects.filter(user=self.user).count(), 1)

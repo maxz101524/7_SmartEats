@@ -1442,6 +1442,73 @@ class MealReportsView(APIView):
         })
 
 
+class ConversationsView(View):
+    """
+    GET  /api/conversations/   -> list user's conversations with message_count
+    POST /api/conversations/   -> create an empty conversation (lazy creation
+                                  is preferred via AIChatView; this endpoint
+                                  exists for explicit New-chat flows)
+    """
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def _authenticate(self, request):
+        from rest_framework.authtoken.models import Token
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if not auth_header.startswith("Token "):
+            return None
+        key = auth_header.split(" ", 1)[1].strip()
+        try:
+            return Token.objects.select_related("user").get(key=key).user
+        except Token.DoesNotExist:
+            return None
+
+    def get(self, request, *args, **kwargs):
+        from django.db.models import Count
+        from mealPlanning.models import Conversation
+
+        user = self._authenticate(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        qs = (
+            Conversation.objects.filter(user=user)
+            .annotate(message_count=Count("messages"))
+            .order_by("-updated_at")
+        )
+        data = [
+            {
+                "id": c.id,
+                "title": c.title,
+                "updated_at": c.updated_at.isoformat(),
+                "message_count": c.message_count,
+            }
+            for c in qs
+        ]
+        return JsonResponse(data, safe=False)
+
+    def post(self, request, *args, **kwargs):
+        from mealPlanning.models import Conversation
+
+        user = self._authenticate(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        convo = Conversation.objects.create(user=user)
+        Conversation.enforce_lru_cap_for_user(user, cap=20)
+        return JsonResponse(
+            {
+                "id": convo.id,
+                "title": convo.title,
+                "updated_at": convo.updated_at.isoformat(),
+                "message_count": 0,
+            },
+            status=201,
+        )
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class AIChatView(View):
     """Gemini-powered AI chat endpoint for dining recommendations."""
