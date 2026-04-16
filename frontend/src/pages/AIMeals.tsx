@@ -13,9 +13,16 @@ import { EmptyHero } from "./aimeals/EmptyHero";
 import { ComposerBar } from "./aimeals/ComposerBar";
 import { SlashMenu, type SlashCommand } from "./aimeals/SlashMenu";
 import { EstimatorModal } from "./aimeals/EstimatorModal";
-import { sendChatMessage } from "./aimeals/api";
+import { HistoryDrawer } from "./aimeals/HistoryDrawer";
+import {
+  sendChatMessage,
+  listConversations,
+  getConversation,
+  renameConversation,
+  deleteConversation,
+} from "./aimeals/api";
 import { getDishHall, hasDishNutrition } from "./aimeals/dishHelpers";
-import type { RecommendedDish, MealPlan, Message, MessageRole } from "./aimeals/types";
+import type { RecommendedDish, MealPlan, Message, MessageRole, ConvoSummary } from "./aimeals/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -165,9 +172,17 @@ export default function AIMeals() {
   const [activeConvoId, setActiveConvoId] = useState<number | null>(null);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [estimatorOpen, setEstimatorOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [conversations, setConversations] = useState<ConvoSummary[]>([]);
+  const isAuthenticated = Boolean(localStorage.getItem("authToken"));
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const nextId = useRef(1);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    listConversations().then(setConversations).catch(() => {});
+  }, [isAuthenticated]);
 
   const slashQuery = input.startsWith("/") ? input.slice(1) : "";
 
@@ -189,6 +204,49 @@ export default function AIMeals() {
     setMessages([]);
     nextId.current = 1;
     sessionStorage.removeItem(CHAT_STORAGE_KEY);
+  };
+
+  const handleSelectConvo = async (id: number) => {
+    try {
+      const detail = await getConversation(id);
+      const hydrated: Message[] = detail.messages.map((m) => ({
+        id: m.id,
+        role: m.role === "assistant" ? "ai" : "user",
+        text: m.content,
+        recommendedDishes: sanitizeRecommendedDishes(m.metadata?.recommended_dishes),
+        mealPlan: sanitizeMealPlan(m.metadata?.meal_plan),
+        followUpSuggestions: sanitizeFollowUpSuggestions(m.metadata?.follow_up_suggestions),
+      }));
+      setMessages(hydrated);
+      setActiveConvoId(id);
+      nextId.current = hydrated.length > 0 ? Math.max(...hydrated.map((m) => m.id)) + 1 : 1;
+      setDrawerOpen(false);
+    } catch (err) {
+      console.error("Couldn't load chat", err);
+    }
+  };
+
+  const handleRename = async (id: number, newTitle: string) => {
+    const prev = conversations;
+    setConversations((list) => list.map((c) => (c.id === id ? { ...c, title: newTitle } : c)));
+    try {
+      await renameConversation(id, newTitle);
+    } catch (err) {
+      setConversations(prev);
+      console.error("Rename failed", err);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    const prev = conversations;
+    setConversations((list) => list.filter((c) => c.id !== id));
+    if (activeConvoId === id) handleNewChat();
+    try {
+      await deleteConversation(id);
+    } catch (err) {
+      setConversations(prev);
+      console.error("Delete failed", err);
+    }
   };
 
   const slashCommands: SlashCommand[] = [
@@ -432,6 +490,29 @@ export default function AIMeals() {
 
       if (data.conversation_id) {
         setActiveConvoId(data.conversation_id);
+        setConversations((prev) => {
+          const existing = prev.find((c) => c.id === data.conversation_id);
+          if (existing) {
+            return [
+              {
+                ...existing,
+                title: data.title ?? existing.title,
+                updated_at: new Date().toISOString(),
+                message_count: existing.message_count + 2,
+              },
+              ...prev.filter((c) => c.id !== data.conversation_id),
+            ];
+          }
+          return [
+            {
+              id: data.conversation_id!,
+              title: data.title ?? trimmed.slice(0, 80),
+              updated_at: new Date().toISOString(),
+              message_count: 2,
+            },
+            ...prev,
+          ].slice(0, 20);
+        });
       }
 
       if (data.error) {
@@ -554,6 +635,28 @@ export default function AIMeals() {
             position: "relative",
           }}
         >
+            {/* ── Top action row: history + new chat ───────────────────── */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "8px 0 4px",
+              }}
+            >
+              <button type="button" onClick={() => setDrawerOpen(true)} style={topBtn}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18M3 12h18M3 18h18" />
+                </svg>
+                History
+              </button>
+              {!isEmpty && (
+                <button type="button" onClick={handleNewChat} style={topBtn}>
+                  + New chat
+                </button>
+              )}
+            </div>
+
             {/* ── Chat messages area (ONLY scroll region, chat state only) ── */}
             {!isEmpty && (
               <div
@@ -751,6 +854,32 @@ export default function AIMeals() {
         </div>
       </div>
       <EstimatorModal open={estimatorOpen} onClose={() => setEstimatorOpen(false)} />
+      <HistoryDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        conversations={conversations}
+        activeId={activeConvoId}
+        onSelect={handleSelectConvo}
+        onNewChat={handleNewChat}
+        onRename={handleRename}
+        onDelete={handleDelete}
+        isAuthenticated={isAuthenticated}
+        onSignIn={() => navigate("/login")}
+      />
     </>
   );
 }
+
+const topBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "6px 12px",
+  borderRadius: 9999,
+  border: "1px solid var(--se-border)",
+  background: "var(--se-bg-surface)",
+  color: "var(--se-text-secondary)",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+};
