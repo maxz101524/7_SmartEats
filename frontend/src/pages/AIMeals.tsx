@@ -547,30 +547,26 @@ export default function AIMeals() {
             <NutritionEstimator />
           </div>
         ) : (
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            {/* ── Chat messages area (ONLY scroll region) ───────────────── */}
-            <div
-              ref={messagesContainerRef}
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                padding: isEmpty ? "0" : "8px 0 16px",
-              }}
-            >
-              {isEmpty ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    height: "100%",
-                  }}
-                >
-                  <EmptyHero onPick={sendMessage} />
-                </div>
-              ) : (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              position: "relative",
+            }}
+          >
+            {/* ── Chat messages area (ONLY scroll region, chat state only) ── */}
+            {!isEmpty && (
+              <div
+                ref={messagesContainerRef}
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  padding: "8px 0 16px",
+                }}
+              >
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {messages.map((msg) => (
                     <div
@@ -679,18 +675,23 @@ export default function AIMeals() {
 
                   {loading && <ThinkingIndicator />}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* ── Composer (pinned bottom, non-scrolling) ───────────────── */}
+            {/* ── Composer cluster (morphs from centered to docked) ─────── */}
             <div
+              className="ai-composer-cluster"
               style={{
-                flexShrink: 0,
-                paddingTop: 12,
-                paddingBottom: 12,
-                background: "var(--se-bg-base)",
+                marginTop: isEmpty ? "calc(38vh - 120px)" : 0,
+                padding: isEmpty ? "0 16px" : "12px 0",
+                display: "flex",
+                flexDirection: "column",
+                gap: 20,
+                background: isEmpty ? "transparent" : "var(--se-bg-base)",
+                transition: "margin-top 550ms cubic-bezier(0.32, 0.72, 0, 1)",
               }}
             >
+              {isEmpty && <EmptyHero onPick={sendMessage} />}
               <form
                 onSubmit={handleSubmit}
                 className="ai-chatbox-form"
