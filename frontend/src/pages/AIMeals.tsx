@@ -8,10 +8,11 @@ import { FormattedMessageText } from "./aimeals/FormattedMessageText";
 import { DishRecommendationCard } from "./aimeals/DishRecommendationCard";
 import { MealPlanCard } from "./aimeals/MealPlanCard";
 import { ThinkingIndicator } from "./aimeals/ThinkingIndicator";
-import { NutritionEstimator } from "./aimeals/NutritionEstimator";
 import { BackgroundOrb } from "./aimeals/BackgroundOrb";
 import { EmptyHero } from "./aimeals/EmptyHero";
 import { ComposerBar } from "./aimeals/ComposerBar";
+import { SlashMenu, type SlashCommand } from "./aimeals/SlashMenu";
+import { EstimatorModal } from "./aimeals/EstimatorModal";
 import { sendChatMessage } from "./aimeals/api";
 import { getDishHall, hasDishNutrition } from "./aimeals/dishHelpers";
 import type { RecommendedDish, MealPlan, Message, MessageRole } from "./aimeals/types";
@@ -28,10 +29,6 @@ interface DailyIntake {
   goals: { calories: number; protein: number; carbs: number; fat: number } | null;
   goals_set: boolean;
 }
-
-// ─── Tab type ─────────────────────────────────────────────────────────────────
-
-type ActiveTab = "chat" | "estimator";
 
 const CHAT_STORAGE_KEY = "smarteats_ai_chat_v1";
 const ASSISTANT_STYLE_PREFIXES = [
@@ -161,18 +158,67 @@ export default function AIMeals() {
     uniqueCount,
     addItem,
   } = useMealTray();
-  const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [dailyIntake, setDailyIntake] = useState<DailyIntake | null>(null);
   const [activeConvoId, setActiveConvoId] = useState<number | null>(null);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [estimatorOpen, setEstimatorOpen] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const nextId = useRef(1);
-  // slashMenuOpen is consumed by SlashMenu in Task 13; keep the reference to satisfy lint.
-  void slashMenuOpen;
+
+  const slashQuery = input.startsWith("/") ? input.slice(1) : "";
+
+  useEffect(() => {
+    if (input.startsWith("/")) setSlashMenuOpen(true);
+    else setSlashMenuOpen(false);
+  }, [input]);
+
+  const handleNewChat = () => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setActiveConvoId(null);
+    nextId.current = 1;
+    sessionStorage.removeItem(CHAT_STORAGE_KEY);
+  };
+
+  const handleClearCurrent = () => {
+    abortRef.current?.abort();
+    setMessages([]);
+    nextId.current = 1;
+    sessionStorage.removeItem(CHAT_STORAGE_KEY);
+  };
+
+  const slashCommands: SlashCommand[] = [
+    {
+      id: "estimate",
+      label: "Nutrition Estimator",
+      description: "Calculate daily calories and macros",
+      onRun: () => { setInput(""); setEstimatorOpen(true); },
+    },
+    {
+      id: "new",
+      label: "New chat",
+      description: "Start a fresh conversation",
+      hint: "⌘K",
+      onRun: () => { setInput(""); handleNewChat(); },
+    },
+    {
+      id: "clear",
+      label: "Clear this chat",
+      description: "Remove all messages in the current thread",
+      onRun: () => { setInput(""); handleClearCurrent(); },
+    },
+    {
+      id: "menu",
+      label: "Browse menu",
+      description: "Coming soon — /menu <hall>",
+      disabled: true,
+      onRun: () => {},
+    },
+  ];
 
   // Route-scoped scroll lock so the AI chat behaves like modern chat UIs:
   // the shell owns scrolling, not the whole page (prevents reaching footer).
@@ -499,88 +545,15 @@ export default function AIMeals() {
             overflow: "hidden",
           }}
         >
-        {/* ── Tab bar ──────────────────────────────────────── */}
         <div
           style={{
+            flex: 1,
+            minHeight: 0,
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            paddingBottom: 16,
-            flexShrink: 0,
-            flexWrap: "wrap",
+            flexDirection: "column",
+            position: "relative",
           }}
         >
-          <div style={{
-            display: "inline-flex",
-            background: "var(--se-bg-subtle)",
-            borderRadius: "var(--se-radius-full)",
-            padding: 3,
-            gap: 2,
-          }}>
-            {[{ key: "chat", label: "AI Chat" }, { key: "estimator", label: "Nutrition Estimator" }].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key as ActiveTab)}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: "var(--se-radius-full)",
-                  border: "none",
-                  fontSize: "var(--se-text-sm)",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  transition: "all 150ms ease",
-                  background: activeTab === tab.key ? "var(--se-bg-surface)" : "transparent",
-                  color: activeTab === tab.key ? "var(--se-text-main)" : "var(--se-text-muted)",
-                  boxShadow: activeTab === tab.key ? "var(--se-shadow-sm)" : "none",
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {activeTab === "chat" && !isEmpty && (
-            <button
-              type="button"
-              onClick={() => {
-                setMessages([]);
-                nextId.current = 1;
-                sessionStorage.removeItem(CHAT_STORAGE_KEY);
-              }}
-              style={{
-                border: "1px solid var(--se-border)",
-                background: "var(--se-bg-surface)",
-                color: "var(--se-text-muted)",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                padding: "8px 12px",
-                borderRadius: "var(--se-radius-full)",
-                boxShadow: "var(--se-shadow-sm)",
-              }}
-            >
-              New chat
-            </button>
-          )}
-        </div>
-
-        {/* ── Estimator tab ──────────────────────────────────── */}
-        {activeTab === "estimator" ? (
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 0 16px" }}>
-            <NutritionEstimator />
-          </div>
-        ) : (
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              flexDirection: "column",
-              position: "relative",
-            }}
-          >
             {/* ── Chat messages area (ONLY scroll region, chat state only) ── */}
             {!isEmpty && (
               <div
@@ -717,16 +690,24 @@ export default function AIMeals() {
               }}
             >
               {isEmpty && <EmptyHero onPick={sendMessage} />}
-              <ComposerBar
-                value={input}
-                onChange={setInput}
-                onSubmit={() => sendMessage(input)}
-                onStop={stopGeneration}
-                onSlashTrigger={() => setSlashMenuOpen(true)}
-                loading={loading}
-                autoFocus={isEmpty}
-                compact={isEmpty}
-              />
+              <div style={{ position: "relative" }}>
+                <ComposerBar
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={() => sendMessage(input)}
+                  onStop={stopGeneration}
+                  onSlashTrigger={() => setSlashMenuOpen(true)}
+                  loading={loading}
+                  autoFocus={isEmpty}
+                  compact={isEmpty}
+                />
+                <SlashMenu
+                  open={slashMenuOpen}
+                  query={slashQuery}
+                  commands={slashCommands}
+                  onClose={() => setSlashMenuOpen(false)}
+                />
+              </div>
 
               {/* AI Context strip */}
               <div
@@ -767,9 +748,9 @@ export default function AIMeals() {
 
             </div>
           </div>
-        )}
         </div>
       </div>
+      <EstimatorModal open={estimatorOpen} onClose={() => setEstimatorOpen(false)} />
     </>
   );
 }
