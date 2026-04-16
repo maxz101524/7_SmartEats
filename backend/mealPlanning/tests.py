@@ -1669,3 +1669,89 @@ class ConversationsEndpointTest(TestCase):
         self.assertIn("id", data)
         self.assertEqual(data["title"], "New chat")
         self.assertEqual(Conversation.objects.filter(user=self.user).count(), 1)
+
+
+class ConversationDetailEndpointTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.token = Token.objects.create(user=self.user)
+        self.auth = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+        self.convo = Conversation.objects.create(user=self.user, title="Test convo")
+        ChatMessage.objects.create(conversation=self.convo, role="user", content="Hi")
+        ChatMessage.objects.create(
+            conversation=self.convo,
+            role="assistant",
+            content="Hello back",
+            metadata={"follow_up_suggestions": ["more?"]},
+        )
+
+    def test_get_returns_conversation_with_messages(self):
+        resp = self.client.get(f"/api/conversations/{self.convo.id}/", **self.auth)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["id"], self.convo.id)
+        self.assertEqual(data["title"], "Test convo")
+        self.assertEqual(len(data["messages"]), 2)
+        self.assertEqual(data["messages"][0]["role"], "user")
+        self.assertEqual(data["messages"][0]["content"], "Hi")
+        self.assertEqual(data["messages"][1]["role"], "assistant")
+        self.assertEqual(data["messages"][1]["metadata"], {"follow_up_suggestions": ["more?"]})
+
+    def test_get_returns_404_for_other_users_conversation(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        try:
+            other = User.objects.create_user(username="eve", password="pw")
+        finally:
+            post_save.connect(create_user_profile, sender=User)
+            post_save.connect(save_user_profile, sender=User)
+        other_convo = Conversation.objects.create(user=other, title="Theirs")
+        resp = self.client.get(f"/api/conversations/{other_convo.id}/", **self.auth)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_get_returns_401_when_unauthenticated(self):
+        resp = self.client.get(f"/api/conversations/{self.convo.id}/")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_patch_renames_conversation(self):
+        resp = self.client.patch(
+            f"/api/conversations/{self.convo.id}/",
+            data=json.dumps({"title": "Renamed"}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.convo.refresh_from_db()
+        self.assertEqual(self.convo.title, "Renamed")
+
+    def test_patch_truncates_title_to_80_chars(self):
+        long_title = "x" * 200
+        resp = self.client.patch(
+            f"/api/conversations/{self.convo.id}/",
+            data=json.dumps({"title": long_title}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.convo.refresh_from_db()
+        self.assertEqual(len(self.convo.title), 80)
+
+    def test_patch_rejects_empty_title(self):
+        resp = self.client.patch(
+            f"/api/conversations/{self.convo.id}/",
+            data=json.dumps({"title": "   "}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_delete_removes_conversation_and_cascades_messages(self):
+        convo_id = self.convo.id
+        resp = self.client.delete(f"/api/conversations/{convo_id}/", **self.auth)
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(Conversation.objects.filter(id=convo_id).exists())
+        self.assertEqual(ChatMessage.objects.filter(conversation_id=convo_id).count(), 0)

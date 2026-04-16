@@ -56,6 +56,23 @@ from django.conf import settings
 from allauth.socialaccount.models import SocialAccount
 
 
+def _get_user_from_token(request):
+    """
+    Extract authenticated User from `Authorization: Token <key>` header.
+    Returns None if missing/invalid. Used by plain Django Views that don't
+    have DRF's authentication plumbing.
+    """
+    from rest_framework.authtoken.models import Token
+    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    if not auth_header.startswith("Token "):
+        return None
+    key = auth_header.split(" ", 1)[1].strip()
+    try:
+        return Token.objects.select_related("user").get(key=key).user
+    except Token.DoesNotExist:
+        return None
+
+
 def _recommendation_context_signature(goal, dietary_flags):
     return json.dumps({
         "goal": goal or "maintain",
@@ -1454,22 +1471,11 @@ class ConversationsView(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def _authenticate(self, request):
-        from rest_framework.authtoken.models import Token
-        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        if not auth_header.startswith("Token "):
-            return None
-        key = auth_header.split(" ", 1)[1].strip()
-        try:
-            return Token.objects.select_related("user").get(key=key).user
-        except Token.DoesNotExist:
-            return None
-
     def get(self, request, *args, **kwargs):
         from django.db.models import Count
         from mealPlanning.models import Conversation
 
-        user = self._authenticate(request)
+        user = _get_user_from_token(request)
         if user is None:
             return JsonResponse({"error": "Authentication required"}, status=401)
 
@@ -1492,7 +1498,7 @@ class ConversationsView(View):
     def post(self, request, *args, **kwargs):
         from mealPlanning.models import Conversation
 
-        user = self._authenticate(request)
+        user = _get_user_from_token(request)
         if user is None:
             return JsonResponse({"error": "Authentication required"}, status=401)
 
@@ -1507,6 +1513,94 @@ class ConversationsView(View):
             },
             status=201,
         )
+
+
+class ConversationDetailView(View):
+    """
+    GET    /api/conversations/<id>/   -> full conversation + messages
+    PATCH  /api/conversations/<id>/   -> rename (body: {"title": "..."})
+    DELETE /api/conversations/<id>/   -> delete (cascades messages)
+    """
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def _get_convo_or_404(self, user, convo_id):
+        from mealPlanning.models import Conversation
+        try:
+            return Conversation.objects.get(id=convo_id, user=user)
+        except Conversation.DoesNotExist:
+            return None
+
+    def get(self, request, convo_id, *args, **kwargs):
+        user = _get_user_from_token(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        convo = self._get_convo_or_404(user, convo_id)
+        if convo is None:
+            return JsonResponse({"error": "Not found"}, status=404)
+
+        messages = [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "metadata": m.metadata or {},
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in convo.messages.all()
+        ]
+        return JsonResponse(
+            {
+                "id": convo.id,
+                "title": convo.title,
+                "updated_at": convo.updated_at.isoformat(),
+                "messages": messages,
+            }
+        )
+
+    def patch(self, request, convo_id, *args, **kwargs):
+        user = _get_user_from_token(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        convo = self._get_convo_or_404(user, convo_id)
+        if convo is None:
+            return JsonResponse({"error": "Not found"}, status=404)
+
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        title = str(body.get("title", "")).strip()
+        if not title:
+            return JsonResponse({"error": "Title cannot be empty"}, status=400)
+
+        convo.title = title[:80]
+        convo.save(update_fields=["title", "updated_at"])
+
+        return JsonResponse(
+            {
+                "id": convo.id,
+                "title": convo.title,
+                "updated_at": convo.updated_at.isoformat(),
+            }
+        )
+
+    def delete(self, request, convo_id, *args, **kwargs):
+        user = _get_user_from_token(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        convo = self._get_convo_or_404(user, convo_id)
+        if convo is None:
+            return JsonResponse({"error": "Not found"}, status=404)
+
+        convo.delete()
+        return JsonResponse({}, status=204)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
