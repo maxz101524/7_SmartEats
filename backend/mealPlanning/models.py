@@ -403,6 +403,17 @@ class Conversation(models.Model):
         ordering = ["-updated_at"]
         indexes = [models.Index(fields=["user", "-updated_at"])]
 
+    @classmethod
+    def enforce_lru_cap_for_user(cls, user, cap: int = 20) -> int:
+        """
+        Delete the user's oldest conversations (by updated_at ASC) until they
+        own at most `cap` conversations. Returns the number deleted.
+        """
+        qs = cls.objects.filter(user=user).order_by("-updated_at")
+        ids_to_keep = list(qs.values_list("id", flat=True)[:cap])
+        deleted, _ = cls.objects.filter(user=user).exclude(id__in=ids_to_keep).delete()
+        return deleted
+
     def __str__(self) -> str:
         return f"Conversation({self.id}, user={self.user_id}, title={self.title!r})"
 

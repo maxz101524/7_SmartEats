@@ -1516,6 +1516,49 @@ class ConversationModelTest(TestCase):
         self.assertEqual(ordered[0].id, c1.id)
         self.assertEqual(ordered[1].id, c2.id)
 
+    def test_enforce_lru_cap_deletes_oldest_when_over_limit(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        base = timezone.now()
+        convos = []
+        for i in range(21):
+            c = Conversation.objects.create(user=self.user, title=f"c{i}")
+            Conversation.objects.filter(pk=c.pk).update(
+                updated_at=base - timedelta(minutes=21 - i)
+            )
+            convos.append(c)
+
+        Conversation.enforce_lru_cap_for_user(self.user, cap=20)
+
+        remaining = Conversation.objects.filter(user=self.user).count()
+        self.assertEqual(remaining, 20)
+        self.assertFalse(Conversation.objects.filter(pk=convos[0].pk).exists())
+        self.assertTrue(Conversation.objects.filter(pk=convos[-1].pk).exists())
+
+    def test_enforce_lru_cap_noop_when_under_limit(self):
+        for i in range(5):
+            Conversation.objects.create(user=self.user, title=f"c{i}")
+        Conversation.enforce_lru_cap_for_user(self.user, cap=20)
+        self.assertEqual(Conversation.objects.filter(user=self.user).count(), 5)
+
+    def test_enforce_lru_cap_only_affects_target_user(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        try:
+            other = User.objects.create_user(username="other", password="pw")
+        finally:
+            post_save.connect(create_user_profile, sender=User)
+            post_save.connect(save_user_profile, sender=User)
+
+        for i in range(21):
+            Conversation.objects.create(user=self.user, title=f"mine{i}")
+        Conversation.objects.create(user=other, title="theirs")
+
+        Conversation.enforce_lru_cap_for_user(self.user, cap=20)
+        self.assertEqual(Conversation.objects.filter(user=self.user).count(), 20)
+        self.assertEqual(Conversation.objects.filter(user=other).count(), 1)
+
 
 class ChatMessageModelTest(TestCase):
     def setUp(self):
