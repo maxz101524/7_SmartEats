@@ -14,6 +14,7 @@ import { ComposerBar } from "./aimeals/ComposerBar";
 import { SlashMenu, type SlashCommand } from "./aimeals/SlashMenu";
 import { EstimatorModal } from "./aimeals/EstimatorModal";
 import { HistoryDrawer } from "./aimeals/HistoryDrawer";
+import { useKeyboardShortcuts } from "./aimeals/useKeyboardShortcuts";
 import {
   sendChatMessage,
   listConversations,
@@ -248,6 +249,11 @@ export default function AIMeals() {
       console.error("Delete failed", err);
     }
   };
+
+  useKeyboardShortcuts({
+    onNewChat: handleNewChat,
+    onToggleDrawer: () => setDrawerOpen((v) => !v),
+  });
 
   const slashCommands: SlashCommand[] = [
     {
