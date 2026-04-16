@@ -1711,6 +1711,7 @@ class AIChatView(View):
 
     def post(self, request, *args, **kwargs):
         from mealPlanning.services import ai_chat
+        from mealPlanning.models import Conversation, ChatMessage
 
         try:
             body = json.loads(request.body)
@@ -1723,6 +1724,40 @@ class AIChatView(View):
 
         raw_history = body.get("history", [])
         history = raw_history if isinstance(raw_history, list) else []
+        conversation_id = body.get("conversation_id")
+        regenerate = bool(body.get("regenerate"))
+
+        user = _get_user_from_token(request)
+        convo = None
+
+        if user is not None:
+            if conversation_id is not None:
+                try:
+                    convo = Conversation.objects.get(id=conversation_id, user=user)
+                except Conversation.DoesNotExist:
+                    return JsonResponse({"error": "Conversation not found"}, status=404)
+            else:
+                convo = Conversation.objects.create(user=user)
+                Conversation.enforce_lru_cap_for_user(user, cap=20)
+
+            if regenerate:
+                last_assistant = convo.messages.filter(role="assistant").order_by("-created_at").first()
+                if last_assistant is not None:
+                    last_assistant.delete()
+            else:
+                ChatMessage.objects.create(conversation=convo, role="user", content=message)
+
+            history = [
+                {"role": m.role if m.role == "user" else "assistant", "content": m.content}
+                for m in convo.messages.all()
+            ]
+
+            if convo.title == "New chat":
+                first_user_msg = convo.messages.filter(role="user").order_by("created_at").first()
+                if first_user_msg is not None:
+                    convo.title = first_user_msg.content[:80]
+                    convo.save(update_fields=["title", "updated_at"])
+
         user_context = self._extract_user_context(
             request,
             tray_context=body.get("tray_context"),
@@ -1738,6 +1773,22 @@ class AIChatView(View):
                 {"error": "AI service unavailable. Please try again later."},
                 status=503,
             )
+
+        if convo is not None:
+            metadata = {
+                k: result[k]
+                for k in ("recommended_dishes", "meal_plan", "follow_up_suggestions")
+                if k in result and result[k] is not None
+            }
+            ChatMessage.objects.create(
+                conversation=convo,
+                role="assistant",
+                content=result.get("response", ""),
+                metadata=metadata,
+            )
+            convo.save(update_fields=["updated_at"])
+
+            result = {**result, "conversation_id": convo.id, "title": convo.title}
 
         return JsonResponse(result)
 

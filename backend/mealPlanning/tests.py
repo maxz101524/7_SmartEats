@@ -723,7 +723,10 @@ class AIChatViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         mock_get_response.assert_called_once()
         _, kwargs = mock_get_response.call_args
-        self.assertEqual(kwargs["history"], [])
+        self.assertEqual(
+            kwargs["history"],
+            [{"role": "user", "content": "What fits the rest of my macros?"}],
+        )
         self.assertEqual(kwargs["user_context"]["goal"], "fat_loss")
         self.assertEqual(kwargs["user_context"]["today_logged_totals"]["calories"], 220)
         self.assertEqual(kwargs["user_context"]["today_remaining_goals"]["protein"], 122)
@@ -1755,3 +1758,174 @@ class ConversationDetailEndpointTest(TestCase):
         self.assertEqual(resp.status_code, 204)
         self.assertFalse(Conversation.objects.filter(id=convo_id).exists())
         self.assertEqual(ChatMessage.objects.filter(conversation_id=convo_id).count(), 0)
+
+
+class AIChatPersistenceTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+
+        self._ensure_profile_patcher = patch(
+            "mealPlanning.views.ensure_user_profile",
+            return_value=SimpleNamespace(
+                goal=None,
+                activity_level=None,
+                sex=None,
+                age=None,
+                height_cm=None,
+                weight_kg=None,
+                daily_cal_goal=None,
+                daily_protein_goal=None,
+                daily_carbs_goal=None,
+                daily_fat_goal=None,
+            ),
+        )
+        self._ensure_profile_patcher.start()
+        self.addCleanup(self._ensure_profile_patcher.stop)
+
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.token = Token.objects.create(user=self.user)
+        self.auth = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_creates_conversation_when_none_provided(self, mock_llm):
+        mock_llm.return_value = {"response": "Hi!", "recommended_dishes": []}
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "What's good for dinner?"}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("conversation_id", data)
+        self.assertEqual(data["response"], "Hi!")
+
+        convo = Conversation.objects.get(id=data["conversation_id"])
+        self.assertEqual(convo.user, self.user)
+        self.assertEqual(convo.title, "What's good for dinner?")
+        self.assertEqual(convo.messages.count(), 2)
+        self.assertEqual(convo.messages.first().role, "user")
+        self.assertEqual(convo.messages.last().role, "assistant")
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_appends_to_existing_conversation(self, mock_llm):
+        mock_llm.return_value = {"response": "Noted!", "recommended_dishes": []}
+        convo = Conversation.objects.create(user=self.user, title="Existing")
+        ChatMessage.objects.create(conversation=convo, role="user", content="first")
+        ChatMessage.objects.create(conversation=convo, role="assistant", content="reply")
+
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "follow up", "conversation_id": convo.id}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["conversation_id"], convo.id)
+
+        convo.refresh_from_db()
+        self.assertEqual(convo.messages.count(), 4)
+        self.assertEqual(convo.messages.last().role, "assistant")
+        self.assertEqual(convo.title, "Existing")
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_rejects_other_users_conversation_id(self, mock_llm):
+        mock_llm.return_value = {"response": "Hi!", "recommended_dishes": []}
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        try:
+            other = User.objects.create_user(username="eve", password="pw")
+        finally:
+            post_save.connect(create_user_profile, sender=User)
+            post_save.connect(save_user_profile, sender=User)
+        other_convo = Conversation.objects.create(user=other, title="Theirs")
+
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "x", "conversation_id": other_convo.id}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_regenerate_pops_last_assistant_message(self, mock_llm):
+        mock_llm.return_value = {"response": "New answer", "recommended_dishes": []}
+        convo = Conversation.objects.create(user=self.user, title="x")
+        ChatMessage.objects.create(conversation=convo, role="user", content="q1")
+        ChatMessage.objects.create(conversation=convo, role="assistant", content="old answer")
+
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({
+                "message": "q1",
+                "conversation_id": convo.id,
+                "regenerate": True,
+            }),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        contents = list(convo.messages.values_list("content", flat=True))
+        self.assertEqual(contents, ["q1", "New answer"])
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_anonymous_request_still_works_without_persistence(self, mock_llm):
+        mock_llm.return_value = {"response": "Hi!", "recommended_dishes": []}
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "hi"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertNotIn("conversation_id", data)
+        self.assertEqual(Conversation.objects.count(), 0)
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_lru_cap_enforced_on_new_conversation(self, mock_llm):
+        mock_llm.return_value = {"response": "ok", "recommended_dishes": []}
+        from django.utils import timezone
+        from datetime import timedelta
+
+        base = timezone.now()
+        for i in range(20):
+            c = Conversation.objects.create(user=self.user, title=f"old{i}")
+            Conversation.objects.filter(pk=c.pk).update(
+                updated_at=base - timedelta(hours=20 - i)
+            )
+
+        self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "new one"}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(Conversation.objects.filter(user=self.user).count(), 20)
+        self.assertFalse(Conversation.objects.filter(user=self.user, title="old0").exists())
+        self.assertTrue(Conversation.objects.filter(user=self.user, title="new one").exists())
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_assistant_metadata_persisted(self, mock_llm):
+        mock_llm.return_value = {
+            "response": "Try these!",
+            "recommended_dishes": [{"dish_id": 1, "dish_name": "Tofu", "reason": "high protein"}],
+            "follow_up_suggestions": ["add to tray?"],
+        }
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "protein ideas"}),
+            content_type="application/json",
+            **self.auth,
+        )
+        convo_id = resp.json()["conversation_id"]
+        assistant_msg = ChatMessage.objects.get(conversation_id=convo_id, role="assistant")
+        self.assertEqual(
+            assistant_msg.metadata.get("recommended_dishes"),
+            [{"dish_id": 1, "dish_name": "Tofu", "reason": "high protein"}],
+        )
+        self.assertEqual(assistant_msg.metadata.get("follow_up_suggestions"), ["add to tray?"])
