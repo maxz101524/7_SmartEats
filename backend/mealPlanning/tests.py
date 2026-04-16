@@ -12,6 +12,8 @@ from django.db.models.signals import post_save
 from rest_framework.authtoken.models import Token
 
 from mealPlanning.models import (
+    ChatMessage,
+    Conversation,
     DailyRecommendationSnapshot,
     DiningHall,
     Dish,
@@ -1487,3 +1489,74 @@ class SemanticSearchViewTest(TestCase):
         mock_search.side_effect = RuntimeError("model crashed")
         response = self.client.get("/api/semantic-search/?q=breakfast")
         self.assertEqual(response.status_code, 503)
+
+
+class ConversationModelTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+        self.user = User.objects.create_user(username="alice", password="pw")
+
+    def test_conversation_defaults_and_fields(self):
+        convo = Conversation.objects.create(user=self.user)
+        convo.refresh_from_db()
+        self.assertEqual(convo.title, "New chat")
+        self.assertEqual(convo.user, self.user)
+        self.assertIsNotNone(convo.created_at)
+        self.assertIsNotNone(convo.updated_at)
+
+    def test_conversation_ordered_by_updated_at_desc(self):
+        c1 = Conversation.objects.create(user=self.user, title="first")
+        c2 = Conversation.objects.create(user=self.user, title="second")
+        c1.title = "touched"
+        c1.save()  # updated_at bumps
+        ordered = list(Conversation.objects.filter(user=self.user))
+        self.assertEqual(ordered[0].id, c1.id)
+        self.assertEqual(ordered[1].id, c2.id)
+
+
+class ChatMessageModelTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+        self.user = User.objects.create_user(username="bob", password="pw")
+        self.convo = Conversation.objects.create(user=self.user)
+
+    def test_chat_message_fields(self):
+        msg = ChatMessage.objects.create(
+            conversation=self.convo,
+            role="user",
+            content="Hello",
+            metadata={"foo": "bar"},
+        )
+        msg.refresh_from_db()
+        self.assertEqual(msg.role, "user")
+        self.assertEqual(msg.content, "Hello")
+        self.assertEqual(msg.metadata, {"foo": "bar"})
+        self.assertIsNotNone(msg.created_at)
+
+    def test_messages_ordered_by_created_at(self):
+        m1 = ChatMessage.objects.create(conversation=self.convo, role="user", content="a")
+        m2 = ChatMessage.objects.create(conversation=self.convo, role="assistant", content="b")
+        msgs = list(self.convo.messages.all())
+        self.assertEqual(msgs[0].id, m1.id)
+        self.assertEqual(msgs[1].id, m2.id)
+
+    def test_metadata_defaults_to_empty_dict(self):
+        msg = ChatMessage.objects.create(
+            conversation=self.convo,
+            role="assistant",
+            content="x",
+        )
+        self.assertEqual(msg.metadata, {})
+
+    def test_cascade_delete_removes_messages(self):
+        ChatMessage.objects.create(conversation=self.convo, role="user", content="a")
+        ChatMessage.objects.create(conversation=self.convo, role="assistant", content="b")
+        self.assertEqual(ChatMessage.objects.count(), 2)
+        self.convo.delete()
+        self.assertEqual(ChatMessage.objects.count(), 0)
