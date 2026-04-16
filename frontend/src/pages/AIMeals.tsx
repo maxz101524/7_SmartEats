@@ -10,6 +10,7 @@ import { MealPlanCard } from "./aimeals/MealPlanCard";
 import { ThinkingIndicator } from "./aimeals/ThinkingIndicator";
 import { NutritionEstimator } from "./aimeals/NutritionEstimator";
 import { BackgroundOrb } from "./aimeals/BackgroundOrb";
+import { EmptyHero } from "./aimeals/EmptyHero";
 import { getDishHall, hasDishNutrition } from "./aimeals/dishHelpers";
 import type { RecommendedDish, MealPlan, Message, MessageRole } from "./aimeals/types";
 
@@ -30,22 +31,6 @@ interface DailyIntake {
 
 type ActiveTab = "chat" | "estimator";
 
-// ─── Prompt suggestions ───────────────────────────────────────────────────────
-
-const ALL_PROMPTS = [
-  "What's healthy at ISR today?",
-  "High protein lunch ideas",
-  "I want something under 400 calories",
-  "What vegetarian options are there?",
-  "Help me hit my macro goals",
-  "Find me a light dinner option",
-  "What can I eat before a workout?",
-  "What's good at Ikenberry?",
-  "I need gluten-free options",
-  "Best post-workout meal at PAR?",
-  "Compare protein options across halls",
-  "Low carb dinner suggestions",
-];
 const CHAT_STORAGE_KEY = "smarteats_ai_chat_v1";
 const ASSISTANT_STYLE_PREFIXES = [
   "are you",
@@ -56,11 +41,6 @@ const ASSISTANT_STYLE_PREFIXES = [
   "what kind of",
   "which kind of",
 ] as const;
-
-function pickRandom<T>(arr: T[], n: number): T[] {
-  const shuffled = [...arr].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, n);
-}
 
 function sanitizeFollowUpSuggestions(rawSuggestions: unknown): string[] | undefined {
   if (!Array.isArray(rawSuggestions)) return undefined;
@@ -187,8 +167,6 @@ export default function AIMeals() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
-
-  const suggestions = useMemo(() => pickRandom(ALL_PROMPTS, 3), []);
 
   // Route-scoped scroll lock so the AI chat behaves like modern chat UIs:
   // the shell owns scrolling, not the whole page (prevents reaching footer).
@@ -588,91 +566,9 @@ export default function AIMeals() {
                     alignItems: "center",
                     justifyContent: "center",
                     height: "100%",
-                    padding: "0 16px",
-                    textAlign: "center",
                   }}
                 >
-                  <div
-                    style={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: "50%",
-                      background: "var(--se-primary-dim)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 22,
-                      marginBottom: 16,
-                      color: "var(--se-primary)",
-                      fontWeight: 900,
-                    }}
-                  >
-                    ✦
-                  </div>
-                  <h1
-                    style={{
-                      fontSize: "var(--se-text-h2)",
-                      fontWeight: "var(--se-weight-extrabold)",
-                      color: "var(--se-text-main)",
-                      margin: "0 0 6px",
-                    }}
-                  >
-                    <span className="text-gradient-vivid">SmartEats AI</span>
-                  </h1>
-                  <p
-                    style={{
-                      fontSize: 14,
-                      color: "var(--se-text-muted)",
-                      marginBottom: 32,
-                      maxWidth: 320,
-                    }}
-                  >
-                    Ask about dining options, nutrition, or meal ideas across all UIUC dining halls.
-                  </p>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                      width: "100%",
-                      maxWidth: 480,
-                    }}
-                  >
-                    {suggestions.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => sendMessage(s)}
-                        style={{
-                          padding: "12px 18px",
-                          borderRadius: 12,
-                          border: "1.5px solid var(--se-border)",
-                          background: "var(--se-bg-surface)",
-                          textAlign: "left",
-                          cursor: "pointer",
-                          fontSize: 14,
-                          color: "var(--se-text-secondary)",
-                          fontWeight: 500,
-                          boxShadow: "var(--se-shadow-sm)",
-                          transition: "border-color 0.1s, box-shadow 0.1s, transform 0.1s, background 0.1s",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = "var(--se-primary)";
-                          e.currentTarget.style.color = "var(--se-text-main)";
-                          e.currentTarget.style.transform = "translateY(-1px)";
-                          e.currentTarget.style.background = "var(--se-bg-elevated)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = "var(--se-border)";
-                          e.currentTarget.style.color = "var(--se-text-secondary)";
-                          e.currentTarget.style.transform = "translateY(0)";
-                          e.currentTarget.style.background = "var(--se-bg-surface)";
-                        }}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+                  <EmptyHero onPick={sendMessage} />
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
