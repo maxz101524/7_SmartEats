@@ -9,6 +9,7 @@ import { DishRecommendationCard } from "./aimeals/DishRecommendationCard";
 import { MealPlanCard } from "./aimeals/MealPlanCard";
 import { ThinkingIndicator } from "./aimeals/ThinkingIndicator";
 import { NutritionEstimator } from "./aimeals/NutritionEstimator";
+import { BackgroundOrb } from "./aimeals/BackgroundOrb";
 import { getDishHall, hasDishNutrition } from "./aimeals/dishHelpers";
 import type { RecommendedDish, MealPlan, Message, MessageRole } from "./aimeals/types";
 
@@ -480,8 +481,11 @@ export default function AIMeals() {
           overflow: "hidden",
         }}
       >
+        <BackgroundOrb mode={isEmpty ? "centered" : "docked"} />
         <div
           style={{
+            position: "relative",
+            zIndex: 1,
             display: "flex",
             flexDirection: "column",
             height: "100%",
