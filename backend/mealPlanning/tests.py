@@ -12,6 +12,8 @@ from django.db.models.signals import post_save
 from rest_framework.authtoken.models import Token
 
 from mealPlanning.models import (
+    ChatMessage,
+    Conversation,
     DailyRecommendationSnapshot,
     DiningHall,
     Dish,
@@ -772,7 +774,10 @@ class AIChatViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         mock_get_response.assert_called_once()
         _, kwargs = mock_get_response.call_args
-        self.assertEqual(kwargs["history"], [])
+        self.assertEqual(
+            kwargs["history"],
+            [{"role": "user", "content": "What fits the rest of my macros?"}],
+        )
         self.assertEqual(kwargs["user_context"]["goal"], "fat_loss")
         self.assertEqual(kwargs["user_context"]["today_logged_totals"]["calories"], 220)
         self.assertEqual(kwargs["user_context"]["today_remaining_goals"]["protein"], 122)
@@ -1538,3 +1543,440 @@ class SemanticSearchViewTest(TestCase):
         mock_search.side_effect = RuntimeError("model crashed")
         response = self.client.get("/api/semantic-search/?q=breakfast")
         self.assertEqual(response.status_code, 503)
+
+
+class ConversationModelTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+        self.user = User.objects.create_user(username="alice", password="pw")
+
+    def test_conversation_defaults_and_fields(self):
+        convo = Conversation.objects.create(user=self.user)
+        convo.refresh_from_db()
+        self.assertEqual(convo.title, "New chat")
+        self.assertEqual(convo.user, self.user)
+        self.assertIsNotNone(convo.created_at)
+        self.assertIsNotNone(convo.updated_at)
+
+    def test_conversation_ordered_by_updated_at_desc(self):
+        c1 = Conversation.objects.create(user=self.user, title="first")
+        c2 = Conversation.objects.create(user=self.user, title="second")
+        c1.title = "touched"
+        c1.save()  # updated_at bumps
+        ordered = list(Conversation.objects.filter(user=self.user))
+        self.assertEqual(ordered[0].id, c1.id)
+        self.assertEqual(ordered[1].id, c2.id)
+
+    def test_enforce_lru_cap_deletes_oldest_when_over_limit(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        base = timezone.now()
+        convos = []
+        for i in range(21):
+            c = Conversation.objects.create(user=self.user, title=f"c{i}")
+            Conversation.objects.filter(pk=c.pk).update(
+                updated_at=base - timedelta(minutes=21 - i)
+            )
+            convos.append(c)
+
+        Conversation.enforce_lru_cap_for_user(self.user, cap=20)
+
+        remaining = Conversation.objects.filter(user=self.user).count()
+        self.assertEqual(remaining, 20)
+        self.assertFalse(Conversation.objects.filter(pk=convos[0].pk).exists())
+        self.assertTrue(Conversation.objects.filter(pk=convos[-1].pk).exists())
+
+    def test_enforce_lru_cap_noop_when_under_limit(self):
+        for i in range(5):
+            Conversation.objects.create(user=self.user, title=f"c{i}")
+        Conversation.enforce_lru_cap_for_user(self.user, cap=20)
+        self.assertEqual(Conversation.objects.filter(user=self.user).count(), 5)
+
+    def test_enforce_lru_cap_only_affects_target_user(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        try:
+            other = User.objects.create_user(username="other", password="pw")
+        finally:
+            post_save.connect(create_user_profile, sender=User)
+            post_save.connect(save_user_profile, sender=User)
+
+        for i in range(21):
+            Conversation.objects.create(user=self.user, title=f"mine{i}")
+        Conversation.objects.create(user=other, title="theirs")
+
+        Conversation.enforce_lru_cap_for_user(self.user, cap=20)
+        self.assertEqual(Conversation.objects.filter(user=self.user).count(), 20)
+        self.assertEqual(Conversation.objects.filter(user=other).count(), 1)
+
+
+class ChatMessageModelTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+        self.user = User.objects.create_user(username="bob", password="pw")
+        self.convo = Conversation.objects.create(user=self.user)
+
+    def test_chat_message_fields(self):
+        msg = ChatMessage.objects.create(
+            conversation=self.convo,
+            role="user",
+            content="Hello",
+            metadata={"foo": "bar"},
+        )
+        msg.refresh_from_db()
+        self.assertEqual(msg.role, "user")
+        self.assertEqual(msg.content, "Hello")
+        self.assertEqual(msg.metadata, {"foo": "bar"})
+        self.assertIsNotNone(msg.created_at)
+
+    def test_messages_ordered_by_created_at(self):
+        m1 = ChatMessage.objects.create(conversation=self.convo, role="user", content="a")
+        m2 = ChatMessage.objects.create(conversation=self.convo, role="assistant", content="b")
+        msgs = list(self.convo.messages.all())
+        self.assertEqual(msgs[0].id, m1.id)
+        self.assertEqual(msgs[1].id, m2.id)
+
+    def test_metadata_defaults_to_empty_dict(self):
+        msg = ChatMessage.objects.create(
+            conversation=self.convo,
+            role="assistant",
+            content="x",
+        )
+        self.assertEqual(msg.metadata, {})
+
+    def test_cascade_delete_removes_messages(self):
+        ChatMessage.objects.create(conversation=self.convo, role="user", content="a")
+        ChatMessage.objects.create(conversation=self.convo, role="assistant", content="b")
+        self.assertEqual(ChatMessage.objects.count(), 2)
+        self.convo.delete()
+        self.assertEqual(ChatMessage.objects.count(), 0)
+
+
+class ConversationsEndpointTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.token = Token.objects.create(user=self.user)
+        self.auth = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+
+    def test_get_returns_401_when_unauthenticated(self):
+        resp = self.client.get("/api/conversations/")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_get_returns_empty_list_initially(self):
+        resp = self.client.get("/api/conversations/", **self.auth)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_get_returns_user_conversations_with_message_count(self):
+        c1 = Conversation.objects.create(user=self.user, title="One")
+        ChatMessage.objects.create(conversation=c1, role="user", content="hi")
+        ChatMessage.objects.create(conversation=c1, role="assistant", content="hello")
+        Conversation.objects.create(user=self.user, title="Two")
+
+        resp = self.client.get("/api/conversations/", **self.auth)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 2)
+        titles = [c["title"] for c in data]
+        self.assertIn("One", titles)
+        self.assertIn("Two", titles)
+        one = next(c for c in data if c["title"] == "One")
+        self.assertEqual(one["message_count"], 2)
+        self.assertIn("updated_at", one)
+        self.assertIn("id", one)
+
+    def test_get_does_not_leak_other_users_conversations(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        try:
+            other = User.objects.create_user(username="eve", password="pw")
+        finally:
+            post_save.connect(create_user_profile, sender=User)
+            post_save.connect(save_user_profile, sender=User)
+        Conversation.objects.create(user=other, title="Secret")
+        Conversation.objects.create(user=self.user, title="Mine")
+
+        resp = self.client.get("/api/conversations/", **self.auth)
+        titles = [c["title"] for c in resp.json()]
+        self.assertEqual(titles, ["Mine"])
+
+    def test_post_creates_empty_conversation(self):
+        resp = self.client.post(
+            "/api/conversations/",
+            data=json.dumps({}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertIn("id", data)
+        self.assertEqual(data["title"], "New chat")
+        self.assertEqual(Conversation.objects.filter(user=self.user).count(), 1)
+
+
+class ConversationDetailEndpointTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.token = Token.objects.create(user=self.user)
+        self.auth = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+        self.convo = Conversation.objects.create(user=self.user, title="Test convo")
+        ChatMessage.objects.create(conversation=self.convo, role="user", content="Hi")
+        ChatMessage.objects.create(
+            conversation=self.convo,
+            role="assistant",
+            content="Hello back",
+            metadata={"follow_up_suggestions": ["more?"]},
+        )
+
+    def test_get_returns_conversation_with_messages(self):
+        resp = self.client.get(f"/api/conversations/{self.convo.id}/", **self.auth)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["id"], self.convo.id)
+        self.assertEqual(data["title"], "Test convo")
+        self.assertEqual(len(data["messages"]), 2)
+        self.assertEqual(data["messages"][0]["role"], "user")
+        self.assertEqual(data["messages"][0]["content"], "Hi")
+        self.assertEqual(data["messages"][1]["role"], "assistant")
+        self.assertEqual(data["messages"][1]["metadata"], {"follow_up_suggestions": ["more?"]})
+
+    def test_get_returns_404_for_other_users_conversation(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        try:
+            other = User.objects.create_user(username="eve", password="pw")
+        finally:
+            post_save.connect(create_user_profile, sender=User)
+            post_save.connect(save_user_profile, sender=User)
+        other_convo = Conversation.objects.create(user=other, title="Theirs")
+        resp = self.client.get(f"/api/conversations/{other_convo.id}/", **self.auth)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_get_returns_401_when_unauthenticated(self):
+        resp = self.client.get(f"/api/conversations/{self.convo.id}/")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_patch_renames_conversation(self):
+        resp = self.client.patch(
+            f"/api/conversations/{self.convo.id}/",
+            data=json.dumps({"title": "Renamed"}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.convo.refresh_from_db()
+        self.assertEqual(self.convo.title, "Renamed")
+
+    def test_patch_truncates_title_to_80_chars(self):
+        long_title = "x" * 200
+        resp = self.client.patch(
+            f"/api/conversations/{self.convo.id}/",
+            data=json.dumps({"title": long_title}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.convo.refresh_from_db()
+        self.assertEqual(len(self.convo.title), 80)
+
+    def test_patch_rejects_empty_title(self):
+        resp = self.client.patch(
+            f"/api/conversations/{self.convo.id}/",
+            data=json.dumps({"title": "   "}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_delete_removes_conversation_and_cascades_messages(self):
+        convo_id = self.convo.id
+        resp = self.client.delete(f"/api/conversations/{convo_id}/", **self.auth)
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(Conversation.objects.filter(id=convo_id).exists())
+        self.assertEqual(ChatMessage.objects.filter(conversation_id=convo_id).count(), 0)
+
+
+class AIChatPersistenceTest(TestCase):
+    def setUp(self):
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        self.addCleanup(post_save.connect, create_user_profile, sender=User)
+        self.addCleanup(post_save.connect, save_user_profile, sender=User)
+
+        self._ensure_profile_patcher = patch(
+            "mealPlanning.views.ensure_user_profile",
+            return_value=SimpleNamespace(
+                goal=None,
+                activity_level=None,
+                sex=None,
+                age=None,
+                height_cm=None,
+                weight_kg=None,
+                daily_cal_goal=None,
+                daily_protein_goal=None,
+                daily_carbs_goal=None,
+                daily_fat_goal=None,
+            ),
+        )
+        self._ensure_profile_patcher.start()
+        self.addCleanup(self._ensure_profile_patcher.stop)
+
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.token = Token.objects.create(user=self.user)
+        self.auth = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_creates_conversation_when_none_provided(self, mock_llm):
+        mock_llm.return_value = {"response": "Hi!", "recommended_dishes": []}
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "What's good for dinner?"}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("conversation_id", data)
+        self.assertEqual(data["response"], "Hi!")
+
+        convo = Conversation.objects.get(id=data["conversation_id"])
+        self.assertEqual(convo.user, self.user)
+        self.assertEqual(convo.title, "What's good for dinner?")
+        self.assertEqual(convo.messages.count(), 2)
+        self.assertEqual(convo.messages.first().role, "user")
+        self.assertEqual(convo.messages.last().role, "assistant")
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_appends_to_existing_conversation(self, mock_llm):
+        mock_llm.return_value = {"response": "Noted!", "recommended_dishes": []}
+        convo = Conversation.objects.create(user=self.user, title="Existing")
+        ChatMessage.objects.create(conversation=convo, role="user", content="first")
+        ChatMessage.objects.create(conversation=convo, role="assistant", content="reply")
+
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "follow up", "conversation_id": convo.id}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["conversation_id"], convo.id)
+
+        convo.refresh_from_db()
+        self.assertEqual(convo.messages.count(), 4)
+        self.assertEqual(convo.messages.last().role, "assistant")
+        self.assertEqual(convo.title, "Existing")
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_rejects_other_users_conversation_id(self, mock_llm):
+        mock_llm.return_value = {"response": "Hi!", "recommended_dishes": []}
+        post_save.disconnect(create_user_profile, sender=User)
+        post_save.disconnect(save_user_profile, sender=User)
+        try:
+            other = User.objects.create_user(username="eve", password="pw")
+        finally:
+            post_save.connect(create_user_profile, sender=User)
+            post_save.connect(save_user_profile, sender=User)
+        other_convo = Conversation.objects.create(user=other, title="Theirs")
+
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "x", "conversation_id": other_convo.id}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_regenerate_pops_last_assistant_message(self, mock_llm):
+        mock_llm.return_value = {"response": "New answer", "recommended_dishes": []}
+        convo = Conversation.objects.create(user=self.user, title="x")
+        ChatMessage.objects.create(conversation=convo, role="user", content="q1")
+        ChatMessage.objects.create(conversation=convo, role="assistant", content="old answer")
+
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({
+                "message": "q1",
+                "conversation_id": convo.id,
+                "regenerate": True,
+            }),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        contents = list(convo.messages.values_list("content", flat=True))
+        self.assertEqual(contents, ["q1", "New answer"])
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_anonymous_request_still_works_without_persistence(self, mock_llm):
+        mock_llm.return_value = {"response": "Hi!", "recommended_dishes": []}
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "hi"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertNotIn("conversation_id", data)
+        self.assertEqual(Conversation.objects.count(), 0)
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_lru_cap_enforced_on_new_conversation(self, mock_llm):
+        mock_llm.return_value = {"response": "ok", "recommended_dishes": []}
+        from django.utils import timezone
+        from datetime import timedelta
+
+        base = timezone.now()
+        for i in range(20):
+            c = Conversation.objects.create(user=self.user, title=f"old{i}")
+            Conversation.objects.filter(pk=c.pk).update(
+                updated_at=base - timedelta(hours=20 - i)
+            )
+
+        self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "new one"}),
+            content_type="application/json",
+            **self.auth,
+        )
+        self.assertEqual(Conversation.objects.filter(user=self.user).count(), 20)
+        self.assertFalse(Conversation.objects.filter(user=self.user, title="old0").exists())
+        self.assertTrue(Conversation.objects.filter(user=self.user, title="new one").exists())
+
+    @patch("mealPlanning.services.ai_chat.get_response")
+    def test_assistant_metadata_persisted(self, mock_llm):
+        mock_llm.return_value = {
+            "response": "Try these!",
+            "recommended_dishes": [{"dish_id": 1, "dish_name": "Tofu", "reason": "high protein"}],
+            "follow_up_suggestions": ["add to tray?"],
+        }
+        resp = self.client.post(
+            "/api/ai-chat/",
+            data=json.dumps({"message": "protein ideas"}),
+            content_type="application/json",
+            **self.auth,
+        )
+        convo_id = resp.json()["conversation_id"]
+        assistant_msg = ChatMessage.objects.get(conversation_id=convo_id, role="assistant")
+        self.assertEqual(
+            assistant_msg.metadata.get("recommended_dishes"),
+            [{"dish_id": 1, "dish_name": "Tofu", "reason": "high protein"}],
+        )
+        self.assertEqual(assistant_msg.metadata.get("follow_up_suggestions"), ["add to tray?"])

@@ -379,3 +379,67 @@ def auto_update_meal_nutrition(sender, instance, action, **kwargs):
   
     if action in ["post_add", "post_remove", "post_clear"]:
         instance.update_nutrition()
+
+
+class Conversation(models.Model):
+    """
+    A persisted AI-chat conversation belonging to a single user.
+
+    LRU-capped to 20 per user (enforced in AIChatView.post). Title defaults to
+    "New chat" and is replaced with the first user message (truncated) when the
+    first message is persisted.
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="conversations",
+    )
+    title = models.CharField(max_length=80, default="New chat")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [models.Index(fields=["user", "-updated_at"])]
+
+    @classmethod
+    def enforce_lru_cap_for_user(cls, user, cap: int = 20) -> int:
+        """
+        Delete the user's oldest conversations (by updated_at ASC) until they
+        own at most `cap` conversations. Returns the number deleted.
+        """
+        qs = cls.objects.filter(user=user).order_by("-updated_at")
+        ids_to_keep = list(qs.values_list("id", flat=True)[:cap])
+        deleted, _ = cls.objects.filter(user=user).exclude(id__in=ids_to_keep).delete()
+        return deleted
+
+    def __str__(self) -> str:
+        return f"Conversation({self.id}, user={self.user_id}, title={self.title!r})"
+
+
+class ChatMessage(models.Model):
+    """
+    A single turn (user or assistant) within a Conversation.
+
+    metadata stores optional structured payloads for assistant messages:
+    recommended_dishes, meal_plan, follow_up_suggestions.
+    """
+
+    ROLE_CHOICES = [("user", "user"), ("assistant", "assistant")]
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES)
+    content = models.TextField()
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"ChatMessage({self.id}, role={self.role}, convo={self.conversation_id})"

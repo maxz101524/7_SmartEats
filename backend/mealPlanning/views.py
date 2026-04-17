@@ -58,6 +58,23 @@ from mealPlanning.services.uiuc_dining import DINING_OPTIONS
 from mealPlanning.services.uiuc_hours import compute_status, fetch_hours_html, parse_hours_rows
 
 
+def _get_user_from_token(request):
+    """
+    Extract authenticated User from `Authorization: Token <key>` header.
+    Returns None if missing/invalid. Used by plain Django Views that don't
+    have DRF's authentication plumbing.
+    """
+    from rest_framework.authtoken.models import Token
+    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    if not auth_header.startswith("Token "):
+        return None
+    key = auth_header.split(" ", 1)[1].strip()
+    try:
+        return Token.objects.select_related("user").get(key=key).user
+    except Token.DoesNotExist:
+        return None
+
+
 def _recommendation_context_signature(goal, dietary_flags):
     return json.dumps({
         "goal": goal or "maintain",
@@ -1465,6 +1482,150 @@ class MealReportsView(APIView):
         })
 
 
+class ConversationsView(View):
+    """
+    GET  /api/conversations/   -> list user's conversations with message_count
+    POST /api/conversations/   -> create an empty conversation (lazy creation
+                                  is preferred via AIChatView; this endpoint
+                                  exists for explicit New-chat flows)
+    """
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        from django.db.models import Count
+        from mealPlanning.models import Conversation
+
+        user = _get_user_from_token(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        qs = (
+            Conversation.objects.filter(user=user)
+            .annotate(message_count=Count("messages"))
+            .order_by("-updated_at")
+        )
+        data = [
+            {
+                "id": c.id,
+                "title": c.title,
+                "updated_at": c.updated_at.isoformat(),
+                "message_count": c.message_count,
+            }
+            for c in qs
+        ]
+        return JsonResponse(data, safe=False)
+
+    def post(self, request, *args, **kwargs):
+        from mealPlanning.models import Conversation
+
+        user = _get_user_from_token(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        convo = Conversation.objects.create(user=user)
+        Conversation.enforce_lru_cap_for_user(user, cap=20)
+        return JsonResponse(
+            {
+                "id": convo.id,
+                "title": convo.title,
+                "updated_at": convo.updated_at.isoformat(),
+                "message_count": 0,
+            },
+            status=201,
+        )
+
+
+class ConversationDetailView(View):
+    """
+    GET    /api/conversations/<id>/   -> full conversation + messages
+    PATCH  /api/conversations/<id>/   -> rename (body: {"title": "..."})
+    DELETE /api/conversations/<id>/   -> delete (cascades messages)
+    """
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def _get_convo_or_404(self, user, convo_id):
+        from mealPlanning.models import Conversation
+        try:
+            return Conversation.objects.get(id=convo_id, user=user)
+        except Conversation.DoesNotExist:
+            return None
+
+    def get(self, request, convo_id, *args, **kwargs):
+        user = _get_user_from_token(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        convo = self._get_convo_or_404(user, convo_id)
+        if convo is None:
+            return JsonResponse({"error": "Not found"}, status=404)
+
+        messages = [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "metadata": m.metadata or {},
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in convo.messages.all()
+        ]
+        return JsonResponse(
+            {
+                "id": convo.id,
+                "title": convo.title,
+                "updated_at": convo.updated_at.isoformat(),
+                "messages": messages,
+            }
+        )
+
+    def patch(self, request, convo_id, *args, **kwargs):
+        user = _get_user_from_token(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        convo = self._get_convo_or_404(user, convo_id)
+        if convo is None:
+            return JsonResponse({"error": "Not found"}, status=404)
+
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        title = str(body.get("title", "")).strip()
+        if not title:
+            return JsonResponse({"error": "Title cannot be empty"}, status=400)
+
+        convo.title = title[:80]
+        convo.save(update_fields=["title", "updated_at"])
+
+        return JsonResponse(
+            {
+                "id": convo.id,
+                "title": convo.title,
+                "updated_at": convo.updated_at.isoformat(),
+            }
+        )
+
+    def delete(self, request, convo_id, *args, **kwargs):
+        user = _get_user_from_token(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required"}, status=401)
+
+        convo = self._get_convo_or_404(user, convo_id)
+        if convo is None:
+            return JsonResponse({"error": "Not found"}, status=404)
+
+        convo.delete()
+        return JsonResponse({}, status=204)
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class AIChatView(View):
     """Gemini-powered AI chat endpoint for dining recommendations."""
@@ -1573,6 +1734,7 @@ class AIChatView(View):
 
     def post(self, request, *args, **kwargs):
         from mealPlanning.services import ai_chat
+        from mealPlanning.models import Conversation, ChatMessage
 
         try:
             body = json.loads(request.body)
@@ -1585,6 +1747,40 @@ class AIChatView(View):
 
         raw_history = body.get("history", [])
         history = raw_history if isinstance(raw_history, list) else []
+        conversation_id = body.get("conversation_id")
+        regenerate = bool(body.get("regenerate"))
+
+        user = _get_user_from_token(request)
+        convo = None
+
+        if user is not None:
+            if conversation_id is not None:
+                try:
+                    convo = Conversation.objects.get(id=conversation_id, user=user)
+                except Conversation.DoesNotExist:
+                    return JsonResponse({"error": "Conversation not found"}, status=404)
+            else:
+                convo = Conversation.objects.create(user=user)
+                Conversation.enforce_lru_cap_for_user(user, cap=20)
+
+            if regenerate:
+                last_assistant = convo.messages.filter(role="assistant").order_by("-created_at").first()
+                if last_assistant is not None:
+                    last_assistant.delete()
+            else:
+                ChatMessage.objects.create(conversation=convo, role="user", content=message)
+
+            history = [
+                {"role": m.role if m.role == "user" else "assistant", "content": m.content}
+                for m in convo.messages.all()
+            ]
+
+            if convo.title == "New chat":
+                first_user_msg = convo.messages.filter(role="user").order_by("created_at").first()
+                if first_user_msg is not None:
+                    convo.title = first_user_msg.content[:80]
+                    convo.save(update_fields=["title", "updated_at"])
+
         user_context = self._extract_user_context(
             request,
             tray_context=body.get("tray_context"),
@@ -1600,6 +1796,22 @@ class AIChatView(View):
                 {"error": "AI service unavailable. Please try again later."},
                 status=503,
             )
+
+        if convo is not None:
+            metadata = {
+                k: result[k]
+                for k in ("recommended_dishes", "meal_plan", "follow_up_suggestions")
+                if k in result and result[k] is not None
+            }
+            ChatMessage.objects.create(
+                conversation=convo,
+                role="assistant",
+                content=result.get("response", ""),
+                metadata=metadata,
+            )
+            convo.save(update_fields=["updated_at"])
+
+            result = {**result, "conversation_id": convo.id, "title": convo.title}
 
         return JsonResponse(result)
 

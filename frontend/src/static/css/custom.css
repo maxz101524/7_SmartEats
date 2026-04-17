@@ -126,6 +126,51 @@ select:focus-visible {
   }
 }
 
+/* ── AI chat page animations ───────────────────── */
+
+@keyframes aiOrbit {
+  0%   { transform: translate(-30px, -20px) scale(1); }
+  50%  { transform: translate(40px, 30px) scale(1.1); }
+  100% { transform: translate(-30px, -20px) scale(1); }
+}
+
+@keyframes drawerSlideIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes suggestionCrossfade {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* History drawer default width */
+.ai-history-drawer {
+  width: min(320px, 100vw);
+}
+
+/* Mobile: full-width drawer on small phones */
+@media (max-width: 500px) {
+  .ai-history-drawer {
+    width: 100vw;
+  }
+}
+
+/* Mobile: tighten composer padding */
+@media (max-width: 768px) {
+  .ai-chatbox-form {
+    padding: 10px 12px 6px !important;
+    border-radius: 18px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-aurora-layer,
+  .ai-orb-layer {
+    animation: none !important;
+  }
+}
+
 /* ── Z-Index Scale (reference) ───────────────────────── */
 /* z-10: sticky search bar (Menu)     */
 /* z-40: mobile chip bar (Menu)       */
@@ -134,4 +179,10 @@ select:focus-visible {
 /* Button press micro-interaction */
 button:active:not(:disabled) {
   transform: scale(0.97);
+}
+
+/* AI message hover actions reveal */
+.ai-message-actions-wrap:hover .ai-message-actions,
+.ai-message-actions-wrap:focus-within .ai-message-actions {
+  opacity: 1;
 }
