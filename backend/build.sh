@@ -16,3 +16,14 @@ if not User.objects.filter(username='tester').exists():
 else:
     print('Superuser tester already exists')
 "
+
+# Create analytics dashboard grader account if it doesn't already exist
+python manage.py shell --settings=SmartEats_config.settings.production -c "
+from django.contrib.auth import get_user_model
+User = get_user_model()
+if not User.objects.filter(username='mohitg2').exists():
+    User.objects.create_user('mohitg2', '', 'uiuc12345')
+    print('Created user: mohitg2')
+else:
+    print('User mohitg2 already exists')
+"

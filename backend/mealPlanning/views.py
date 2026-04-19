@@ -2,12 +2,15 @@ from django.shortcuts import get_object_or_404, render
 
 import json
 import logging
+import time
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 import requests as http_requests
 from  django.http import HttpResponse, JsonResponse
 from django.views import View
 from .models import (
+    AIAnalyticsEvent,
     DailyRecommendationSnapshot,
     DiningHall,
     Dish,
@@ -73,6 +76,51 @@ def _get_user_from_token(request):
         return Token.objects.select_related("user").get(key=key).user
     except Token.DoesNotExist:
         return None
+
+ANALYTICS_INPUT_RATE_PER_MILLION = Decimal("0.15")
+ANALYTICS_OUTPUT_RATE_PER_MILLION = Decimal("0.60")
+
+
+def _bucket_for_prompt_chars(prompt_chars):
+    if prompt_chars <= 50:
+        return "0-50"
+    if prompt_chars <= 150:
+        return "51-150"
+    if prompt_chars <= 300:
+        return "151-300"
+    return "301+"
+
+
+def _estimate_tokens_from_text(text):
+    # Lightweight fallback approximation: ~4 characters per token.
+    chars = len(str(text or "").strip())
+    if chars == 0:
+        return 0
+    return max(1, round(chars / 4))
+
+
+def _estimate_cost_usd(prompt_tokens, completion_tokens):
+    prompt_millions = Decimal(prompt_tokens) / Decimal("1000000")
+    completion_millions = Decimal(completion_tokens) / Decimal("1000000")
+    return (
+        (prompt_millions * ANALYTICS_INPUT_RATE_PER_MILLION)
+        + (completion_millions * ANALYTICS_OUTPUT_RATE_PER_MILLION)
+    )
+
+
+def _infer_intent_label(message):
+    lower = str(message or "").lower()
+    if any(term in lower for term in ("protein", "post-workout", "muscle", "macro")):
+        return "high_protein"
+    if any(term in lower for term in ("vegetarian", "vegan", "plant")):
+        return "vegetarian"
+    if any(term in lower for term in ("allergy", "allergen", "gluten", "dairy", "peanut", "nut")):
+        return "allergy"
+    if any(term in lower for term in ("low carb", "carb", "keto")):
+        return "low_carb"
+    if any(term in lower for term in ("calorie", "under", "light")):
+        return "calorie_control"
+    return "general"
 
 
 def _recommendation_context_signature(goal, dietary_flags):
@@ -1630,25 +1678,21 @@ class ConversationDetailView(View):
 class AIChatView(View):
     """Gemini-powered AI chat endpoint for dining recommendations."""
 
-    def _extract_user_context(self, request, tray_context=None):
+    def _extract_authenticated_user(self, request):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Token "):
-            return {}
+            return None
 
         token_key = auth_header.split(" ", 1)[1].strip()
         if not token_key:
-            return {}
+            return None
 
-        token = (
-            Token.objects
-            .select_related("user")
-            .filter(key=token_key)
-            .first()
-        )
-        if token is None:
-            return {}
+        token = Token.objects.select_related("user").filter(key=token_key).first()
+        return token.user if token else None
 
-        user = token.user
+    def _extract_user_context(self, user, tray_context=None):
+        if user is None:
+            return {}
         context = {}
 
         display_name = f"{user.first_name} {user.last_name}".strip()
@@ -1732,17 +1776,94 @@ class AIChatView(View):
 
         return context
 
+    def _log_ai_chat_event(
+        self,
+        *,
+        user,
+        message,
+        session_id,
+        request_id,
+        latency_ms,
+        success,
+        model_name,
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        error_type="",
+    ):
+        prompt_chars = len(str(message or "").strip())
+        input_bucket = _bucket_for_prompt_chars(prompt_chars)
+        if total_tokens <= 0:
+            total_tokens = prompt_tokens + completion_tokens
+        estimated_cost_usd = _estimate_cost_usd(prompt_tokens, completion_tokens)
+
+        AIAnalyticsEvent.objects.create(
+            event_type=AIAnalyticsEvent.EVENT_AI_CHAT_REQUEST,
+            user=user,
+            session_id=str(session_id or "")[:64],
+            request_id=str(request_id or "")[:64],
+            prompt_chars=prompt_chars,
+            prompt_text_redacted=str(message or "")[:240],
+            input_bucket=input_bucket,
+            intent_label=_infer_intent_label(message),
+            latency_ms=max(0, int(latency_ms or 0)),
+            success=bool(success),
+            error_type=str(error_type or "")[:64],
+            model_name=str(model_name or "")[:80],
+            prompt_tokens=max(0, int(prompt_tokens or 0)),
+            completion_tokens=max(0, int(completion_tokens or 0)),
+            total_tokens=max(0, int(total_tokens or 0)),
+            estimated_cost_usd=estimated_cost_usd,
+        )
+
     def post(self, request, *args, **kwargs):
         from mealPlanning.services import ai_chat
         from mealPlanning.models import Conversation, ChatMessage
 
+        user = self._extract_authenticated_user(request)
+        started = time.perf_counter()
+
         try:
             body = json.loads(request.body)
         except (json.JSONDecodeError, ValueError):
+            try:
+                self._log_ai_chat_event(
+                    user=user,
+                    message="",
+                    session_id="",
+                    request_id="",
+                    latency_ms=0,
+                    success=False,
+                    model_name=getattr(ai_chat, "MODEL_NAME", "unknown"),
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    error_type="invalid_json",
+                )
+            except Exception:
+                logger.exception("Failed to write analytics event for invalid_json")
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         message = body.get("message", "").strip()
+        session_id = str(body.get("session_id", "")).strip()
+        request_id = str(body.get("request_id", "")).strip()
         if not message:
+            try:
+                self._log_ai_chat_event(
+                    user=user,
+                    message="",
+                    session_id=session_id,
+                    request_id=request_id,
+                    latency_ms=0,
+                    success=False,
+                    model_name=getattr(ai_chat, "MODEL_NAME", "unknown"),
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    error_type="missing_message",
+                )
+            except Exception:
+                logger.exception("Failed to write analytics event for missing_message")
             return JsonResponse({"error": "Message is required"}, status=400)
 
         raw_history = body.get("history", [])
@@ -1782,7 +1903,7 @@ class AIChatView(View):
                     convo.save(update_fields=["title", "updated_at"])
 
         user_context = self._extract_user_context(
-            request,
+            user,
             tray_context=body.get("tray_context"),
         )
 
@@ -1791,11 +1912,56 @@ class AIChatView(View):
             history=history,
             user_context=user_context,
         )
+        latency_ms = round((time.perf_counter() - started) * 1000)
         if result is None:
+            prompt_tokens = _estimate_tokens_from_text(message)
+            try:
+                self._log_ai_chat_event(
+                    user=user,
+                    message=message,
+                    session_id=session_id,
+                    request_id=request_id,
+                    latency_ms=latency_ms,
+                    success=False,
+                    model_name=getattr(ai_chat, "MODEL_NAME", "unknown"),
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=0,
+                    total_tokens=prompt_tokens,
+                    error_type="ai_service_unavailable",
+                )
+            except Exception:
+                logger.exception("Failed to write analytics event for ai_service_unavailable")
             return JsonResponse(
                 {"error": "AI service unavailable. Please try again later."},
                 status=503,
             )
+
+        meta = result.pop("_meta", {}) if isinstance(result, dict) else {}
+        prompt_tokens = int(meta.get("prompt_tokens") or 0)
+        completion_tokens = int(meta.get("completion_tokens") or 0)
+        total_tokens = int(meta.get("total_tokens") or 0)
+        if prompt_tokens <= 0:
+            prompt_tokens = _estimate_tokens_from_text(message)
+        if completion_tokens <= 0:
+            completion_tokens = _estimate_tokens_from_text(result.get("response", ""))
+        if total_tokens <= 0:
+            total_tokens = prompt_tokens + completion_tokens
+
+        try:
+            self._log_ai_chat_event(
+                user=user,
+                message=message,
+                session_id=session_id,
+                request_id=request_id,
+                latency_ms=latency_ms,
+                success=True,
+                model_name=meta.get("model_name") or getattr(ai_chat, "MODEL_NAME", "unknown"),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+            )
+        except Exception:
+            logger.exception("Failed to write analytics event for ai_chat_request")
 
         if convo is not None:
             metadata = {
@@ -1989,6 +2155,47 @@ class AIRecommendView(View):
             "snapshot_date": today.isoformat(),
             "generated_at": generated_at.isoformat(),
         })
+
+
+class AnalyticsEventView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        event_type = str(request.data.get("event_type", "")).strip()
+        if event_type not in {
+            AIAnalyticsEvent.EVENT_FOLLOW_UP_CLICK,
+            AIAnalyticsEvent.EVENT_DISH_ADD,
+            "ai_prompt_submitted",
+        }:
+            return Response({"error": "Unsupported event_type"}, status=status.HTTP_400_BAD_REQUEST)
+
+        session_id = str(request.data.get("session_id", "")).strip()[:64]
+        request_id = str(request.data.get("request_id", "")).strip()[:64]
+        message = str(request.data.get("message", "")).strip()
+        prompt_chars = len(message)
+        prompt_tokens = _estimate_tokens_from_text(message) if event_type == "ai_prompt_submitted" else 0
+
+        AIAnalyticsEvent.objects.create(
+            event_type=event_type if event_type != "ai_prompt_submitted" else AIAnalyticsEvent.EVENT_AI_CHAT_REQUEST,
+            user=request.user,
+            session_id=session_id,
+            request_id=request_id,
+            prompt_chars=prompt_chars,
+            prompt_text_redacted=message[:240],
+            input_bucket=_bucket_for_prompt_chars(prompt_chars) if prompt_chars else "",
+            intent_label=_infer_intent_label(message) if message else "general",
+            latency_ms=0,
+            success=True,
+            error_type="",
+            model_name="client_event",
+            prompt_tokens=prompt_tokens,
+            completion_tokens=0,
+            total_tokens=prompt_tokens,
+            estimated_cost_usd=_estimate_cost_usd(prompt_tokens, 0),
+            follow_up_clicked=event_type == AIAnalyticsEvent.EVENT_FOLLOW_UP_CLICK,
+            dish_added_from_ai=event_type == AIAnalyticsEvent.EVENT_DISH_ADD,
+        )
+        return Response({"ok": True}, status=status.HTTP_201_CREATED)
 
 
 class SemanticSearchView(APIView):

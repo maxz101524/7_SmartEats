@@ -40,6 +40,7 @@ interface DailyIntake {
 }
 
 const CHAT_STORAGE_KEY = "smarteats_ai_chat_v1";
+const ANALYTICS_SESSION_KEY = "smarteats_ai_session_v1";
 const ASSISTANT_STYLE_PREFIXES = [
   "are you",
   "do you",
@@ -49,6 +50,14 @@ const ASSISTANT_STYLE_PREFIXES = [
   "what kind of",
   "which kind of",
 ] as const;
+
+function createRequestId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 
 function sanitizeFollowUpSuggestions(rawSuggestions: unknown): string[] | undefined {
   if (!Array.isArray(rawSuggestions)) return undefined;
@@ -180,6 +189,8 @@ export default function AIMeals() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const nextId = useRef(1);
+  const analyticsSessionIdRef = useRef("");
+  const lastAiRequestIdRef = useRef("");
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -303,6 +314,17 @@ export default function AIMeals() {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [messages, loading]);
+
+  useEffect(() => {
+    const existing = localStorage.getItem(ANALYTICS_SESSION_KEY);
+    if (existing) {
+      analyticsSessionIdRef.current = existing;
+      return;
+    }
+    const generated = createRequestId();
+    analyticsSessionIdRef.current = generated;
+    localStorage.setItem(ANALYTICS_SESSION_KEY, generated);
+  }, []);
 
   useEffect(() => {
     try {
@@ -455,6 +477,20 @@ export default function AIMeals() {
       );
     }
 
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      void axios.post(
+        `${API_BASE}/analytics/event/`,
+        {
+          event_type: "dish_added_from_ai",
+          session_id: analyticsSessionIdRef.current,
+          request_id: lastAiRequestIdRef.current,
+          message: dish.dish_name,
+        },
+        { headers: { Authorization: `Token ${token}` } },
+      ).catch(() => undefined);
+    }
+
     return quantity;
   };
 
@@ -477,6 +513,8 @@ export default function AIMeals() {
     const trimmed = text.trim();
     const userMsg: Message = { id: nextId.current++, role: "user", text: trimmed };
     const history = toHistory(messages);
+    const requestId = createRequestId();
+    lastAiRequestIdRef.current = requestId;
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
@@ -491,6 +529,8 @@ export default function AIMeals() {
           history,
           tray_context: trayContext,
           conversation_id: activeConvoId,
+          session_id: analyticsSessionIdRef.current,
+          request_id: requestId,
         },
         controller.signal,
       );
@@ -581,6 +621,9 @@ export default function AIMeals() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const requestId = createRequestId();
+    lastAiRequestIdRef.current = requestId;
+
     try {
       const data = await sendChatMessage(
         {
@@ -589,6 +632,8 @@ export default function AIMeals() {
           tray_context: trayContext,
           conversation_id: activeConvoId,
           regenerate: true,
+          session_id: analyticsSessionIdRef.current,
+          request_id: requestId,
         },
         controller.signal,
       );
@@ -836,7 +881,22 @@ export default function AIMeals() {
                                   key={`${msg.id}-${suggestion}`}
                                   type="button"
                                   disabled={loading}
-                                  onClick={() => sendMessage(suggestion)}
+                                  onClick={() => {
+                                    const token = localStorage.getItem("authToken");
+                                    if (token) {
+                                      void axios.post(
+                                        `${API_BASE}/analytics/event/`,
+                                        {
+                                          event_type: "follow_up_clicked",
+                                          session_id: analyticsSessionIdRef.current,
+                                          request_id: lastAiRequestIdRef.current,
+                                          message: suggestion,
+                                        },
+                                        { headers: { Authorization: `Token ${token}` } },
+                                      ).catch(() => undefined);
+                                    }
+                                    void sendMessage(suggestion);
+                                  }}
                                   style={{
                                     fontSize: "var(--se-text-sm)",
                                     borderRadius: "var(--se-radius-full)",

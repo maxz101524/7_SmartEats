@@ -249,6 +249,71 @@ class DailyRecommendationSnapshot(models.Model):
         return f"{self.user.username} @ {self.snapshot_date}"
 
 
+class AIAnalyticsEvent(models.Model):
+    EVENT_AI_CHAT_REQUEST = "ai_chat_request"
+    EVENT_FOLLOW_UP_CLICK = "follow_up_clicked"
+    EVENT_DISH_ADD = "dish_added_from_ai"
+    EVENT_TYPES = [
+        (EVENT_AI_CHAT_REQUEST, "AI chat request"),
+        (EVENT_FOLLOW_UP_CLICK, "Follow-up clicked"),
+        (EVENT_DISH_ADD, "Dish added from AI"),
+    ]
+
+    INPUT_BUCKET_CHOICES = [
+        ("0-50", "0-50"),
+        ("51-150", "51-150"),
+        ("151-300", "151-300"),
+        ("301+", "301+"),
+    ]
+
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    event_type = models.CharField(max_length=40, choices=EVENT_TYPES, db_index=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_analytics_events",
+    )
+    session_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    request_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+
+    prompt_chars = models.PositiveIntegerField(default=0)
+    prompt_text_redacted = models.CharField(max_length=240, blank=True, default="")
+    input_bucket = models.CharField(
+        max_length=16,
+        choices=INPUT_BUCKET_CHOICES,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    intent_label = models.CharField(max_length=64, blank=True, default="", db_index=True)
+
+    latency_ms = models.PositiveIntegerField(default=0)
+    success = models.BooleanField(default=True, db_index=True)
+    error_type = models.CharField(max_length=64, blank=True, default="")
+    model_name = models.CharField(max_length=80, blank=True, default="")
+
+    prompt_tokens = models.PositiveIntegerField(default=0)
+    completion_tokens = models.PositiveIntegerField(default=0)
+    total_tokens = models.PositiveIntegerField(default=0)
+    estimated_cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=0)
+
+    follow_up_clicked = models.BooleanField(default=False)
+    dish_added_from_ai = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["event_type", "timestamp"]),
+            models.Index(fields=["user", "timestamp"]),
+            models.Index(fields=["event_type", "session_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} @ {self.timestamp.isoformat()}"
+
+
 
 
     

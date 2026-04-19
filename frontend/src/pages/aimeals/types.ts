@@ -69,6 +69,8 @@ export interface AiChatRequest {
   tray_context?: unknown;
   conversation_id?: number | null;
   regenerate?: boolean;
+  session_id?: string;
+  request_id?: string;
 }
 
 export interface AiChatResponse {

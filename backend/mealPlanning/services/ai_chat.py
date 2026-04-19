@@ -674,6 +674,33 @@ def _sanitize_follow_up_suggestions(raw_suggestions):
     return cleaned
 
 
+def _extract_usage_metadata(response):
+    usage = getattr(response, "usage_metadata", None)
+    if usage is None:
+        return {}
+
+    prompt_tokens = getattr(usage, "prompt_token_count", None)
+    completion_tokens = getattr(usage, "candidates_token_count", None)
+    total_tokens = getattr(usage, "total_token_count", None)
+
+    if prompt_tokens is None and isinstance(usage, dict):
+        prompt_tokens = usage.get("prompt_token_count")
+        completion_tokens = usage.get("candidates_token_count")
+        total_tokens = usage.get("total_token_count")
+
+    def _to_int(value):
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 0
+
+    return {
+        "prompt_tokens": _to_int(prompt_tokens),
+        "completion_tokens": _to_int(completion_tokens),
+        "total_tokens": _to_int(total_tokens),
+    }
+
+
 def get_response(user_message, history=None, user_context=None):
     """
     Send user message to Gemini with dining context.
@@ -686,6 +713,13 @@ def get_response(user_message, history=None, user_context=None):
     if _wants_goal_meal_plan(user_message, user_context):
         fast_plan = _build_goal_meal_plan(user_message, user_context, dish_lookup)
         if fast_plan is not None:
+            fast_plan["_meta"] = {
+                "model_name": "smart_rule_planner",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "token_source": "fast_path",
+            }
             return fast_plan
 
     if genai is None:
@@ -746,11 +780,20 @@ def get_response(user_message, history=None, user_context=None):
         follow_up_suggestions = _sanitize_follow_up_suggestions(
             data.get("follow_up_suggestions", []),
         )
+        usage_meta = _extract_usage_metadata(response)
+        token_source = "provider" if usage_meta.get("total_tokens", 0) > 0 else "unknown"
 
         return {
             "response": response_text,
             "recommended_dishes": recommended,
             "follow_up_suggestions": follow_up_suggestions,
+            "_meta": {
+                "model_name": MODEL_NAME,
+                "prompt_tokens": usage_meta.get("prompt_tokens", 0),
+                "completion_tokens": usage_meta.get("completion_tokens", 0),
+                "total_tokens": usage_meta.get("total_tokens", 0),
+                "token_source": token_source,
+            },
         }
     except (json.JSONDecodeError, ValueError) as exc:
         logger.warning("AI chat JSON error: %s", exc)
