@@ -399,8 +399,7 @@ function BarChart({ data, yLabel, height = CHART_HEIGHT, valueFormatter, orienta
     );
   }
 
-  const plotWidth = width > 0 ? 640 : 640;
-  const svgWidth = 640;
+  const svgWidth = Math.max(280, width);
   const chartHeight = height;
   const barAreaWidth = svgWidth - CHART_PADDING.left - CHART_PADDING.right;
   const barWidth = Math.min(60, (barAreaWidth / data.length) * 0.6);
