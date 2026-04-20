@@ -7,6 +7,7 @@ import "./static/css/custom.css";
 import App from "./App.tsx";
 
 const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
   "518876283778-otj1d5k32s2fb3inlh03ehn0ijh1olhh.apps.googleusercontent.com";
 
 createRoot(document.getElementById("root")!).render(

@@ -155,6 +155,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "https://vega.github.io",
     "https://seven-smarteats.onrender.com",
+    "https://smarteats.site",
+    "https://www.smarteats.site",
     "https://smarteats7.vercel.app",
 ]
 
@@ -165,16 +167,20 @@ CSRF_COOKIE_SAMESITE = None  # Allow cross-site cookie sending
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://smarteats.site",
+    "https://www.smarteats.site",
 ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://smarteats.site",
+    "https://www.smarteats.site",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CSRF_COOKIE_HTTPONLY = False  # Must be False so JavaScript can read it
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {

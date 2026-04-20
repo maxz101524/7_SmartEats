@@ -316,17 +316,18 @@ class GoogleLogin(APIView):
         
         try:
             # Verify the Google ID token
-            # Note: This works for development. For production, set CLIENT_ID explicitly
             idinfo = google_id_token.verify_oauth2_token(
                 id_token_str, 
                 requests.Request()
             )
             
-            # Verify token is for our app (optional but recommended)
-            # You may need to set your Google OAuth Client ID here
-            # CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
-            # if idinfo['aud'] != CLIENT_ID:
-            #     raise ValueError('Token audience mismatch')
+            # Verify token audience in environments where client ID is configured.
+            client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+            if client_id and idinfo.get("aud") != client_id:
+                return Response(
+                    {"error": "Google token audience mismatch"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             
             email = idinfo.get('email')
             first_name = idinfo.get('given_name', '')

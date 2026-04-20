@@ -123,7 +123,7 @@ SECTION 5: Individual Deployment (A5.2)
 - Backend (Render): Connected to GitHub main branch. build.sh runs pip install,
   collectstatic, and migrate. db.sqlite3 is committed so seeded data persists
   across redeploys on the free tier.
-- Production URLs (Max): https://smarteats7.vercel.app / https://smarteats-backend.onrender.com
+- Production URLs (Max): https://smarteats.site / https://smarteats-backend.onrender.com
 
 
 ================================================================================

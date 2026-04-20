@@ -66,6 +66,15 @@ Copy `.env.example` to `.env` in `backend/` and fill in the required values:
 ```
 SECRET_KEY=...
 GEMINI_API_KEY=...
+FRONTEND_URL=https://smarteats.site
+GOOGLE_OAUTH_CLIENT_ID=...
+```
+
+Copy `frontend/.env.example` to `frontend/.env` for frontend runtime config:
+
+```
+VITE_BACKEND_BASE_URL=https://smarteats-backend.onrender.com
+VITE_GOOGLE_CLIENT_ID=...
 ```
 
 ### Run the backend
@@ -175,7 +184,7 @@ The app downloads weights locally only when `USE_LOCAL_MODEL=true`.
 ## Deployment
 
 - **Backend (Render):** `https://smarteats-backend.onrender.com` - `USE_LOCAL_LLM=false`; keep `USE_LOCAL_MODEL=false` for semantic search and set `HF_API_TOKEN`
-- **Frontend (Vercel):** `https://smarteats7.vercel.app`
+- **Frontend (Vercel):** `https://smarteats.site`
 
 After deploying backend changes, run these in the Render shell against the production environment:
 

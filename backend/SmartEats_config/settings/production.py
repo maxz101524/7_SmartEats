@@ -43,6 +43,8 @@ CORS_ALLOWED_ORIGINS = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "https://vega.github.io",
+        "https://smarteats.site",
+        "https://www.smarteats.site",
         "https://smarteats7.vercel.app",
         FRONTEND_URL,
     ] if origin
@@ -51,6 +53,8 @@ CSRF_TRUSTED_ORIGINS = [
     origin for origin in [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://smarteats.site",
+        "https://www.smarteats.site",
         FRONTEND_URL,
     ] if origin
 ]
