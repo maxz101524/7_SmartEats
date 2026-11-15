@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 
 from django.conf import settings
@@ -11,7 +12,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = os.environ.get("GEMINI_NUTRITION_MODEL", "gemini-2.5-flash-lite")
 _last_call_time = 0.0
 RATE_LIMIT_SECONDS = 7  # Safe under 10 RPM free tier
 

@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import date
 
 from django.core.management.base import BaseCommand
@@ -8,6 +9,68 @@ from mealPlanning.models import DiningHall, Dish
 from mealPlanning.services import uiuc_dining, gemini_client, semantic_search
 
 logger = logging.getLogger(__name__)
+
+
+def _env_flag(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+NUTRITION_FIELDS = (
+    "calories",
+    "protein",
+    "carbohydrates",
+    "fat",
+    "fiber",
+    "sodium",
+    "serving_size",
+    "nutrition_source",
+    "ai_confidence",
+)
+
+
+def _copy_existing_nutrition(dish):
+    source = (
+        Dish.objects
+        .filter(dish_name__iexact=dish.dish_name, calories__gt=0)
+        .exclude(pk=dish.pk)
+        .exclude(nutrition_source="")
+        .order_by("-last_seen", "dining_hall__name")
+        .first()
+    )
+    if source is None:
+        return False
+
+    for field in NUTRITION_FIELDS:
+        setattr(dish, field, getattr(source, field))
+    if not dish.nutrition_source:
+        dish.nutrition_source = "copied"
+    dish.save(update_fields=NUTRITION_FIELDS)
+    return True
+
+
+def _nutrition_cache_key(dish):
+    return (
+        str(dish.dish_name or "").strip().lower(),
+        str(dish.category or "").strip().lower(),
+        str(dish.meal_period or "").strip().lower(),
+        str(dish.serving_unit or "").strip().lower(),
+    )
+
+
+def _apply_ai_nutrition(dish, ai_data):
+    dish.calories = ai_data["calories"]
+    dish.protein = round(ai_data["protein"])
+    dish.carbohydrates = round(ai_data["carbohydrates"])
+    dish.fat = round(ai_data["fat"])
+    dish.fiber = ai_data["fiber"]
+    dish.sodium = ai_data["sodium"]
+    dish.serving_size = ai_data.get("serving_size", "")
+    dish.nutrition_source = "ai_generated"
+    dish.ai_confidence = ai_data.get("confidence", "")
+    dish.save()
 
 
 class Command(BaseCommand):
@@ -23,15 +86,42 @@ class Command(BaseCommand):
         parser.add_argument(
             "--force",
             action="store_true",
-            help="Re-enrich dishes that already have nutrition data",
+            help="Re-enrich existing nutrition only when combined with --enrich-gemini.",
+        )
+        parser.add_argument(
+            "--enrich-gemini",
+            action="store_true",
+            help="Force Gemini nutrition enrichment on when DISABLE_GEMINI_NUTRITION=true.",
+        )
+        parser.add_argument(
+            "--skip-gemini",
+            action="store_true",
+            help="Skip Gemini nutrition enrichment for this run.",
         )
 
     def handle(self, *args, **options):
         menu_date = options["date"] or timezone.localdate().isoformat()
         force = options["force"]
-        self.stdout.write(f"Scraping menu for {menu_date} (force={force})...")
+        disable_by_env = _env_flag("DISABLE_GEMINI_NUTRITION", default=False)
+        enrich_with_gemini = (
+            (options["enrich_gemini"] or not disable_by_env)
+            and not options["skip_gemini"]
+        )
+        self.stdout.write(
+            f"Scraping menu for {menu_date} (force={force}, enrich_gemini={enrich_with_gemini})..."
+        )
 
-        stats = {"halls": 0, "created": 0, "updated": 0, "ai": 0, "skipped": 0, "force_enriched": 0}
+        stats = {
+            "halls": 0,
+            "created": 0,
+            "updated": 0,
+            "ai": 0,
+            "ai_calls": 0,
+            "copied": 0,
+            "skipped": 0,
+            "ai_disabled": 0,
+            "force_enriched": 0,
+        }
         dishes_to_enrich = []
         today_dishes = []
 
@@ -71,17 +161,37 @@ class Command(BaseCommand):
                 else:
                     stats["updated"] += 1
 
-                # Queue for nutrition enrichment
+                # Reuse known nutrition first; only truly missing rows need Gemini.
                 needs_nutrition = dish.nutrition_source == ""
-                if force or needs_nutrition:
-                    dishes_to_enrich.append(dish)
+                if needs_nutrition and _copy_existing_nutrition(dish):
+                    stats["copied"] += 1
+                    needs_nutrition = False
+
+                force_reenrich = force and options["enrich_gemini"]
+                if force and not options["enrich_gemini"] and not needs_nutrition:
+                    stats["skipped"] += 1
+                elif force_reenrich or needs_nutrition:
+                    if enrich_with_gemini:
+                        dishes_to_enrich.append(dish)
+                    else:
+                        stats["ai_disabled"] += 1
                 else:
                     stats["skipped"] += 1
 
-        # Nutrition enrichment phase — Gemini only
+        # Nutrition enrichment phase. Use --skip-gemini only for emergency no-AI refreshes.
+        if not enrich_with_gemini and stats["ai_disabled"]:
+            self.stdout.write(self.style.WARNING(
+                f"Gemini enrichment disabled; skipped {stats['ai_disabled']} dishes. "
+                "Remove --skip-gemini or use --enrich-gemini to opt in."
+            ))
         self.stdout.write(f"Enriching {len(dishes_to_enrich)} dishes via Gemini...")
 
+        enrich_groups = {}
         for dish in dishes_to_enrich:
+            enrich_groups.setdefault(_nutrition_cache_key(dish), []).append(dish)
+
+        for group in enrich_groups.values():
+            dish = group[0]
             ai_data = gemini_client.estimate_nutrition(
                 dish_name=dish.dish_name,
                 category=dish.category,
@@ -92,26 +202,20 @@ class Command(BaseCommand):
             )
 
             if ai_data:
-                dish.calories = ai_data["calories"]
-                dish.protein = round(ai_data["protein"])
-                dish.carbohydrates = round(ai_data["carbohydrates"])
-                dish.fat = round(ai_data["fat"])
-                dish.fiber = ai_data["fiber"]
-                dish.sodium = ai_data["sodium"]
-                dish.serving_size = ai_data.get("serving_size", "")
-                dish.nutrition_source = "ai_generated"
-                dish.ai_confidence = ai_data.get("confidence", "")
-                dish.save()
-                if force and dish.nutrition_source != "":
-                    stats["force_enriched"] += 1
-                stats["ai"] += 1
+                stats["ai_calls"] += 1
+                for grouped_dish in group:
+                    _apply_ai_nutrition(grouped_dish, ai_data)
+                    if force:
+                        stats["force_enriched"] += 1
+                    stats["ai"] += 1
             else:
                 logger.warning("No nutrition data for '%s'", dish.dish_name)
 
         self.stdout.write(self.style.SUCCESS(
             f"Done! Halls: {stats['halls']}, "
             f"Created: {stats['created']}, Updated: {stats['updated']}, "
-            f"AI: {stats['ai']}, Skipped: {stats['skipped']}, "
+            f"AI: {stats['ai']}, AI calls: {stats['ai_calls']}, Copied: {stats['copied']}, "
+            f"Skipped: {stats['skipped']}, AI disabled: {stats['ai_disabled']}, "
             f"Force re-enriched: {stats['force_enriched']}"
         ))
 
