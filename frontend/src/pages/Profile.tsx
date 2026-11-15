@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import embed from "vega-embed";
-import { API_BASE } from "../config";
+import { API_BASE, DATA_MODE } from "../config";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { EmptyState } from "../components/EmptyState";
 import { MacroProgressBar } from "../components/MacroProgressBar";
-import { IconDownload, IconSparkle } from "../components/Icons";
+import { IconDownload } from "../components/Icons";
+import "../styles/profile.css";
 import Skeleton from "../components/Skeleton";
 import { useToast } from "../components/useToast";
 
@@ -109,7 +110,7 @@ const lineSpec = {
   data: { url: `${API_BASE}/meals-per-day/` },
   mark: { type: "line" as const, point: true },
   encoding: {
-    x: { field: "date", type: "temporal" as const, title: "Date" },
+    x: { field: "date", timeUnit: "utcyearmonthdate" as const, type: "temporal" as const, title: "Date" },
     y: { field: "count", type: "quantitative" as const, title: "Meals" },
   },
 };
@@ -120,12 +121,40 @@ function VegaChart({ spec, id }: { spec: object; id: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const result = embed(containerRef.current, spec as never, {
-      actions: { export: true, source: false, compiled: false, editor: true },
-    });
+    const container = containerRef.current;
+    if (!container) return;
+    let cancelled = false;
+    let view: { finalize: () => void } | null = null;
+
+    // Resolve `data.url` through axios so API URLs work in static mode (served in-browser).
+    const withData = async () => {
+      const data = (spec as { data?: { url?: string } }).data;
+      if (!data?.url) return spec;
+      const token = localStorage.getItem("authToken");
+      const res = await axios.get(data.url, {
+        headers: token ? { Authorization: `Token ${token}` } : undefined,
+      });
+      return { ...spec, data: { values: res.data } };
+    };
+
+    withData()
+      .then((resolved) =>
+        cancelled
+          ? null
+          : embed(container, resolved as never, {
+              actions: { export: true, source: false, compiled: false, editor: true },
+            }),
+      )
+      .then((result) => {
+        if (!result) return;
+        if (cancelled) result.finalize();
+        else view = result;
+      })
+      .catch(() => undefined);
+
     return () => {
-      result.then((r) => r.finalize());
+      cancelled = true;
+      view?.finalize();
     };
   }, [spec]);
 
@@ -135,66 +164,16 @@ function VegaChart({ spec, id }: { spec: object; id: string }) {
 /* ─── Stat tile helper ───────────────────────────────────────────────── */
 
 function StatTile({ label, value }: { label: string; value: string | number | null | undefined }) {
-  const display =
-    value === null || value === undefined || value === ""
-      ? "\u2014"
-      : String(value);
-
+  const display = value === null || value === undefined || value === "" ? "\u2014" : String(value);
   return (
-    <div
-      style={{
-        background: "var(--se-bg-subtle)",
-        borderRadius: "var(--se-radius-md)",
-        padding: "10px 14px",
-        border: "1px solid var(--se-border)",
-      }}
-    >
-      <p
-        style={{
-          fontSize: "var(--se-text-xs)",
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          color: "var(--se-text-faint)",
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </p>
-      <p
-        style={{
-          fontSize: "var(--se-text-sm)",
-          fontWeight: 600,
-          color: "var(--se-text-main)",
-          margin: 0,
-        }}
-      >
-        {display}
-      </p>
+    <div>
+      <dt>{label}</dt>
+      <dd>{display}</dd>
     </div>
   );
 }
 
 /* ─── Shared styles ─────────────────────────────────────────────────── */
-
-const sectionLabel: React.CSSProperties = {
-  fontSize: "var(--se-text-xs)",
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "var(--se-text-faint)",
-  margin: "0 0 12px",
-};
-
-const pageStyle: React.CSSProperties = {
-  maxWidth: 720,
-  margin: "0 auto",
-  padding: "0 24px",
-};
-
-const sectionStyle: React.CSSProperties = {
-  marginBottom: 36,
-};
 
 /* ─── Activity level options ────────────────────────────────────────── */
 
@@ -494,7 +473,14 @@ function Profile() {
     data: { values: historyData },
     mark: "bar",
     encoding: {
-      x: { field: "date", type: "temporal" as const, title: "Date" },
+      // Dates are calendar days ("YYYY-MM-DD"); treat them as UTC days so they don't shift in US time zones.
+      x: {
+        field: "date",
+        timeUnit: "utcyearmonthdate" as const,
+        type: "ordinal" as const,
+        title: "Date",
+        axis: { format: "%a %d", labelAngle: 0 },
+      },
       y: { field: "grams", type: "quantitative" as const, title: "Grams" },
       color: {
         field: "macro",
@@ -538,28 +524,23 @@ function Profile() {
   /* ════════════════════════════════════════════════════════════════════ */
 
   return (
-    <div style={pageStyle}>
+    <div className="profile">
 
       {/* ════ Section 1 — Identity Header ════ */}
-      <section style={sectionStyle}>
+      <header className="profile-head">
         {profileLoading ? (
-          <Card padding="md">
-            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              <Skeleton variant="circle" width={56} />
-              <div style={{ flex: 1 }}>
-                <Skeleton variant="rect" height={24} width="50%" />
-                <div style={{ marginTop: 8 }}><Skeleton variant="text" lines={2} /></div>
-              </div>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flex: 1 }}>
+            <Skeleton variant="circle" width={64} />
+            <div style={{ flex: 1 }}>
+              <Skeleton variant="rect" height={36} width="40%" />
             </div>
-          </Card>
+          </div>
         ) : profileError || !profile ? (
           <Card padding="md">
             <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
-              <p style={{ color: "var(--se-error)", fontWeight: 600, fontSize: "var(--se-text-base)", margin: 0 }}>
-                Something went wrong
-              </p>
+              <p style={{ color: "var(--se-error)", fontWeight: 600, margin: 0 }}>Could not load your profile</p>
               <p style={{ color: "var(--se-text-muted)", fontSize: "var(--se-text-sm)", margin: "4px 0 0" }}>
-                {profileError || "Could not load profile."}
+                {profileError || "Please try again."}
               </p>
               <div style={{ marginTop: "var(--se-space-4)" }}>
                 <Button variant="secondary" size="sm" onClick={fetchProfile}>
@@ -569,100 +550,59 @@ function Profile() {
             </div>
           </Card>
         ) : (
-          <Card padding="md">
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-              {/* Left: avatar + name */}
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                {/* Avatar circle */}
-                <div
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: "var(--se-radius-full)",
-                    background: "linear-gradient(135deg, var(--se-primary), #f59e0b)",
-                    color: "white",
-                    fontSize: 22,
-                    fontWeight: 900,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    userSelect: "none",
-                  }}
-                >
-                  {profile.first_name ? profile.first_name[0].toUpperCase() : "U"}
+          <>
+            <div className="profile-head__id">
+              <span className="profile-avatar" aria-hidden="true">
+                {profile.first_name ? profile.first_name[0].toUpperCase() : "U"}
+              </span>
+              {editingIdentity ? (
+                <div className="profile-edit">
+                  <input
+                    style={inputStyle}
+                    value={editFirstName}
+                    onChange={(e) => setEditFirstName(e.target.value)}
+                    placeholder="First name"
+                    aria-label="First name"
+                  />
+                  <input
+                    style={inputStyle}
+                    value={editLastName}
+                    onChange={(e) => setEditLastName(e.target.value)}
+                    placeholder="Last name"
+                    aria-label="Last name"
+                  />
+                  <Button variant="primary" size="sm" loading={savingIdentity} onClick={handleSaveIdentity}>
+                    Save
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setEditingIdentity(false)}>
+                    Cancel
+                  </Button>
                 </div>
-
-                {/* Name block */}
+              ) : (
                 <div>
-                  {editingIdentity ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <input
-                          style={{ ...inputStyle, maxWidth: 140 }}
-                          value={editFirstName}
-                          onChange={(e) => setEditFirstName(e.target.value)}
-                          placeholder="First name"
-                        />
-                        <input
-                          style={{ ...inputStyle, maxWidth: 140 }}
-                          value={editLastName}
-                          onChange={(e) => setEditLastName(e.target.value)}
-                          placeholder="Last name"
-                        />
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <Button variant="primary" size="sm" loading={savingIdentity} onClick={handleSaveIdentity}>
-                          Save
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setEditingIdentity(false)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <h1
-                        style={{
-                          fontSize: "var(--se-text-h3)",
-                          fontWeight: 800,
-                          color: "var(--se-text-main)",
-                          margin: 0,
-                          lineHeight: 1.1,
-                        }}
-                      >
-                        {profile.first_name || ""} {profile.last_name || ""}
-                      </h1>
-                      {profile.netID && (
-                        <p style={{ fontSize: "var(--se-text-sm)", color: "var(--se-text-muted)", margin: "4px 0 0" }}>
-                          netID: {profile.netID}
-                        </p>
-                      )}
-                      {profile.date_joined && (
-                        <p style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-faint)", margin: "4px 0 0" }}>
-                          Member since {formatMemberSince(profile.date_joined)}
-                        </p>
-                      )}
-                    </>
-                  )}
+                  <h1>{[profile.first_name, profile.last_name].filter(Boolean).join(" ") || "Your profile"}</h1>
+                  <p className="profile-head__meta se-mono">
+                    {profile.netID ? `netID ${profile.netID}` : profile.email}
+                    {profile.date_joined ? ` · joined ${formatMemberSince(profile.date_joined)}` : ""}
+                  </p>
                 </div>
-              </div>
-
-              {/* Right: Edit button */}
-              {!editingIdentity && (
-                <Button variant="ghost" size="sm" onClick={startEditIdentity}>
-                  Edit Profile
-                </Button>
               )}
             </div>
-          </Card>
+            {!editingIdentity && (
+              <button type="button" className="menu-btn" onClick={startEditIdentity}>
+                Edit name
+              </button>
+            )}
+          </>
         )}
-      </section>
+      </header>
 
+      <div className="profile-grid">
+        <aside className="profile-side">
       {/* ════ Section 2 — My Goals ════ */}
       {profile && (
-        <section style={sectionStyle}>
-          <p style={sectionLabel}>My Goals</p>
+        <section className="profile-section">
+          <h2 className="profile-h2">Daily targets</h2>
 
           {editingGoals ? (
             <Card padding="md">
@@ -717,110 +657,56 @@ function Profile() {
             </Card>
           ) : hasGoals ? (
             <Card padding="md">
-              {/* Goal cards row */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+              <dl className="profile-targets">
                 {([
                   { label: "Calories", value: profile.daily_cal_goal, unit: "kcal", color: "var(--se-macro-cal)" },
                   { label: "Protein", value: profile.daily_protein_goal, unit: "g", color: "var(--se-macro-protein)" },
                   { label: "Carbs", value: profile.daily_carbs_goal, unit: "g", color: "var(--se-macro-carbs)" },
                   { label: "Fat", value: profile.daily_fat_goal, unit: "g", color: "var(--se-macro-fat)" },
                 ] as const).map((item) => (
-                  <div
-                    key={item.label}
-                    style={{
-                      background: "var(--se-bg-subtle)",
-                      borderRadius: "var(--se-radius-md)",
-                      padding: "12px 14px",
-                      border: "1px solid var(--se-border)",
-                      textAlign: "center",
-                    }}
-                  >
-                    <p style={{ fontSize: "var(--se-text-xs)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--se-text-faint)", margin: "0 0 6px" }}>
+                  <div key={item.label}>
+                    <dt>
+                      <span className="profile-swatch" style={{ background: item.color }} />
                       {item.label}
-                    </p>
-                    <p style={{ fontSize: "var(--se-text-h3)", fontWeight: 700, color: item.color, margin: 0, lineHeight: 1.2 }}>
+                    </dt>
+                    <dd className="se-mono">
                       {item.value ?? "\u2014"}
-                    </p>
-                    <p style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)", margin: "2px 0 0" }}>
-                      {item.unit}
-                    </p>
+                      <span>{item.unit}</span>
+                    </dd>
                   </div>
                 ))}
-              </div>
-
-              {/* Source + activity badges */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-                {profile.goals_source && (
-                  <span
-                    style={{
-                      display: "inline-block",
-                      padding: "3px 10px",
-                      borderRadius: "var(--se-radius-full)",
-                      fontSize: "var(--se-text-xs)",
-                      fontWeight: 600,
-                      background: profile.goals_source === "ai" ? "var(--se-info-dim)" : "var(--se-bg-subtle)",
-                      color: profile.goals_source === "ai" ? "var(--se-info)" : "var(--se-text-muted)",
-                      border: `1px solid ${profile.goals_source === "ai" ? "var(--se-info)" : "var(--se-border)"}`,
-                    }}
-                  >
-                    {profile.goals_source === "ai" ? "AI-calculated" : "Custom"}
-                  </span>
-                )}
-                {profile.activity_level && (
-                  <span
-                    style={{
-                      display: "inline-block",
-                      padding: "3px 10px",
-                      borderRadius: "var(--se-radius-full)",
-                      fontSize: "var(--se-text-xs)",
-                      fontWeight: 600,
-                      background: "var(--se-bg-subtle)",
-                      color: "var(--se-text-muted)",
-                      border: "1px solid var(--se-border)",
-                    }}
-                  >
-                    {activityLabel(profile.activity_level)}
-                  </span>
-                )}
-              </div>
+              </dl>
+              <p className="profile-note">
+                {profile.goals_source === "ai" ? "Estimated from your body stats" : "Set manually"}
+                {profile.activity_level ? ` · ${activityLabel(profile.activity_level)}` : ""}
+              </p>
 
               {/* Action buttons */}
               <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                <Button variant="ghost" size="sm" onClick={startEditGoals}>
-                  Edit Goals
+                <Button variant="secondary" size="sm" onClick={startEditGoals}>
+                  Edit
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => navigate("/aimeals")}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <IconSparkle size={14} /> Open AI Meals
-                  </span>
+                  Use estimator
                 </Button>
               </div>
             </Card>
           ) : (
             /* No goals set — prompt */
             <Card padding="md">
-              <div
-                style={{
-                  background: "var(--se-primary-dim)",
-                  borderRadius: "var(--se-radius-md)",
-                  padding: "20px 24px",
-                  textAlign: "center",
-                }}
-              >
+              <div>
                 <p style={{ fontSize: "var(--se-text-base)", fontWeight: 600, color: "var(--se-text-main)", margin: "0 0 4px" }}>
-                  Set your daily nutrition goals to track your progress
+                  No daily targets yet
                 </p>
                 <p style={{ fontSize: "var(--se-text-sm)", color: "var(--se-text-muted)", margin: "0 0 16px" }}>
-                  Personalized targets help you stay on track with your diet.
+                  Set calories and macros to see progress on the dashboard.
                 </p>
-                <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Button variant="secondary" size="sm" onClick={startEditGoals}>
-                    Set Goals Manually
+                    Set targets
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => navigate("/aimeals")}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <IconSparkle size={14} /> Open AI Meals
-                    </span>
+                    Estimate in AI Meals
                   </Button>
                 </div>
               </div>
@@ -831,15 +717,9 @@ function Profile() {
 
       {/* ════ Section 3 — Body Stats ════ */}
       {profile && (
-        <section style={sectionStyle}>
-          <p style={sectionLabel}>Body Stats</p>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 12,
-            }}
-          >
+        <section className="profile-section">
+          <h2 className="profile-h2">Body stats</h2>
+          <dl className="profile-stats">
             <StatTile label="Sex" value={profile.sex} />
             <StatTile label="Age" value={profile.age != null ? `${profile.age} yrs` : null} />
             <StatTile
@@ -860,14 +740,44 @@ function Profile() {
             />
             <StatTile label="Goal" value={goalLabel(profile.goal)} />
             <StatTile label="Activity" value={activityLabel(profile.activity_level)} />
-          </div>
+          </dl>
         </section>
       )}
 
+      {/* ════ Section 6 — Account ════ */}
+      <section className="profile-section">
+        <h2 className="profile-h2">Account</h2>
+        <Card padding="md">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <p style={{ fontSize: "var(--se-text-sm)", color: "var(--se-text-secondary)", margin: 0 }}>
+                Signed in as <strong>{profile?.email || profile?.netID || "you"}</strong>
+              </p>
+              {DATA_MODE === "static" && (
+                <p style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)", margin: "4px 0 0" }}>
+                  Your account and meal log are saved in this browser only.
+                </p>
+              )}
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                localStorage.removeItem("authToken");
+                navigate("/login");
+              }}
+            >
+              Log out
+            </Button>
+          </div>
+        </Card>
+      </section>
+        </aside>
+        <div className="profile-main">
       {/* ════ Section 4 — Nutrition History ════ */}
-      <section style={sectionStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <p style={{ ...sectionLabel, margin: 0 }}>Your Nutrition This Week</p>
+      <section className="profile-section">
+        <div className="profile-section__head">
+          <h2 className="profile-h2">Nutrition history</h2>
           <div style={{ display: "flex", gap: 6 }}>
             <RangePill label="7 days" value={7} />
             <RangePill label="30 days" value={30} />
@@ -897,8 +807,8 @@ function Profile() {
                 const todayFat = latest.find((r) => r.macro === "Fat")?.grams ?? 0;
                 return (
                   <div style={{ marginTop: 20 }}>
-                    <p style={{ fontSize: "var(--se-text-xs)", fontWeight: 600, color: "var(--se-text-faint)", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      Latest Day Progress
+                    <p className="se-eyebrow" style={{ margin: "0 0 12px" }}>
+                      Latest logged day vs targets
                     </p>
                     <MacroProgressBar label="Protein" current={todayProtein} max={profile!.daily_protein_goal ?? 150} color="var(--se-macro-protein)" />
                     <MacroProgressBar label="Carbs" current={todayCarbs} max={profile!.daily_carbs_goal ?? 250} color="var(--se-macro-carbs)" />
@@ -920,17 +830,17 @@ function Profile() {
               cursor: "pointer",
               fontSize: "var(--se-text-sm)",
               fontWeight: 600,
-              color: "var(--se-text-accent)",
+              color: "var(--se-text-main)",
               padding: "4px 0",
+              textDecoration: "underline",
+              textDecorationColor: "var(--se-primary)",
+              textUnderlineOffset: 3,
               display: "flex",
               alignItems: "center",
               gap: 6,
             }}
           >
-            <span style={{ transform: showDetailedCharts ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 150ms", display: "inline-block" }}>
-              &#9654;
-            </span>
-            {showDetailedCharts ? "Hide detailed charts" : "View detailed charts"}
+            {showDetailedCharts ? "Hide more charts" : "Show more charts"}
           </button>
 
           {showDetailedCharts && (
@@ -953,9 +863,9 @@ function Profile() {
       </section>
 
       {/* ════ Section 5 — Meal Log ════ */}
-      <section style={sectionStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <p style={{ ...sectionLabel, margin: 0 }}>Meal Log</p>
+      <section className="profile-section">
+        <div className="profile-section__head">
+          <h2 className="profile-h2">Meal log</h2>
           {report && (
             <div style={{ display: "flex", gap: 8 }}>
               <Button variant="secondary" size="sm" onClick={() => handleDownload("csv")}>
@@ -987,62 +897,34 @@ function Profile() {
             />
           </Card>
         ) : mealLog.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-            {mealLog.slice(0, 6).map((entry) => (
-              <Card key={entry.meal_id} padding="sm">
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                      <span
-                        style={{
-                          fontSize: "var(--se-text-xs)",
-                          fontWeight: 700,
-                          color: "var(--se-text-accent)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                        }}
-                      >
-                        {entry.category || "Logged Meal"}
-                      </span>
-                      <span style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)" }}>
-                        {new Date(entry.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {entry.dishes.map((dish) => (
-                        <button
-                          key={`${entry.meal_id}-${dish.dish_id}`}
-                          type="button"
-                          onClick={() => navigate(`/dishes/${dish.dish_id}`)}
-                          style={{
-                            border: "1px solid var(--se-border)",
-                            borderRadius: "var(--se-radius-full)",
-                            background: "var(--se-bg-subtle)",
-                            color: "var(--se-text-main)",
-                            fontSize: "var(--se-text-xs)",
-                            padding: "6px 10px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {dish.dish_name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, auto)", gap: 8, textAlign: "right" }}>
-                    <span style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)" }}>
-                      {entry.total_calories} cal
-                    </span>
-                    <span style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)" }}>
-                      {entry.total_protein}P / {entry.total_carbohydrates}C / {entry.total_fat}F
-                    </span>
-                  </div>
+          <div className="profile-log">
+            {mealLog.slice(0, 8).map((entry) => (
+              <div key={entry.meal_id} className="profile-log__row">
+                <div className="profile-log__when">
+                  <span className="se-eyebrow">{entry.category || "Logged meal"}</span>
+                  <span className="se-mono">
+                    {new Date(`${entry.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
                 </div>
-              </Card>
+                <div className="profile-log__dishes">
+                  {entry.dishes.map((dish, idx) => (
+                    <span key={`${entry.meal_id}-${dish.dish_id}`}>
+                      <button type="button" onClick={() => navigate(`/dishes/${dish.dish_id}`)}>
+                        {dish.dish_name}
+                      </button>
+                      {idx < entry.dishes.length - 1 ? ", " : ""}
+                    </span>
+                  ))}
+                </div>
+                <div className="profile-log__macros se-mono">
+                  <span>
+                    <strong>{entry.total_calories}</strong> kcal
+                  </span>
+                  <span>
+                    {entry.total_protein}P · {entry.total_carbohydrates}C · {entry.total_fat}F
+                  </span>
+                </div>
+              </div>
             ))}
           </div>
         ) : null}
@@ -1078,7 +960,7 @@ function Profile() {
                 }}
               >
                 <div>
-                  <p style={{ fontSize: "var(--se-text-h3)", fontWeight: 700, color: "var(--se-text-main)", margin: 0 }}>
+                  <p className="se-mono" style={{ fontSize: "1.4rem", fontWeight: 500, color: "var(--se-text-main)", margin: 0 }}>
                     {report.statistics.total_count}
                   </p>
                   <p style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)", margin: "2px 0 0" }}>
@@ -1087,7 +969,7 @@ function Profile() {
                 </div>
                 {report.statistics.macros.labels.map((label, i) => (
                   <div key={label}>
-                    <p style={{ fontSize: "var(--se-text-h3)", fontWeight: 700, color: "var(--se-text-main)", margin: 0 }}>
+                    <p className="se-mono" style={{ fontSize: "1.4rem", fontWeight: 500, color: "var(--se-text-main)", margin: 0 }}>
                       {report.statistics.macros.values[i] ?? 0}g
                     </p>
                     <p style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)", margin: "2px 0 0" }}>
@@ -1102,7 +984,7 @@ function Profile() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Macronutrient Breakdown */}
               <Card padding="sm">
-                <p style={{ ...sectionLabel, margin: "0 0 8px" }}>Macronutrient Breakdown</p>
+                <p className="se-eyebrow" style={{ margin: "0 0 8px" }}>Total macros logged</p>
                 <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   <table style={{ width: "100%", fontSize: "var(--se-text-sm)", borderCollapse: "collapse" }}>
                     <thead>
@@ -1117,7 +999,6 @@ function Profile() {
                           key={label}
                           style={{
                             borderBottom: "1px solid var(--se-border-muted)",
-                            background: i % 2 === 0 ? "var(--se-bg-subtle)" : undefined,
                           }}
                         >
                           <td style={{ padding: "6px 10px", color: "var(--se-text-main)" }}>{label}</td>
@@ -1133,7 +1014,7 @@ function Profile() {
 
               {/* Meals by Category */}
               <Card padding="sm">
-                <p style={{ ...sectionLabel, margin: "0 0 8px" }}>Meals by Category</p>
+                <p className="se-eyebrow" style={{ margin: "0 0 8px" }}>Meals by category</p>
                 <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                   <table style={{ width: "100%", fontSize: "var(--se-text-sm)", borderCollapse: "collapse" }}>
                     <thead>
@@ -1148,7 +1029,6 @@ function Profile() {
                           key={label}
                           style={{
                             borderBottom: "1px solid var(--se-border-muted)",
-                            background: i % 2 === 0 ? "var(--se-bg-subtle)" : undefined,
                           }}
                         >
                           <td style={{ padding: "6px 10px", color: "var(--se-text-main)" }}>{label}</td>
@@ -1166,31 +1046,8 @@ function Profile() {
         )}
       </section>
 
-      {/* ════ Section 6 — Account ════ */}
-      <section style={sectionStyle}>
-        <p style={sectionLabel}>Account</p>
-        <Card padding="md">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              {profile?.email && (
-                <p style={{ fontSize: "var(--se-text-sm)", color: "var(--se-text-secondary)", margin: 0 }}>
-                  {profile.email}
-                </p>
-              )}
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                localStorage.removeItem("authToken");
-                navigate("/login");
-              }}
-            >
-              Log out
-            </Button>
-          </div>
-        </Card>
-      </section>
+        </div>
+      </div>
     </div>
   );
 }

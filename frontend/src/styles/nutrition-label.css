@@ -1,0 +1,90 @@
+/* Nutrition-facts panel (v2.1) */
+.nf-label {
+  background: var(--se-bg-surface);
+  color: var(--se-text-main);
+  border: 2px solid var(--se-text-main);
+  border-radius: 6px;
+  padding: 14px 16px 12px;
+  box-shadow: 0 1px 0 rgba(28, 25, 22, 0.05), 0 24px 48px -16px rgba(28, 25, 22, 0.28);
+  font-size: 13px;
+}
+.nf-label__title {
+  font-family: var(--se-font-display);
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variation-settings: "SOFT" 0;
+}
+.nf-label__dish {
+  margin-top: 6px;
+  font-weight: var(--se-weight-semibold);
+  font-size: 14px;
+  line-height: 1.25;
+}
+.nf-label__serving {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding-bottom: 6px;
+  color: var(--se-text-secondary);
+  border-bottom: 1px solid var(--se-text-main);
+}
+.nf-label__rule {
+  background: var(--se-text-main);
+}
+.nf-label__rule--heavy {
+  height: 9px;
+  margin: 0 -2px;
+}
+.nf-label__rule--medium {
+  height: 4px;
+}
+.nf-label__calories {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0 2px;
+  font-family: var(--se-font-display);
+  font-weight: 800;
+  font-size: 1.55rem;
+  line-height: 1.1;
+  font-variation-settings: "SOFT" 0;
+}
+.nf-label__calories .se-mono {
+  font-size: 2.1rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+.nf-label__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--se-border);
+}
+.nf-label__row:last-of-type {
+  border-bottom-color: var(--se-text-main);
+}
+.nf-label__row > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: var(--se-weight-semibold);
+}
+.nf-label__row i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.nf-label__foot {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--se-text-muted);
+}
+.nf-label--compact .nf-label__title {
+  font-size: 1.5rem;
+}

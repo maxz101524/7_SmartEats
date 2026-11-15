@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
-import { Card } from "../components/Card";
-import { Button } from "../components/Button";
 import { MealTrayCard } from "../components/MealTrayCard";
-import { MacroProgressBar } from "../components/MacroProgressBar";
 import { FoodIcon } from "../components/FoodIcon";
 import { useToast } from "../components/useToast";
 import { useMealTray } from "../mealTray";
 import Skeleton from "../components/Skeleton";
-import { IconMapPin, IconSparkle, IconPlus, IconGrid } from "../components/Icons";
+import { statusFor, statusLabel, type HallStatusMap } from "../utils/halls";
+import "../styles/dashboard.css";
 
 /* ── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -55,43 +53,8 @@ interface RecommendationResponse {
   generated_at?: string;
 }
 
-/* ── Hall hours (static) ────────────────────────────────────────────────────── */
-
-const HALL_HOURS: Record<string, { open: number; close: number }> = {
-  "Ikenberry Dining Center": { open: 7, close: 21 },
-  "Pennsylvania Avenue Dining Hall": { open: 7, close: 21 },
-  "ISR Dining Center": { open: 7, close: 20 },
-};
-
-function isHallOpen(hallName: string): boolean {
-  const hours = HALL_HOURS[hallName];
-  if (!hours) return false;
-  const hour = new Date().getHours();
-  return hour >= hours.open && hour < hours.close;
-}
-
-/* ── Time-of-day greeting ───────────────────────────────────────────────────── */
-
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour <= 11) return "Good morning";
-  if (hour >= 12 && hour <= 16) return "Good afternoon";
-  if (hour >= 17 && hour <= 20) return "Good evening";
-  return "Good night";
-}
 
 /* ── Shared section-label style ─────────────────────────────────────────────── */
-
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: "var(--se-text-xs)",
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "var(--se-text-faint)",
-  marginBottom: 12,
-  margin: 0,
-  paddingBottom: 12,
-};
 
 /* ── Formatted date ─────────────────────────────────────────────────────────── */
 
@@ -159,6 +122,7 @@ export default function Dashboard() {
 
   /* State */
   const [halls, setHalls] = useState<DiningHall[]>([]);
+  const [hallStatus, setHallStatus] = useState<HallStatusMap>({});
   const [hallsLoading, setHallsLoading] = useState(true);
 
   const [intake, setIntake] = useState<DailyIntake | null>(null);
@@ -182,6 +146,10 @@ export default function Dashboard() {
         /* halls are non-critical — silently degrade */
       })
       .finally(() => setHallsLoading(false));
+    axios
+      .get<HallStatusMap>(`${API_BASE}/hall-status/`)
+      .then((res) => setHallStatus(res.data ?? {}))
+      .catch(() => setHallStatus({}));
   }, []);
 
   /* Fetch daily intake (auth required) */
@@ -293,578 +261,183 @@ export default function Dashboard() {
 
   /* ── Render ─────────────────────────────────────────────────────────────── */
 
+  const servingHalls = halls
+    .filter((h) => h.dishes.length > 0)
+    .map((h) => ({ ...h, status: statusFor(h.name, hallStatus) }))
+    .sort((a, b) => Number(b.status?.is_open ?? false) - Number(a.status?.is_open ?? false));
+
+  const goals = intake?.goals_set ? intake.goals : null;
+  const consumed = intake?.consumed;
+  const pct = (value: number, goal: number) => (goal > 0 ? Math.min(100, Math.round((value / goal) * 100)) : 0);
+
   return (
-    <div style={{ padding: "0 24px" }}>
-      {/* Grid: main (2/3) + sidebar (1/3) */}
-      <div
-        style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24 }}
-        className="lg:grid-cols-[2fr_1fr]"
-      >
-        {/* ═══════════════════════ MAIN COLUMN ═══════════════════════ */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* ── 1. Welcome Header ── */}
-          <section>
-            <h1
-              style={{
-                fontSize: "var(--se-text-h1)",
-                fontWeight: "var(--se-weight-extrabold)",
-                color: "var(--se-text-main)",
-                margin: 0,
-                lineHeight: "var(--se-leading-tight)",
-              }}
-            >
-              {getGreeting()}
-              {firstName ? `, ${firstName}` : ""}
-            </h1>
-            <p
-              style={{
-                fontSize: "var(--se-text-base)",
-                color: "var(--se-text-secondary)",
-                margin: "6px 0 0",
-              }}
-            >
-              Here's your nutrition snapshot for today.
-            </p>
-            <p
-              style={{
-                fontSize: "var(--se-text-sm)",
-                color: "var(--se-text-muted)",
-                margin: "4px 0 0",
-              }}
-            >
-              {formatDate()}
-            </p>
-          </section>
+    <div className="dash">
+      <header className="dash-head">
+        <div>
+          <p className="se-eyebrow">{formatDate()}</p>
+          <h1>{firstName ? `${firstName}'s day` : "Your day"}</h1>
+        </div>
+        <div className="dash-head__actions">
+          <Link to="/menu" className="menu-btn">Browse menus</Link>
+          <Link to="/aimeals" className="menu-btn">Plan with AI</Link>
+        </div>
+      </header>
 
-          {/* ── 2. Dining Hall Status ── */}
-          <section>
-            <p style={sectionLabelStyle}>Dining Halls</p>
-
-            {hallsLoading ? (
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} variant="rect" width={200} height={90} />
-                ))}
+      {/* ── Today's intake ── */}
+      <section className="dash-today" aria-label="Today's intake">
+        {intakeLoading ? (
+          <Skeleton variant="rect" height={120} />
+        ) : goals && consumed ? (
+          <>
+            <div className="dash-today__kcal">
+              <span className="se-eyebrow">Calories today</span>
+              <div className="dash-today__big">
+                <span className="se-mono">{consumed.calories.toLocaleString()}</span>
+                <span className="dash-today__of">/ {goals.calories.toLocaleString()} kcal</span>
               </div>
+              <div className="dash-meter dash-meter--lg">
+                <span style={{ width: `${pct(consumed.calories, goals.calories)}%`, background: "var(--se-macro-cal)" }} />
+              </div>
+              <p className="dash-today__left">
+                {goals.calories - consumed.calories > 0
+                  ? `${(goals.calories - consumed.calories).toLocaleString()} kcal left today`
+                  : "Calorie target reached"}
+              </p>
+            </div>
+            <div className="dash-today__macros">
+              {(
+                [
+                  ["Protein", consumed.protein, goals.protein, "var(--se-macro-protein)"],
+                  ["Carbs", consumed.carbs, goals.carbs, "var(--se-macro-carbs)"],
+                  ["Fat", consumed.fat, goals.fat, "var(--se-macro-fat)"],
+                ] as const
+              ).map(([label, value, goal, color]) => (
+                <div key={label} className="dash-macro">
+                  <span className="dash-macro__label">{label}</span>
+                  <span className="se-mono dash-macro__value">
+                    {value}
+                    <span>/{goal}g</span>
+                  </span>
+                  <div className="dash-meter">
+                    <span style={{ width: `${pct(value, goal)}%`, background: color }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : intake && !intake.goals_set ? (
+          <div className="dash-today__empty">
+            <p>Set daily targets to see your intake against them.</p>
+            <Link to="/profile" className="menu-btn">Set targets</Link>
+          </div>
+        ) : (
+          <div className="dash-today__empty">
+            <p>Nothing logged yet today. Add dishes to your tray and log them as a meal.</p>
+          </div>
+        )}
+      </section>
+
+      <div className="dash-grid">
+        <div className="dash-main">
+          {/* ── Suggestions ── */}
+          <section>
+            <header className="dash-section__head">
+              <div>
+                <h2>Suggested for today</h2>
+                <p className="dash-sub">
+                  Ranked from today&apos;s menu for your goal
+                  {recUpdatedLabel ? ` · updated ${recUpdatedLabel}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="menu-btn"
+                onClick={refreshRecommendations}
+                disabled={recRefreshing}
+              >
+                {recRefreshing ? "Refreshing…" : "Refresh"}
+              </button>
+            </header>
+
+            {recLoading ? (
+              <Skeleton variant="rect" height={210} />
+            ) : recError ? (
+              <p className="dash-sub">Could not load suggestions.</p>
             ) : (
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {halls.map((hall) => {
-                  const open = isHallOpen(hall.name);
+              <div className="dash-table">
+                {recData?.recommendations.map((rec) => {
+                  const inTray = getItemQuantity(rec.dish_id) > 0;
                   return (
-                    <Card
-                      key={hall.Dining_Hall_ID}
-                      hover
-                      padding="sm"
-                      onClick={() => navigate(`/menu/${hall.Dining_Hall_ID}`)}
+                    <div
+                      key={rec.dish_id}
+                      role="button"
+                      tabIndex={0}
+                      className="dash-rec"
+                      onClick={() => navigate(`/dishes/${rec.dish_id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") navigate(`/dishes/${rec.dish_id}`);
+                      }}
                     >
-                      <div style={{ minWidth: 160 }}>
-                        <p
-                          style={{
-                            fontSize: "var(--se-text-sm)",
-                            fontWeight: "var(--se-weight-bold)",
-                            color: "var(--se-text-main)",
-                            margin: 0,
-                          }}
-                        >
-                          {hall.name}
-                        </p>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                            marginTop: 4,
-                          }}
-                        >
-                          <IconMapPin size={12} color="var(--se-text-muted)" />
-                          <span
-                            style={{
-                              fontSize: "var(--se-text-xs)",
-                              color: "var(--se-text-muted)",
-                            }}
-                          >
-                            {hall.location}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 5,
-                            marginTop: 8,
-                            padding: "3px 10px",
-                            borderRadius: "var(--se-radius-full)",
-                            background: open
-                              ? "var(--se-success-dim)"
-                              : "var(--se-bg-subtle)",
-                            fontSize: "var(--se-text-xs)",
-                            fontWeight: "var(--se-weight-semibold)",
-                            color: open
-                              ? "var(--se-success)"
-                              : "var(--se-text-faint)",
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: "50%",
-                              background: open
-                                ? "var(--se-success)"
-                                : "var(--se-text-faint)",
-                              flexShrink: 0,
-                            }}
-                          />
-                          {open ? "Open" : "Closed"}
-                        </div>
-                      </div>
-                    </Card>
+                      <span className="menu-row__icon">
+                        <FoodIcon dishName={rec.dish_name} size="sm" />
+                      </span>
+                      <span className="dash-rec__main">
+                        <span className="dash-rec__name">{rec.dish_name}</span>
+                        <span className="dash-rec__meta">
+                          {rec.hall_name}
+                          {rec.meal_period ? ` · ${rec.meal_period}` : ""}
+                        </span>
+                        <span className="dash-rec__reason se-mono">{rec.reason}</span>
+                      </span>
+                      <span className="dash-rec__kcal se-mono">
+                        {rec.calories}
+                        <small> kcal</small>
+                      </span>
+                      <button
+                        type="button"
+                        className={`dash-rec__add${inTray ? " is-in-tray" : ""}`}
+                        disabled={addingDishId === rec.dish_id}
+                        onClick={(event) => handleAddRecommendationToTray(event, rec)}
+                      >
+                        {inTray ? "Add another" : "Add to tray"}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
             )}
+            {recData?.tip && !recLoading && <p className="dash-tip">{recData.tip}</p>}
           </section>
 
-          {/* ── 3. Recommended for You ── */}
+          {/* ── Dining halls ── */}
           <section>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                marginBottom: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <div>
-                <p
-                  style={{
-                    ...sectionLabelStyle,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    marginBottom: 0,
-                    paddingBottom: 0,
-                  }}
-                >
-                  <IconSparkle size={14} color="var(--se-text-faint)" />
-                  Recommended for You
-                </p>
-                {recUpdatedLabel && (
-                  <p
-                    style={{
-                      fontSize: "var(--se-text-xs)",
-                      color: "var(--se-text-muted)",
-                      margin: "4px 0 0",
-                    }}
-                  >
-                    Updated today at {recUpdatedLabel}
-                  </p>
-                )}
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                loading={recRefreshing}
-                onClick={refreshRecommendations}
-              >
-                Refresh
-              </Button>
-            </div>
-
-            {recLoading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} variant="rect" height={72} />
+            <header className="dash-section__head">
+              <h2>Dining halls</h2>
+              <Link to="/menu" className="home-link">All menus →</Link>
+            </header>
+            {hallsLoading ? (
+              <Skeleton variant="rect" height={160} />
+            ) : (
+              <div className="dash-table">
+                {servingHalls.map((hall) => (
+                  <Link key={hall.Dining_Hall_ID} to={`/menu/${hall.Dining_Hall_ID}`} className="dash-hall">
+                    <span className={`menu-status${hall.status?.is_open ? " is-open" : ""}`}>
+                      <span className="menu-status__dot" />
+                    </span>
+                    <span className="dash-hall__name">{hall.name}</span>
+                    <span className="dash-hall__status">{statusLabel(hall.status)}</span>
+                    <span className="se-mono dash-hall__count">{hall.dishes.length} dishes</span>
+                    <span aria-hidden="true" className="dash-hall__arrow">→</span>
+                  </Link>
                 ))}
               </div>
-            ) : recError ? (
-              <Card padding="md">
-                <p
-                  style={{
-                    fontSize: "var(--se-text-sm)",
-                    color: "var(--se-text-muted)",
-                    margin: 0,
-                    textAlign: "center",
-                    padding: "8px 0",
-                  }}
-                >
-                  Could not load recommendations
-                </p>
-              </Card>
-            ) : (
-              <>
-                {/* Recommendation cards */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {recData?.recommendations.map((rec) => (
-                    <Card
-                      key={rec.dish_id}
-                      hover
-                      padding="sm"
-                      onClick={() => navigate(`/dishes/${rec.dish_id}`)}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                        }}
-                      >
-                        <FoodIcon dishName={rec.dish_name} size="md" />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p
-                            style={{
-                              fontSize: "var(--se-text-sm)",
-                              fontWeight: "var(--se-weight-bold)",
-                              color: "var(--se-text-main)",
-                              margin: 0,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {rec.dish_name}
-                          </p>
-                          <p
-                            style={{
-                              fontSize: "var(--se-text-xs)",
-                              color: "var(--se-text-muted)",
-                              margin: "2px 0 0",
-                            }}
-                          >
-                            {rec.hall_name}
-                            {rec.meal_period ? ` · ${rec.meal_period}` : ""}
-                          </p>
-                          <p
-                            style={{
-                              fontSize: "var(--se-text-xs)",
-                              color: "var(--se-text-secondary)",
-                              fontStyle: "italic",
-                              margin: "2px 0 0",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {rec.reason}
-                          </p>
-                        </div>
-                        <div
-                          style={{
-                            flexShrink: 0,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-end",
-                            gap: 8,
-                          }}
-                        >
-                          <div style={{ textAlign: "right" }}>
-                            <span
-                              style={{
-                                fontSize: "var(--se-text-sm)",
-                                fontWeight: "var(--se-weight-bold)",
-                                color: "var(--se-text-main)",
-                              }}
-                            >
-                              {rec.calories}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "var(--se-text-xs)",
-                                color: "var(--se-text-muted)",
-                                marginLeft: 2,
-                              }}
-                            >
-                              cal
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant={getItemQuantity(rec.dish_id) > 0 ? "secondary" : "primary"}
-                            size="sm"
-                            loading={addingDishId === rec.dish_id}
-                            onClick={(event) => handleAddRecommendationToTray(event, rec)}
-                            className="min-w-[112px]"
-                          >
-                            {getItemQuantity(rec.dish_id) > 0 ? "Add another" : "Add to tray"}
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-
-                {/* AI tip card */}
-                {recData?.tip && (
-                  <div
-                    style={{
-                      marginTop: 12,
-                      padding: "12px 16px",
-                      borderRadius: "var(--se-radius-md)",
-                      background: "var(--se-primary-dim)",
-                      border: "1px solid rgba(232, 74, 39, 0.15)",
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontSize: "var(--se-text-sm)",
-                        color: "var(--se-primary)",
-                        margin: 0,
-                        fontWeight: "var(--se-weight-medium)",
-                        lineHeight: "var(--se-leading-body)",
-                      }}
-                    >
-                      <IconSparkle
-                        size={13}
-                        color="var(--se-primary)"
-                      />{" "}
-                      {recData.tip}
-                    </p>
-                  </div>
-                )}
-              </>
             )}
           </section>
         </div>
 
-        {/* ═══════════════════════ SIDEBAR ═══════════════════════ */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <section>
-            <p style={sectionLabelStyle}>Current Meal Tray</p>
-            <MealTrayCard onMealLogged={setIntake} />
-          </section>
-
-          {/* ── 4. Daily Macros ── */}
-          <section>
-            <p style={sectionLabelStyle}>Today's Macros</p>
-
-            {intakeLoading ? (
-              <Card padding="md">
-                <Skeleton variant="rect" height={24} width="50%" />
-                <div style={{ marginTop: 16 }}>
-                  <Skeleton variant="text" lines={3} />
-                </div>
-              </Card>
-            ) : intake && !intake.goals_set ? (
-              /* Goals not set — prompt */
-              <Card padding="md">
-                <p
-                  style={{
-                    fontSize: "var(--se-text-sm)",
-                    color: "var(--se-text-secondary)",
-                    margin: "0 0 12px",
-                    textAlign: "center",
-                  }}
-                >
-                  Set your daily goals to track macros
-                </p>
-                <div style={{ textAlign: "center" }}>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => navigate("/profile")}
-                  >
-                    Set Goals
-                  </Button>
-                </div>
-              </Card>
-            ) : intake && intake.goals_set && intake.goals ? (
-              /* Goals set — show macros */
-              <Card padding="md">
-                {/* Calorie summary */}
-                <div style={{ textAlign: "center", marginBottom: 20 }}>
-                  <div
-                    style={{
-                      fontSize: "var(--se-text-display)",
-                      fontWeight: "var(--se-weight-extrabold)",
-                      color: "var(--se-macro-cal)",
-                      lineHeight: 1,
-                    }}
-                  >
-                    {intake.consumed.calories}
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "var(--se-text-sm)",
-                      color: "var(--se-text-muted)",
-                      margin: "4px 0 0",
-                    }}
-                  >
-                    of {intake.goals.calories} cal goal
-                  </p>
-                  {/* Simple progress arc representation */}
-                  <div
-                    style={{
-                      height: 6,
-                      borderRadius: 9999,
-                      background: "var(--se-bg-subtle)",
-                      overflow: "hidden",
-                      marginTop: 12,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${Math.min(100, Math.round((intake.consumed.calories / intake.goals.calories) * 100))}%`,
-                        height: "100%",
-                        borderRadius: 9999,
-                        background: "var(--se-macro-cal)",
-                        transition: "width 600ms ease-out",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Macro bars */}
-                <MacroProgressBar
-                  label="Protein"
-                  current={intake.consumed.protein}
-                  max={intake.goals.protein}
-                  color="var(--se-macro-protein)"
-                  animate
-                />
-                <MacroProgressBar
-                  label="Carbs"
-                  current={intake.consumed.carbs}
-                  max={intake.goals.carbs}
-                  color="var(--se-macro-carbs)"
-                  animate
-                />
-                <MacroProgressBar
-                  label="Fat"
-                  current={intake.consumed.fat}
-                  max={intake.goals.fat}
-                  color="var(--se-macro-fat)"
-                  animate
-                />
-              </Card>
-            ) : (
-              /* No intake data at all — subtle fallback */
-              <Card padding="md">
-                <p
-                  style={{
-                    fontSize: "var(--se-text-sm)",
-                    color: "var(--se-text-muted)",
-                    margin: 0,
-                    textAlign: "center",
-                    padding: "12px 0",
-                  }}
-                >
-                  No nutrition data available yet. Log a meal to get started.
-                </p>
-              </Card>
-            )}
-          </section>
-
-          {/* ── 5. Quick Actions ── */}
-          <section>
-            <p style={sectionLabelStyle}>Quick Actions</p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Card hover padding="sm" onClick={() => navigate("/menu")}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "var(--se-radius-md)",
-                      background: "var(--se-primary-dim)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <IconPlus size={18} color="var(--se-primary)" />
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "var(--se-text-sm)",
-                      fontWeight: "var(--se-weight-semibold)",
-                      color: "var(--se-text-main)",
-                    }}
-                  >
-                    Browse Menu
-                  </span>
-                </div>
-              </Card>
-
-              <Card hover padding="sm" onClick={() => navigate("/aimeals")}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "var(--se-radius-md)",
-                      background: "var(--se-primary-dim)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <IconSparkle size={18} color="var(--se-primary)" />
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "var(--se-text-sm)",
-                      fontWeight: "var(--se-weight-semibold)",
-                      color: "var(--se-text-main)",
-                    }}
-                  >
-                    AI Meal Plan
-                  </span>
-                </div>
-              </Card>
-
-              <Card hover padding="sm" onClick={() => navigate("/profile")}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "var(--se-radius-md)",
-                      background: "var(--se-primary-dim)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <IconGrid size={18} color="var(--se-primary)" />
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "var(--se-text-sm)",
-                      fontWeight: "var(--se-weight-semibold)",
-                      color: "var(--se-text-main)",
-                    }}
-                  >
-                    My Profile
-                  </span>
-                </div>
-              </Card>
-            </div>
-          </section>
-        </div>
+        <aside className="dash-side">
+          <MealTrayCard onMealLogged={setIntake} />
+        </aside>
       </div>
     </div>
   );

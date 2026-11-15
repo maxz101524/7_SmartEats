@@ -1,29 +1,28 @@
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useState, useRef } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import axios from "axios";
-import vegaEmbed from "vega-embed";
-import type { TopLevelSpec } from "vega-lite";
 import { API_BASE } from "../config";
 import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
 import Skeleton from "../components/Skeleton";
 import { useToast } from "../components/useToast";
-import { Button } from "../components/Button";
-import { EmptyState } from "../components/EmptyState";
 import { MealTrayCard } from "../components/MealTrayCard";
-import { IconArrowLeft, IconSparkle, IconDatabase, IconPlus, IconChartPie } from "../components/Icons";
+import NutritionLabel from "../components/NutritionLabel";
+import { IconArrowLeft, IconPlus } from "../components/Icons";
 import { useMealTray } from "../mealTray";
+import "../styles/detail.css";
 
 interface Dish {
   dish_id: number;
   dish_name: string;
   calories: number;
   category: string;
+  dining_hall?: number;
   dining_hall__name: string;
   protein: number;
   carbohydrates: number;
   fat: number;
-  fiber?: number;
-  sodium?: number;
+  fiber?: number | null;
+  sodium?: number | null;
   allergens?: string[];
   dietary_flags?: string[];
   serving_unit?: string;
@@ -34,53 +33,38 @@ interface Dish {
   ai_confidence?: string;
 }
 
-function MacroCard({
-  label,
-  value,
-  unit,
-  color,
-}: {
-  label: string;
-  value: number | string;
-  unit: string;
-  color: string;
-}) {
+const SOURCE_LABELS: Record<string, string> = {
+  ai_generated: "Estimated with Gemini from the dish name, station and allergen data",
+  copied: "Copied from the same dish served at another hall",
+  wger: "Matched against the Wger nutrition database",
+};
+
+function EnergySplit({ dish }: { dish: Dish }) {
+  const parts = [
+    { label: "Protein", kcal: dish.protein * 4, grams: dish.protein, color: "var(--se-macro-protein)" },
+    { label: "Carbs", kcal: dish.carbohydrates * 4, grams: dish.carbohydrates, color: "var(--se-macro-carbs)" },
+    { label: "Fat", kcal: dish.fat * 9, grams: dish.fat, color: "var(--se-macro-fat)" },
+  ];
+  const total = parts.reduce((s, p) => s + p.kcal, 0);
+  if (!total) return <p className="dish-muted">No macro breakdown is available for this dish.</p>;
+
   return (
-    <div
-      style={{
-        flex: 1,
-        minWidth: 80,
-        background: "var(--se-bg-surface)",
-        border: "1px solid var(--se-border)",
-        borderRadius: "var(--se-radius-lg)",
-        padding: "14px 8px",
-        textAlign: "center",
-      }}
-    >
-      <p
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          color: "var(--se-text-faint)",
-          margin: "0 0 4px",
-        }}
-      >
-        {label}
-      </p>
-      <p
-        style={{
-          fontSize: 28,
-          fontWeight: 800,
-          color,
-          margin: "0 0 2px",
-          lineHeight: 1.1,
-        }}
-      >
-        {value}
-      </p>
-      <p style={{ fontSize: 11, color: "var(--se-text-muted)", margin: 0 }}>{unit}</p>
+    <div className="dish-split">
+      <div className="dish-split__bar" role="img" aria-label="Share of calories from protein, carbs and fat">
+        {parts.map((p) => (
+          <span key={p.label} style={{ width: `${(p.kcal / total) * 100}%`, background: p.color }} />
+        ))}
+      </div>
+      <div className="dish-split__legend">
+        {parts.map((p) => (
+          <div key={p.label}>
+            <span className="dish-split__swatch" style={{ background: p.color }} />
+            <span className="dish-split__label">{p.label}</span>
+            <span className="se-mono dish-split__pct">{Math.round((p.kcal / total) * 100)}%</span>
+            <span className="se-mono dish-split__grams">{p.grams}g</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -90,15 +74,32 @@ function DishDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const [dish, setDish] = useState<Dish | null>(null);
+  const [related, setRelated] = useState<{ forId: number; items: Dish[] }>({ forId: -1, items: [] });
   const toast = useToast();
-  const chartRef = useRef<HTMLDivElement>(null);
   const { addItem, getItemQuantity } = useMealTray();
 
-  async function handleAddToMeal() {
-    if (!dish) {
-      return;
-    }
+  useEffect(() => {
+    axios.get(`${API_BASE}/dishes/${id}`).then((res) => setDish(res.data));
+  }, [id]);
 
+  useEffect(() => {
+    if (!dish?.dining_hall) return;
+    axios
+      .get(`${API_BASE}/dishes/`, { params: { hall_id: dish.dining_hall } })
+      .then((res) => {
+        const list: Dish[] = Array.isArray(res.data) ? res.data : [];
+        setRelated({
+          forId: dish.dish_id,
+          items: list
+            .filter((d) => d.dish_id !== dish.dish_id && d.serving_unit === dish.serving_unit)
+            .slice(0, 5),
+        });
+      })
+      .catch(() => setRelated({ forId: dish.dish_id, items: [] }));
+  }, [dish]);
+
+  function handleAddToMeal() {
+    if (!dish) return;
     const result = addItem({
       dish_id: dish.dish_id,
       dish_name: dish.dish_name,
@@ -109,335 +110,140 @@ function DishDetail() {
       fat: dish.fat,
       serving_size: dish.serving_size,
     });
-
-    const nextQuantity =
-      result.items.find((item) => item.dish_id === dish.dish_id)?.quantity || 1;
-
-    if (result.added || nextQuantity === 1) {
-      toast.success(`${dish.dish_name} added to your tray.`);
-    } else {
-      toast.info(`${dish.dish_name} now has ${nextQuantity} servings in your tray.`);
-    }
+    const nextQuantity = result.items.find((item) => item.dish_id === dish.dish_id)?.quantity || 1;
+    if (result.added || nextQuantity === 1) toast.success(`${dish.dish_name} added to your tray.`);
+    else toast.info(`${dish.dish_name} now has ${nextQuantity} servings in your tray.`);
   }
 
-  const hasMacros = dish ? (dish.protein ?? 0) + (dish.carbohydrates ?? 0) + (dish.fat ?? 0) > 0 : false;
-  const dishQuantity = dish ? getItemQuantity(dish.dish_id) : 0;
+  const goBack = () => {
+    const from = location.state?.from;
+    if (typeof from === "string" && from.startsWith("/")) navigate(from);
+    else if (window.history.length > 1) navigate(-1);
+    else navigate("/menu");
+  };
 
-  useEffect(() => {
-    axios.get(`${API_BASE}/dishes/${id}`).then((res) => setDish(res.data));
-  }, [id]);
-
-  useEffect(() => {
-    if (!dish || !chartRef.current || !hasMacros) return;
-    const el = chartRef.current;
-    let cancelled = false;
-    const run = () => {
-      if (cancelled || !el.isConnected) return;
-      const w = el.offsetWidth;
-      const width = Math.min(w > 0 ? w : 400, 560);
-      const spec: TopLevelSpec = {
-        $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-        width,
-        height: 200,
-        data: {
-          values: [
-            { macro: "Protein", grams: dish.protein },
-            { macro: "Carbs", grams: dish.carbohydrates },
-            { macro: "Fat", grams: dish.fat },
-          ].filter((d) => d.grams > 0),
-        },
-        mark: { type: "arc", innerRadius: 50, cornerRadius: 4 },
-        encoding: {
-          theta: { field: "grams", type: "quantitative", stack: true },
-          color: {
-            field: "macro",
-            type: "nominal",
-            scale: { domain: ["Protein", "Carbs", "Fat"], range: ["#3b82f6", "#d97706", "#f0784a"] },
-            legend: { orient: "bottom", title: null },
-          },
-          tooltip: [
-            { field: "macro", type: "nominal", title: "Macro" },
-            { field: "grams", type: "quantitative", title: "Grams" },
-          ],
-        },
-        config: {
-          view: { stroke: null },
-          background: "transparent",
-          font: "DM Sans",
-        },
-      };
-      el.innerHTML = "";
-      vegaEmbed(el, spec, { actions: false, renderer: "svg" });
-    };
-    requestAnimationFrame(() => requestAnimationFrame(run));
-    return () => {
-      cancelled = true;
-      el.innerHTML = "";
-    };
-  }, [dish, hasMacros]);
-
-  if (!dish) {
+  // Show the skeleton until the dish for the current URL has loaded.
+  if (!dish || String(dish.dish_id) !== id) {
     return (
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "var(--se-space-8)" }}>
-        <Skeleton variant="rect" height={32} width="60%" />
-        <div style={{ marginTop: 8 }}><Skeleton variant="rect" height={14} width="80%" /></div>
-        <div style={{ marginTop: 4 }}><Skeleton variant="rect" height={14} width="50%" /></div>
-        <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} variant="rect" height={80} />)}
+      <div className="dish-page">
+        <div className="dish-grid">
+          <div>
+            <Skeleton variant="rect" height={18} width="30%" />
+            <div style={{ marginTop: 16 }}><Skeleton variant="rect" height={56} width="80%" /></div>
+            <div style={{ marginTop: 16 }}><Skeleton variant="rect" height={120} /></div>
+          </div>
+          <Skeleton variant="rect" height={380} />
         </div>
       </div>
     );
   }
 
-  const hasDietaryInfo =
-    (dish.dietary_flags && dish.dietary_flags.length > 0) ||
-    (dish.allergens && dish.allergens.length > 0);
+  const dishQuantity = getItemQuantity(dish.dish_id);
+  const relatedItems = related.forId === dish.dish_id ? related.items : [];
+  const context = [dish.dining_hall__name, dish.serving_unit, dish.meal_period].filter(Boolean);
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "24px 16px 48px" }}>
-      {/* Back button */}
-      <button
-        onClick={() => {
-          const from = location.state?.from;
-          if (typeof from === "string" && from.startsWith("/")) {
-            navigate(from);
-            return;
-          }
-          navigate(-1);
-        }}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 13,
-          fontWeight: 600,
-          color: "var(--se-text-muted)",
-          background: "var(--se-bg-subtle)",
-          borderRadius: "var(--se-radius-full)",
-          padding: "6px 14px 6px 10px",
-          border: "none",
-          cursor: "pointer",
-          marginBottom: 20,
-        }}
-      >
-        <IconArrowLeft size={16} />
-        Back to Menu
+    <div className="dish-page">
+      <button type="button" className="dish-back" onClick={goBack}>
+        <IconArrowLeft size={15} />
+        Back
       </button>
 
-      {/* Dish name */}
-      <h1
-        style={{
-          fontSize: "var(--se-text-h1)",
-          fontWeight: "var(--se-weight-extrabold)",
-          color: "var(--se-text-main)",
-          margin: "0 0 6px",
-          lineHeight: 1.2,
-        }}
-      >
-        {dish.dish_name}
-      </h1>
-
-      {/* Subtitle: station + hall */}
-      <p style={{ fontSize: 14, color: "var(--se-text-muted)", margin: "0 0 4px" }}>
-        {[dish.serving_unit, dish.dining_hall__name].filter(Boolean).join(" · ")}
-      </p>
-
-      {/* Serving size */}
-      {dish.serving_size && (
-        <p style={{ fontSize: 13, color: "var(--se-text-secondary)", margin: "0 0 8px", fontWeight: 500 }}>
-          Serving: {dish.serving_size}
-        </p>
-      )}
-
-      {/* Dietary info panel */}
-      {hasDietaryInfo && (
-        <div style={{
-          background: "var(--se-bg-subtle)",
-          borderRadius: "var(--se-radius-lg)",
-          padding: "12px 16px",
-          marginBottom: 20,
-        }}>
-          <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--se-text-faint)", margin: "0 0 8px" }}>
-            Dietary Info
+      <div className="dish-grid">
+        <div className="dish-main">
+          <p className="se-eyebrow dish-context">{context.join(" · ")}</p>
+          <h1 className="dish-title">{dish.dish_name}</h1>
+          <p className="dish-serving">
+            <span className="se-mono">{dish.calories}</span> kcal per {dish.serving_size || "serving"}
           </p>
-          {/* Dietary flags */}
-          {dish.dietary_flags && dish.dietary_flags.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: dish.allergens && dish.allergens.length > 0 ? 8 : 0 }}>
-              {dish.dietary_flags.map((flag) => {
-                const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
-                return (
-                  <span
-                    key={flag}
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "3px 10px",
-                      borderRadius: 9999,
-                      background: colors.bg,
-                      color: colors.text,
-                    }}
-                  >
-                    {flag}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-          {/* Allergen warnings */}
-          {dish.allergens && dish.allergens.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {dish.allergens.map((allergen) => (
-                <span
-                  key={allergen}
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    padding: "2px 8px",
-                    borderRadius: 9999,
-                    border: "1.5px solid var(--se-error)",
-                    color: "var(--se-error)",
-                    background: "var(--se-error-dim)",
-                  }}
-                >
-                  {allergen}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Primary macros — 4 cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginBottom: 12 }}>
-        <MacroCard label="Calories" value={dish.calories} unit="kcal" color="var(--se-macro-cal)" />
-        <MacroCard label="Protein" value={dish.protein} unit="g" color="var(--se-macro-protein)" />
-        <MacroCard label="Carbs" value={dish.carbohydrates} unit="g" color="var(--se-macro-carbs)" />
-        <MacroCard label="Fat" value={dish.fat} unit="g" color="var(--se-macro-fat)" />
-      </div>
+          {(dish.dietary_flags?.length || dish.allergens?.length) ? (
+            <dl className="dish-facts">
+              {dish.dietary_flags && dish.dietary_flags.length > 0 && (
+                <div>
+                  <dt className="se-eyebrow">Suitable for</dt>
+                  <dd>
+                    {dish.dietary_flags.map((flag) => {
+                      const colors = FLAG_COLORS[flag] || FLAG_FALLBACK;
+                      return (
+                        <span key={flag} className="dish-tag" style={{ background: colors.bg, color: colors.text }}>
+                          {flag}
+                        </span>
+                      );
+                    })}
+                  </dd>
+                </div>
+              )}
+              {dish.allergens && dish.allergens.length > 0 && (
+                <div>
+                  <dt className="se-eyebrow">Contains</dt>
+                  <dd>
+                    {dish.allergens.map((allergen) => (
+                      <span key={allergen} className="dish-tag dish-tag--allergen">
+                        {allergen}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : null}
 
-      {/* Extended nutrition */}
-      {(dish.fiber != null || dish.sodium != null) && (
-        <div
-          style={{
-            background: "var(--se-bg-surface)",
-            border: "1px solid var(--se-border)",
-            borderRadius: "var(--se-radius-lg)",
-            padding: "14px 18px",
-            marginBottom: 12,
-          }}
-        >
-          <p
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              color: "var(--se-text-faint)",
-              margin: "0 0 10px",
-            }}
-          >
-            Extended Nutrition
-          </p>
-          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-            {dish.fiber != null && (
-              <div>
-                <p style={{ fontSize: 11, color: "var(--se-text-faint)", margin: "0 0 2px" }}>Fiber</p>
-                <p style={{ fontSize: 16, fontWeight: 700, color: "var(--se-macro-fiber)", margin: 0 }}>
-                  {dish.fiber}g
-                </p>
-              </div>
-            )}
-            {dish.sodium != null && (
-              <div>
-                <p style={{ fontSize: 11, color: "var(--se-text-faint)", margin: "0 0 2px" }}>Sodium</p>
-                <p style={{ fontSize: 16, fontWeight: 700, color: "var(--se-text-secondary)", margin: 0 }}>
-                  {dish.sodium}mg
-                </p>
-              </div>
+          <section className="dish-block">
+            <h2 className="dish-block__title">Where the calories come from</h2>
+            <EnergySplit dish={dish} />
+          </section>
+
+          <div className="dish-actions">
+            <button
+              type="button"
+              className={`dish-add${dishQuantity > 0 ? " is-secondary" : ""}`}
+              onClick={handleAddToMeal}
+            >
+              <IconPlus size={17} />
+              {dishQuantity > 0 ? "Add Another Serving" : "Add to Meal Tray"}
+            </button>
+            {dishQuantity > 0 && (
+              <p className="dish-muted">
+                {dishQuantity} serving{dishQuantity === 1 ? "" : "s"} currently in your tray.
+              </p>
             )}
           </div>
-        </div>
-      )}
 
-      {/* Nutrition source badge */}
-      {dish.nutrition_source && (
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            fontWeight: 600,
-            padding: "4px 12px",
-            borderRadius: 9999,
-            background: dish.nutrition_source === "ai_generated" ? "var(--se-warning-dim)" : "var(--se-bg-subtle)",
-            color: dish.nutrition_source === "ai_generated" ? "var(--se-warning)" : "var(--se-text-muted)",
-            marginBottom: 16,
-          }}
-        >
-          {dish.nutrition_source === "ai_generated" ? <IconSparkle size={14} /> : <IconDatabase size={14} />}
-          {dish.nutrition_source === "ai_generated" ? "AI Estimated" : "Database"}
-          {dish.ai_confidence && (
-            <span style={{ opacity: 0.7 }}>
-              · {dish.ai_confidence} confidence
-            </span>
+          {dish.nutrition_source && (
+            <p className="dish-source">
+              <span className="se-eyebrow">Source</span>
+              {SOURCE_LABELS[dish.nutrition_source] ?? "From the SmartEats dish database"}
+              {dish.ai_confidence ? ` (${dish.ai_confidence} confidence)` : ""}. Treat values as estimates.
+            </p>
           )}
         </div>
-      )}
 
-      {/* Donut chart or empty state */}
-      <div
-        ref={chartRef}
-        style={{
-          width: "100%",
-          minHeight: 200,
-          background: "var(--se-bg-elevated)",
-          border: "1px solid var(--se-border)",
-          borderRadius: "var(--se-radius-lg)",
-          padding: 16,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {!hasMacros && (
-          <EmptyState
-            message="No macro breakdown"
-            sub="Protein, carbs, and fat data are missing for this dish."
-            icon={<IconChartPie size={40} color="var(--se-text-faint)" />}
-          />
-        )}
+        <aside className="dish-aside">
+          <NutritionLabel dish={dish} />
+        </aside>
       </div>
 
-      <div style={{ marginTop: "var(--se-space-6)" }}>
+      {relatedItems.length > 0 && (
+        <section className="dish-related">
+          <h2 className="dish-block__title">More from {dish.serving_unit}</h2>
+          <div className="dish-related__list">
+            {relatedItems.map((d) => (
+              <Link key={d.dish_id} to={`/dishes/${d.dish_id}`} className="dish-related__row">
+                <span className="dish-related__name">{d.dish_name}</span>
+                <span className="se-mono dish-related__macros">
+                  {d.calories} kcal · {d.protein}g protein
+                </span>
+                <span aria-hidden="true" className="dish-related__arrow">→</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="dish-tray">
         <MealTrayCard compact />
-      </div>
-
-      {dishQuantity > 0 && (
-        <p
-          style={{
-            margin: "12px 0 0",
-            fontSize: "var(--se-text-xs)",
-            color: "var(--se-text-muted)",
-          }}
-        >
-          {dishQuantity} serving{dishQuantity === 1 ? "" : "s"} currently in your tray.
-        </p>
-      )}
-
-      {/* Add to Tray CTA */}
-      <div style={{ marginTop: "var(--se-space-4)" }}>
-        <Button
-          variant={dishQuantity > 0 ? "secondary" : "primary"}
-          size="lg"
-          onClick={handleAddToMeal}
-          className="w-full"
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <IconPlus size={18} /> {dishQuantity > 0 ? "Add Another Serving" : "Add to Meal Tray"}
-          </span>
-        </Button>
-      </div>
+      </section>
     </div>
   );
 }

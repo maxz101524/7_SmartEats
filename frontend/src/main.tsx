@@ -5,6 +5,10 @@ import { ToastProvider } from "./components/Toast.tsx";
 import "./index.css";
 import "./static/css/custom.css";
 import App from "./App.tsx";
+import { DATA_MODE } from "./config";
+import { installLocalApi } from "./localApi/install";
+
+if (DATA_MODE === "static") installLocalApi();
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||

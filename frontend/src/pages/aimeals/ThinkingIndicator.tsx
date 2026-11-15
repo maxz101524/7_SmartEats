@@ -1,3 +1,4 @@
+import AssistantMark from "../../components/AssistantMark";
 import { useEffect, useState } from "react";
 
 const THINKING_STATES = [
@@ -19,24 +20,7 @@ export function ThinkingIndicator() {
 
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 16, paddingBottom: 8 }}>
-      <div
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: "50%",
-          background: "var(--se-primary-dim)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 14,
-          flexShrink: 0,
-          color: "var(--se-primary)",
-          fontWeight: 900,
-          animation: "ai-thinking-pulse 1.6s ease-in-out infinite",
-        }}
-      >
-        ✦
-      </div>
+      <AssistantMark size={28} pulse />
       <div
         style={{
           background: "var(--se-bg-surface)",

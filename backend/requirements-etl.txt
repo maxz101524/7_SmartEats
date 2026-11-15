@@ -1,0 +1,18 @@
+# Dependencies for the daily static-data ETL job (.github/workflows/daily-menu.yml).
+# torch is installed separately from the CPU-only wheel index to keep the job fast.
+# Mirrors requirements.txt minus the web-serving and local-LLM packages; Django's
+# system checks import the URL conf, so the API apps' imports must still resolve.
+django==5.1.6
+django-cors-headers==4.9.0
+django-environ==0.12.0
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.3.1
+requests==2.31.0
+matplotlib==3.8.2
+dj-rest-auth==6.0.0
+django-allauth==0.61.1
+cryptography==42.0.5
+google-auth==2.28.0
+google-genai>=1.0.0
+sentence-transformers>=2.7.0
+numpy>=1.24.0

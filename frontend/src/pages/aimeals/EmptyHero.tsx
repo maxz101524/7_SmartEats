@@ -1,3 +1,4 @@
+import AssistantMark from "../../components/AssistantMark";
 import { useEffect, useState } from "react";
 
 const ALL_PROMPTS = [
@@ -47,36 +48,20 @@ export function EmptyHero({ onPick }: { onPick: (prompt: string) => void }) {
         padding: "0 16px",
       }}
     >
-      <div
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: "50%",
-          background: "var(--se-primary-dim)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 24,
-          color: "var(--se-primary)",
-          fontWeight: 900,
-        }}
-      >
-        ✦
-      </div>
+      <AssistantMark size={56} />
       <div>
         <h1
           style={{
             fontSize: "clamp(1.5rem, 4vw, 2.25rem)",
-            fontWeight: 800,
+            fontWeight: 600,
             color: "var(--se-text-main)",
             margin: "0 0 8px",
-            letterSpacing: "-0.02em",
           }}
         >
-          What can I <span className="text-gradient-vivid">help</span> with?
+          Plan a meal from today&apos;s menu
         </h1>
         <p style={{ fontSize: 14, color: "var(--se-text-muted)", margin: 0, maxWidth: 360 }}>
-          Ask about dining options, nutrition, or meal ideas across all UIUC dining halls.
+          Ask by goal, dining hall or diet. Suggestions only use dishes UIUC Dining is serving today.
         </p>
       </div>
       <div

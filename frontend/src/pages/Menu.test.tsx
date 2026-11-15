@@ -238,7 +238,7 @@ describe("Menu redesign", () => {
 
     await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
     await user.click(screen.getByRole("button", { name: "Vegetarian" }));
-    await user.click(screen.getByRole("button", { name: "✦ AI" }));
+    await user.click(screen.getByRole("button", { name: "Semantic" }));
     await user.type(
       screen.getByRole("textbox", { name: /ai semantic search/i }),
       "protein",
@@ -273,7 +273,7 @@ describe("Menu redesign", () => {
     renderMenu();
 
     await screen.findByRole("heading", { name: "Ikenberry Dining Center" });
-    await user.click(screen.getByRole("button", { name: "✦ AI" }));
+    await user.click(screen.getByRole("button", { name: "Semantic" }));
     await user.type(
       screen.getByRole("textbox", { name: /ai semantic search/i }),
       "way too long",

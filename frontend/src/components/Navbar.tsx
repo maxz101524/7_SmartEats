@@ -1,218 +1,66 @@
-import { useLocation, Link } from "react-router-dom";
-import { IconHome, IconUtensils, IconSparkle, IconGrid } from "./Icons";
+import { Link, useLocation } from "react-router-dom";
+import { IconGrid, IconHome, IconSparkle, IconUtensils } from "./Icons";
 
 function Navbar() {
-  const location = useLocation();
-  const token = localStorage.getItem("authToken");
+  const { pathname } = useLocation();
+  const isLoggedIn = Boolean(localStorage.getItem("authToken"));
+  const firstName = localStorage.getItem("userFirstName") ?? "";
+  const userInitial = firstName ? firstName.charAt(0).toUpperCase() : "U";
 
-  const isLoggedIn = Boolean(token);
-
-  const leftLinks = [
-    { to: "/", label: "Home", icon: IconHome, isActive: () => location.pathname === "/" },
-    { to: "/menu", label: "Menu", icon: IconUtensils, isActive: () => location.pathname.startsWith("/menu") },
-    { to: "/aimeals", label: "AI Meals", icon: IconSparkle, isActive: () => location.pathname.startsWith("/aimeals") },
+  const links = [
+    { to: "/", label: "Home", icon: IconHome, active: pathname === "/" },
+    { to: "/menu", label: "Menu", icon: IconUtensils, active: pathname.startsWith("/menu") || pathname.startsWith("/dishes") },
+    { to: "/aimeals", label: "AI Meals", icon: IconSparkle, active: pathname.startsWith("/aimeals") },
   ];
 
-  const userInitial = (() => {
-    const name = localStorage.getItem("userFirstName");
-    return name && name.length > 0 ? name.charAt(0).toUpperCase() : "U";
-  })();
-
-  const linkBaseStyle = (active: boolean): React.CSSProperties => ({
-    display: "flex",
-    alignItems: "center",
-    gap: "5px",
-    padding: "6px 12px",
-    borderRadius: "9999px",
-    fontSize: "0.875rem",
-    fontWeight: 500,
-    textDecoration: "none",
-    whiteSpace: "nowrap",
-    color: active ? "var(--se-text-inverted)" : "var(--se-text-secondary)",
-    background: active ? "var(--se-primary)" : "transparent",
-    transition: "color 0.15s, background 0.15s",
-  });
-
   return (
-    <nav
-      style={{
-        position: "fixed",
-        top: "12px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "min(860px, calc(100% - 48px))",
-        height: "52px",
-        background: "var(--se-bg-surface)",
-        borderRadius: "9999px",
-        boxShadow: "0 2px 16px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.04)",
-        zIndex: 50,
-        padding: "0 16px",
-      }}
-    >
-      {/* Left — primary nav links */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          left: "16px",
-          display: "flex",
-          alignItems: "center",
-          gap: "2px",
-        }}
-      >
-        {leftLinks.map((link) => {
-          const active = link.isActive();
-          return (
+    <nav className="se-nav" aria-label="Main">
+      <div className="se-nav__group">
+        {links.map(({ to, label, icon: Icon, active }) => (
+          <Link
+            key={to}
+            to={to}
+            className={`se-nav__link${to === "/" ? " se-nav__link--home" : ""}`}
+            aria-current={active ? "page" : undefined}
+            title={label}
+          >
+            <Icon size={16} />
+            <span className="se-nav__label">{label}</span>
+          </Link>
+        ))}
+      </div>
+
+      <Link to="/" className="se-nav__brand" aria-label="SmartEats home">
+        <em>Smart</em>Eats
+      </Link>
+
+      <div className="se-nav__group se-nav__group--end">
+        {isLoggedIn ? (
+          <>
             <Link
-              key={link.to}
-              to={link.to}
-              style={linkBaseStyle(active)}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  e.currentTarget.style.color = "var(--se-text-main)";
-                  e.currentTarget.style.background = "var(--se-bg-subtle)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  e.currentTarget.style.color = "var(--se-text-secondary)";
-                  e.currentTarget.style.background = "transparent";
-                }
-              }}
+              to="/dashboard"
+              className="se-nav__link"
+              aria-current={pathname === "/dashboard" ? "page" : undefined}
+              title="Dashboard"
             >
-              <link.icon size={15} />
-              {link.label}
+              <IconGrid size={16} />
+              <span className="se-nav__label">Dashboard</span>
             </Link>
-          );
-        })}
-      </div>
-
-      {/* Center — logo, absolutely centered */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          left: "50%",
-          transform: "translateX(-50%)",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center" }}>
-          <span style={{ color: "var(--se-primary)", fontWeight: 900, fontSize: "1.1rem", letterSpacing: "-0.02em" }}>
-            Smart
-          </span>
-          <span style={{ color: "var(--se-text-main)", fontWeight: 900, fontSize: "1.1rem", letterSpacing: "-0.02em" }}>
-            Eats
-          </span>
-        </Link>
-      </div>
-
-      {/* Right — Dashboard + auth */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          right: "16px",
-          display: "flex",
-          alignItems: "center",
-          gap: "2px",
-        }}
-      >
-        {isLoggedIn && (
-          <Link
-            to="/dashboard"
-            style={linkBaseStyle(location.pathname === "/dashboard")}
-            onMouseEnter={(e) => {
-              if (location.pathname !== "/dashboard") {
-                e.currentTarget.style.color = "var(--se-text-main)";
-                e.currentTarget.style.background = "var(--se-bg-subtle)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (location.pathname !== "/dashboard") {
-                e.currentTarget.style.color = "var(--se-text-secondary)";
-                e.currentTarget.style.background = "transparent";
-              }
-            }}
-          >
-            <IconGrid size={15} />
-            Dashboard
-          </Link>
-        )}
-        {!token ? (
-          <Link
-            to="/login"
-            style={{
-              padding: "6px 12px",
-              borderRadius: "9999px",
-              fontSize: "0.875rem",
-              fontWeight: 500,
-              textDecoration: "none",
-              color: "var(--se-text-secondary)",
-              background: "transparent",
-              transition: "color 0.15s, background 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--se-text-main)";
-              e.currentTarget.style.background = "var(--se-bg-subtle)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--se-text-secondary)";
-              e.currentTarget.style.background = "transparent";
-            }}
-          >
-            Sign In
-          </Link>
+            <Link
+              to="/profile"
+              className="se-nav__link se-nav__link--profile"
+              aria-current={pathname === "/profile" ? "page" : undefined}
+              title="Profile"
+            >
+              <span className="se-nav__avatar" aria-hidden="true">
+                {userInitial}
+              </span>
+              <span className="se-nav__label">Profile</span>
+            </Link>
+          </>
         ) : (
-          <Link
-            to="/profile"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              textDecoration: "none",
-              padding: "4px 10px 4px 4px",
-              borderRadius: "9999px",
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--se-bg-subtle)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-            }}
-          >
-            <span
-              style={{
-                width: "28px",
-                height: "28px",
-                borderRadius: "9999px",
-                background: "var(--se-primary-dim)",
-                color: "var(--se-primary)",
-                fontSize: "11px",
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                border: "2px solid var(--se-primary)",
-              }}
-            >
-              {userInitial}
-            </span>
-            <span
-              style={{
-                fontSize: "0.875rem",
-                fontWeight: 500,
-                color: "var(--se-text-secondary)",
-              }}
-            >
-              Profile
-            </span>
+          <Link to="/login" className="se-nav__link se-nav__signin">
+            <span className="se-nav__label">Sign in</span>
           </Link>
         )}
       </div>

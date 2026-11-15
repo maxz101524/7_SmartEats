@@ -1,17 +1,19 @@
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { API_BASE } from "../config";
 import { FoodIcon } from "../components/FoodIcon";
 import type { FoodCategory } from "../components/FoodIcon";
 import { FilterChip } from "../components/FilterChip";
-import { Card } from "../components/Card";
 import { Button } from "../components/Button";
 import Skeleton from "../components/Skeleton";
+import MenuDateBadge from "../components/MenuDateBadge";
 import { EmptyState } from "../components/EmptyState";
 import { IconClose, IconMapPin, IconSearch } from "../components/Icons";
 import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
+import { hallVisual, statusFor, statusLabel, type HallStatus, type HallStatusMap } from "../utils/halls";
 import { useMealTray } from "../mealTray";
+import "../styles/menu.css";
 
 interface Dish {
   dish_id: number;
@@ -40,61 +42,8 @@ interface DiningHall {
   dishes: Dish[];
 }
 
-type HallStatus = {
-  is_open: boolean;
-  meal_label: string | null;
-  closes_at: string | null;
-};
-
-type HallStatusMap = Record<string, HallStatus>;
-
 const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Halal", "Jain"];
 const ALLERGEN_FILTERS = ["Gluten", "Milk", "Eggs", "Soy", "Corn", "Wheat", "Fish"];
-const HALL_THUMBNAIL_BASE = "/dininghall_thumbnails/";
-
-const HALL_VISUALS = [
-  {
-    matcher: /field\s+of\s+greens/i,
-    src: `${HALL_THUMBNAIL_BASE}greens.png`,
-    accent: "#16a34a",
-  },
-  {
-    matcher: /ikenberry/i,
-    src: `${HALL_THUMBNAIL_BASE}ikenberry_.png`,
-    accent: "#dc2626",
-  },
-  {
-    matcher: /illinois\s+street|isr/i,
-    src: `${HALL_THUMBNAIL_BASE}ISRhall.png`,
-    accent: "#2563eb",
-  },
-  {
-    matcher: /kosher/i,
-    src: `${HALL_THUMBNAIL_BASE}kosher.png`,
-    accent: "#7c3aed",
-  },
-  {
-    matcher: /lincoln|allen/i,
-    src: `${HALL_THUMBNAIL_BASE}allen.png`,
-    accent: "#ea580c",
-  },
-  {
-    matcher: /pennsylvania|par/i,
-    src: `${HALL_THUMBNAIL_BASE}PAR_.png`,
-    accent: "#0891b2",
-  },
-];
-
-function getHallVisual(hall: DiningHall) {
-  const searchableText = `${hall.name} ${hall.location}`;
-
-  return (
-    HALL_VISUALS.find((visual) => visual.matcher.test(searchableText)) ?? {
-      src: "",
-      accent: "var(--se-primary)",
-    }
-  );
-}
 
 function getAiErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
@@ -105,23 +54,16 @@ function getAiErrorMessage(error: unknown): string {
       return apiError;
     }
     if (error.response?.status === 503) {
-      return apiError ?? "AI search unavailable — try Filter mode instead.";
+      return apiError ?? "Semantic search is unavailable. Try keyword search instead.";
     }
     if (!error.response) {
-      return "Could not reach AI search. Check the backend and try again.";
+      return "Could not reach semantic search. Try keyword search instead.";
     }
-    return apiError ?? "AI search failed. Try Filter mode instead.";
+    return apiError ?? "Semantic search failed. Try keyword search instead.";
   }
 
-  return "AI search unavailable — try Filter mode instead.";
+  return "Semantic search is unavailable. Try keyword search instead.";
 }
-
-const panelStyle: CSSProperties = {
-  background: "var(--se-bg-surface)",
-  border: "1px solid var(--se-border)",
-  borderRadius: "var(--se-radius-xl)",
-  boxShadow: "var(--se-shadow-sm)",
-};
 
 function formatStationAnchor(station: string) {
   return (
@@ -133,21 +75,25 @@ function formatStationAnchor(station: string) {
   );
 }
 
+function stationCount(hall: DiningHall) {
+  return new Set(hall.dishes.map((d) => d.serving_unit || "Other")).size;
+}
+
 function ChevronRight() {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M9 18l6-6-6-6" />
     </svg>
+  );
+}
+
+function StatusPill({ status }: { status?: HallStatus }) {
+  return (
+    <span className={`menu-status${status?.is_open ? " is-open" : ""}`} title={statusLabel(status)}>
+      <span className="menu-status__dot" />
+      {statusLabel(status)}
+    </span>
   );
 }
 
@@ -164,306 +110,65 @@ function HallSelectionCard({
   compact?: boolean;
   onClick: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const visual = getHallVisual(hall);
-  const statusKnown = Boolean(hallStatus);
-  const isOpen = hallStatus?.is_open ?? false;
-  const statusDot = isOpen ? "var(--se-success)" : "var(--se-text-faint)";
-  const statusText = !statusKnown
-    ? "Hours unavailable"
-    : isOpen
-      ? `Open${hallStatus?.meal_label ? ` · ${hallStatus.meal_label}` : ""}${hallStatus?.closes_at ? ` until ${hallStatus.closes_at}` : ""}`
-      : "Closed";
-
+  const visual = hallVisual(hall.name, hall.location);
+  const empty = hall.dishes.length === 0;
   return (
     <button
       type="button"
       aria-label={hall.name}
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        ...panelStyle,
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        textAlign: "left",
-        padding: 0,
-        overflow: "hidden",
-        cursor: "pointer",
-        borderColor: selected || hovered ? "var(--se-primary)" : "var(--se-border)",
-        background: selected ? "var(--se-primary-dim)" : "var(--se-bg-surface)",
-        boxShadow: hovered ? "var(--se-shadow-md)" : "var(--se-shadow-sm)",
-        transform: hovered ? "translateY(-1px)" : "translateY(0)",
-        transition: "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease",
-      }}
+      className={`menu-hall${compact ? " menu-hall--compact" : ""}${selected ? " is-selected" : ""}${empty ? " is-empty" : ""}`}
     >
-      <div
-        style={{
-          position: "relative",
-          width: "100%",
-          height: compact ? 124 : 172,
-          overflow: "hidden",
-          background: "var(--se-bg-subtle)",
-        }}
-      >
+      <div className="menu-hall__photo">
         {visual.src ? (
-          <img
-            src={visual.src}
-            alt=""
-            loading="lazy"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition: "center",
-              transform: hovered ? "scale(1.045)" : "scale(1)",
-              transition: "transform 260ms ease",
-            }}
-          />
+          <img src={visual.src} alt="" loading="lazy" />
         ) : (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--se-text-inverted)",
-              fontSize: compact ? 32 : 44,
-              fontWeight: "var(--se-weight-extrabold)",
-              background: visual.accent,
-            }}
-          >
-            {hall.name.slice(0, 1)}
-          </div>
+          <span className="menu-hall__fallback">{hall.name.slice(0, 1)}</span>
         )}
-        {/* Soft top + bottom gradient for pill legibility without darkening the photo */}
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(180deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0) 32%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.42) 100%)",
-            pointerEvents: "none",
-          }}
-        />
-        <span
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            padding: "5px 10px 5px 9px",
-            borderRadius: "var(--se-radius-full)",
-            background: "rgba(255, 255, 255, 0.78)",
-            backdropFilter: "saturate(1.2) blur(10px)",
-            WebkitBackdropFilter: "saturate(1.2) blur(10px)",
-            color: "var(--se-text-main)",
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.02em",
-            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.14)",
-            border: "1px solid rgba(255, 255, 255, 0.55)",
-          }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: selected ? "var(--se-primary)" : statusDot,
-              boxShadow: isOpen && !selected ? "0 0 0 3px rgba(16, 185, 129, 0.18)" : "none",
-            }}
-          />
-          <span
-            style={{
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              maxWidth: compact ? 175 : 220,
-            }}
-            title={statusText}
-          >
-            {statusText}
-          </span>
-        </span>
-        <span
-          style={{
-            position: "absolute",
-            right: 12,
-            bottom: 12,
-            padding: "5px 10px",
-            borderRadius: "var(--se-radius-full)",
-            background: "rgba(255, 255, 255, 0.78)",
-            backdropFilter: "saturate(1.2) blur(10px)",
-            WebkitBackdropFilter: "saturate(1.2) blur(10px)",
-            color: "var(--se-text-main)",
-            fontSize: "var(--se-text-xs)",
-            fontWeight: "var(--se-weight-bold)",
-            whiteSpace: "nowrap",
-            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.14)",
-            border: "1px solid rgba(255, 255, 255, 0.55)",
-          }}
-        >
-          {hall.dishes.length} dishes
-        </span>
+        <StatusPill status={hallStatus} />
       </div>
-
-      <div
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: compact ? "14px 16px" : "17px 18px 18px",
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p
-            style={{
-              margin: "0 0 5px",
-              fontSize: compact ? "var(--se-text-sm)" : "var(--se-text-base)",
-              fontWeight: "var(--se-weight-bold)",
-              color: "var(--se-text-main)",
-            }}
-          >
-            {hall.name}
-          </p>
-          <p
-            style={{
-              margin: 0,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: "var(--se-text-xs)",
-              color: "var(--se-text-muted)",
-              lineHeight: 1.35,
-            }}
-          >
-            <IconMapPin size={12} color="var(--se-text-faint)" />
-            <span
-              style={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {hall.location}
-            </span>
-          </p>
-        </div>
-        <span
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: "50%",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            background: selected ? "var(--se-primary)" : "var(--se-bg-subtle)",
-            color: selected ? "var(--se-text-inverted)" : "var(--se-text-faint)",
-            transition: "background 140ms ease, color 140ms ease",
-          }}
-        >
-          <ChevronRight />
+      <div className="menu-hall__body">
+        <span className="menu-hall__name">{hall.name}</span>
+        <span className="menu-hall__meta se-mono">
+          {empty ? "No menu posted" : `${hall.dishes.length} dishes · ${stationCount(hall)} stations`}
         </span>
       </div>
     </button>
   );
 }
 
-function StationJumpLink({
-  station,
-  href,
-}: {
-  station: string;
-  href: string;
-}) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <a
-      href={href}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        height: 36,
-        padding: "0 16px",
-        borderRadius: "var(--se-radius-full)",
-        border: `1px solid ${hovered ? "var(--se-primary)" : "var(--se-border)"}`,
-        background: hovered ? "var(--se-primary-dim)" : "var(--se-bg-surface)",
-        color: hovered ? "var(--se-primary)" : "var(--se-text-secondary)",
-        fontSize: "var(--se-text-sm)",
-        fontWeight: "var(--se-weight-semibold)",
-        textDecoration: "none",
-        whiteSpace: "nowrap",
-        transition: "all 140ms ease",
-      }}
-    >
-      {station}
-    </a>
-  );
-}
-
 function MacroBar({ protein, carbs, fat }: { protein: number; carbs: number; fat: number }) {
-  const pCal = protein * 4;
-  const cCal = carbs * 4;
-  const fCal = fat * 9;
-  const total = pCal + cCal + fCal || 1;
-
+  const total = protein * 4 + carbs * 4 + fat * 9 || 1;
   return (
-    <div
-      style={{
-        display: "flex",
-        width: "100%",
-        maxWidth: 160,
-        height: 4,
-        borderRadius: 2,
-        overflow: "hidden",
-        background: "var(--se-bg-subtle)",
-      }}
-    >
-      <div style={{ width: `${(pCal / total) * 100}%`, background: "var(--se-macro-protein)" }} />
-      <div style={{ width: `${(cCal / total) * 100}%`, background: "var(--se-macro-carbs)" }} />
-      <div style={{ width: `${(fCal / total) * 100}%`, background: "var(--se-macro-fat)" }} />
-    </div>
+    <span className="menu-row__bar" aria-hidden="true">
+      <span style={{ width: `${(protein * 400) / total}%`, background: "var(--se-macro-protein)" }} />
+      <span style={{ width: `${(carbs * 400) / total}%`, background: "var(--se-macro-carbs)" }} />
+      <span style={{ width: `${(fat * 900) / total}%`, background: "var(--se-macro-fat)" }} />
+    </span>
   );
 }
 
 function DishRow({
   dish,
-  station,
   trayQuantity,
-  index,
   onClick,
   onAddToTray,
 }: {
   dish: Dish;
-  station: string;
   trayQuantity: number;
-  index: number;
   onClick: () => void;
   onAddToTray: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
   const inTray = trayQuantity > 0;
+  const flag = dish.dietary_flags?.[0];
+  const flagColors = flag ? FLAG_COLORS[flag] || FLAG_FALLBACK : null;
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
     onAddToTray();
     setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 600);
+    setTimeout(() => setJustAdded(false), 700);
   };
 
   return (
@@ -471,173 +176,46 @@ function DishRow({
       role="button"
       tabIndex={0}
       onClick={onClick}
-      onKeyDown={(e) => { if (e.key === "Enter") onClick(); }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "8px 12px",
-        borderRadius: "var(--se-radius-md)",
-        background: inTray
-          ? "rgba(var(--se-primary-rgb), 0.04)"
-          : hovered
-            ? "var(--se-bg-elevated)"
-            : "transparent",
-        borderLeft: "none",
-        cursor: "pointer",
-        transition: "background 120ms ease, border-color 120ms ease",
-        animation: "slideInRow 150ms ease both",
-        animationDelay: `${Math.min(index, 15) * 30}ms`,
+      onKeyDown={(e) => {
+        if (e.key === "Enter") onClick();
       }}
+      className={`menu-row${inTray ? " is-in-tray" : ""}`}
     >
-      {/* Icon */}
-      <div
-        style={{
-          width: 44,
-          minWidth: 44,
-          height: 44,
-          borderRadius: 12,
-          background: "var(--se-bg-elevated)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "1px solid var(--se-border)",
-          flexShrink: 0,
-        }}
-      >
-        <FoodIcon dishName={dish.dish_name} category={dish.category as FoodCategory} size="md" />
+      <div className="menu-row__icon">
+        <FoodIcon dishName={dish.dish_name} category={dish.category as FoodCategory} size="sm" />
       </div>
-
-      {/* Name + serving + MacroBar */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-        <span
-          style={{
-            margin: 0,
-            fontSize: "var(--se-text-sm)",
-            fontWeight: "var(--se-weight-bold)",
-            color: "var(--se-text-main)",
-            lineHeight: 1.2,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {dish.dish_name}
-        </span>
-        <span
-          style={{
-            fontSize: "var(--se-text-xs)",
-            color: "var(--se-text-muted)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {dish.serving_size || "Serving size unavailable"}
-          {dish.meal_period ? ` · ${dish.meal_period}` : ""}
-          {station ? ` · ${station}` : ""}
-        </span>
-        <MacroBar protein={dish.protein} carbs={dish.carbohydrates} fat={dish.fat} />
-      </div>
-
-      {/* Macro text pills — hidden on mobile */}
-      <div
-        className="hidden md:flex"
-        style={{
-          alignItems: "center",
-          gap: 8,
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-cal)" }}>
-          {dish.calories}
-        </span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-protein)" }}>
-          {dish.protein}P
-        </span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-carbs)" }}>
-          {dish.carbohydrates}C
-        </span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--se-macro-fat)" }}>
-          {dish.fat}F
-        </span>
-      </div>
-
-      {/* Dietary badge — first flag only, hidden on very small screens */}
-      {dish.dietary_flags?.[0] && (() => {
-        const colors = FLAG_COLORS[dish.dietary_flags[0]] || FLAG_FALLBACK;
-        return (
-          <span
-            className="hidden sm:inline-flex"
-            style={{
-              flexShrink: 0,
-              padding: "3px 7px",
-              borderRadius: "var(--se-radius-full)",
-              background: colors.bg,
-              color: colors.text,
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}
-          >
-            {dish.dietary_flags[0]}
+      <div className="menu-row__main">
+        <span className="menu-row__name">{dish.dish_name}</span>
+        <span className="menu-row__sub">
+          <span>
+            {dish.serving_size || "Serving size unavailable"}
+            {dish.meal_period ? ` · ${dish.meal_period}` : ""}
           </span>
-        );
-      })()}
-
-      {/* Tray quantity badge */}
-      {inTray && (
-        <span
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: "50%",
-            background: "rgba(var(--se-primary-rgb), 0.12)",
-            color: "var(--se-primary)",
-            fontSize: 11,
-            fontWeight: 800,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          {trayQuantity}
+          <MacroBar protein={dish.protein} carbs={dish.carbohydrates} fat={dish.fat} />
         </span>
-      )}
-
-      {/* Add button */}
+        <span className="menu-row__mobile-macros">
+          {dish.calories} kcal · {dish.protein}P · {dish.carbohydrates}C · {dish.fat}F
+        </span>
+      </div>
+      <span className="menu-row__num menu-row__num--kcal">{dish.calories}</span>
+      <span className="menu-row__num">{dish.protein}<small>g</small></span>
+      <span className="menu-row__num">{dish.carbohydrates}<small>g</small></span>
+      <span className="menu-row__num">{dish.fat}<small>g</small></span>
+      <span className="menu-row__flag">
+        {flag && flagColors && (
+          <span className="menu-flag" style={{ background: flagColors.bg, color: flagColors.text }}>
+            {flag}
+          </span>
+        )}
+      </span>
       <button
         type="button"
         onClick={handleAdd}
-        style={{
-          width: justAdded || hovered ? "auto" : 32,
-          minWidth: 32,
-          height: 32,
-          borderRadius: "var(--se-radius-full)",
-          border: "1.5px solid var(--se-border)",
-          background: justAdded
-            ? "var(--se-success)"
-            : "var(--se-bg-surface)",
-          color: justAdded
-            ? "var(--se-text-inverted)"
-            : "var(--se-text-main)",
-          fontSize: "var(--se-text-sm)",
-          fontWeight: "var(--se-weight-bold)",
-          cursor: "pointer",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          padding: justAdded ? "0 12px" : hovered ? "0 14px" : 0,
-          transition: "all 120ms ease",
-          animation: justAdded ? "addBounce 200ms ease" : "none",
-        }}
+        aria-label="Add"
+        title={inTray ? `${trayQuantity} in tray. Add another` : "Add to tray"}
+        className={`menu-add${inTray ? " is-in-tray" : ""}${justAdded ? " just-added" : ""}`}
       >
-        {justAdded ? "\u2713" : hovered ? "Add" : "+"}
+        {justAdded ? "\u2713" : inTray ? trayQuantity : "+"}
       </button>
     </div>
   );
@@ -862,92 +440,65 @@ export default function Menu() {
       excludedAllergens.size > 0,
   );
 
+  const activeAnchor = useActiveAnchor(stationSections.map((s) => s.anchor));
+
+  const sortedHalls = useMemo(
+    () =>
+      [...halls].sort((a, b) => {
+        const emptyDiff = Number(a.dishes.length === 0) - Number(b.dishes.length === 0);
+        if (emptyDiff) return emptyDiff;
+        const openA = statusFor(a.name, hallStatusMap)?.is_open ? 1 : 0;
+        const openB = statusFor(b.name, hallStatusMap)?.is_open ? 1 : 0;
+        return openB - openA || b.dishes.length - a.dishes.length;
+      }),
+    [halls, hallStatusMap],
+  );
+
+  const resetFilters = () => {
+    setSearch("");
+    setAiResults(null);
+    setAiError(null);
+    setActiveMealPeriod("All");
+    setActiveDietary(new Set());
+    setExcludedAllergens(new Set());
+  };
+
   if (!selectedHall) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingBottom: 100 }}>
-        <section
-          style={{
-            padding: "10px 4px 0",
-          }}
-        >
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "6px 10px",
-              borderRadius: "var(--se-radius-full)",
-              background: "var(--se-bg-elevated)",
-              color: "var(--se-text-secondary)",
-              fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              border: "1px solid var(--se-border)",
-            }}
-          >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--se-success)", marginRight: 8 }} />
-            Live dining menus
+      <div className="menu-page">
+        <header className="menu-head">
+          <div>
+            <MenuDateBadge />
           </div>
-          <h1
-            style={{
-              margin: "18px 0 0",
-              maxWidth: 760,
-              fontSize: "clamp(2rem, 4vw, 2.75rem)",
-              lineHeight: 1,
-              color: "var(--se-text-main)",
-              fontWeight: "var(--se-weight-extrabold)",
-              letterSpacing: "-0.04em",
-            }}
-          >
-            Pick a dining hall and explore today&apos;s stations.
-          </h1>
-        </section>
+          <h1>Pick a dining hall</h1>
+          <p>
+            Each menu is grouped by station, with calories and macros for every dish. Halls that are open right now
+            are listed first.
+          </p>
+        </header>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="menu-hallgrid">
             {[1, 2, 3, 4, 5, 6].map((item) => (
-              <Skeleton key={item} variant="rect" height={246} />
+              <Skeleton key={item} variant="rect" height={240} />
             ))}
           </div>
         ) : hallsError ? (
-          <Card padding="md">
-            <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
-              <p
-                style={{
-                  color: "var(--se-error)",
-                  fontWeight: 600,
-                  margin: 0,
-                }}
-              >
-                Could not load dining halls
-              </p>
-              <div style={{ marginTop: "var(--se-space-4)" }}>
-                <Button variant="secondary" size="sm" onClick={fetchHalls}>
-                  Try Again
-                </Button>
-              </div>
+          <div className="menu-empty" style={{ textAlign: "center" }}>
+            <p style={{ color: "var(--se-error)", fontWeight: 600, margin: 0 }}>Could not load dining halls</p>
+            <div style={{ marginTop: "var(--se-space-4)" }}>
+              <Button variant="secondary" size="sm" onClick={fetchHalls}>
+                Try Again
+              </Button>
             </div>
-          </Card>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {halls.map((hall) => (
-              // UIUC DiningOptionIDs (hours endpoint) don’t necessarily equal DB IDs.
-              // We map by name to the known UIUC option IDs used for menus.
+          <div className="menu-hallgrid">
+            {sortedHalls.map((hall) => (
               <HallSelectionCard
                 key={hall.Dining_Hall_ID}
                 hall={hall}
-                hallStatus={(() => {
-                  const name = hall.name.toLowerCase();
-                  const optionId =
-                    name.includes("ikenberry") ? "1"
-                      : name.includes("pennsylvania") || name.includes("par") ? "2"
-                        : name.includes("illinois street") || name.includes("isr") ? "3"
-                          : name.includes("lincoln") || name.includes("allen") ? "5"
-                            : name.includes("field of greens") ? "12"
-                              : name.includes("kosher") ? "23"
-                                : null;
-                  return optionId ? hallStatusMap[optionId] : undefined;
-                })()}
+                hallStatus={statusFor(hall.name, hallStatusMap)}
                 onClick={() => selectHall(hall)}
               />
             ))}
@@ -957,673 +508,306 @@ export default function Menu() {
     );
   }
 
+  const visual = hallVisual(selectedHall.name, selectedHall.location);
+  const filterCount = activeDietary.size + excludedAllergens.size;
+  const isSemantic = searchMode === "ai";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, paddingBottom: 100 }}>
-      <section
-        style={{
-          ...panelStyle,
-          padding: "26px 28px 24px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 20,
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "5px 10px",
-                borderRadius: "var(--se-radius-full)",
-                background: "var(--se-bg-elevated)",
-                color: "var(--se-text-secondary)",
-                fontSize: 10,
-                fontWeight: 800,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                border: "1px solid var(--se-border)",
-              }}
-            >
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--se-primary)" }} />
-              UIUC Dining
-            </div>
-            <h1
-              style={{
-                margin: "16px 0 10px",
-                fontSize: "clamp(2rem, 4vw, 2.8rem)",
-                lineHeight: 0.98,
-                color: "var(--se-text-main)",
-                fontWeight: "var(--se-weight-extrabold)",
-                letterSpacing: "-0.05em",
-              }}
-            >
-              {selectedHall.name}
-            </h1>
-            <p
-              style={{
-                margin: 0,
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 8,
-                fontSize: "var(--se-text-sm)",
-                color: "var(--se-text-secondary)",
-              }}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <IconMapPin size={14} color="var(--se-text-faint)" />
-                {selectedHall.location}
-              </span>
-              <span style={{ color: "var(--se-text-faint)" }}>·</span>
-              <span>
-                {filteredDishes.length}
-                {filteredDishes.length !== selectedHall.dishes.length
-                  ? ` / ${selectedHall.dishes.length}`
-                  : ""}
-                {" "}dishes visible
-              </span>
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowHallPicker((open) => !open)}
-            aria-expanded={showHallPicker}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              height: 42,
-              padding: "0 16px",
-              borderRadius: "var(--se-radius-full)",
-              border: "1px solid var(--se-border)",
-              background: showHallPicker
-                ? "var(--se-primary)"
-                : "var(--se-bg-surface)",
-              color: showHallPicker
-                ? "var(--se-text-inverted)"
-                : "var(--se-text-main)",
-              fontSize: "var(--se-text-sm)",
-              fontWeight: "var(--se-weight-bold)",
-              cursor: "pointer",
-              boxShadow: "var(--se-shadow-sm)",
-              transition: "all 140ms ease",
-            }}
-          >
-            Change Hall
-            <span
-              style={{
-                display: "inline-flex",
-                transform: showHallPicker ? "rotate(90deg)" : "rotate(0deg)",
-                transition: "transform 140ms ease",
-              }}
-            >
-              <ChevronRight />
+    <div className="menu-page">
+      <section className="menu-hallhead">
+        <div className="menu-hallhead__photo">{visual.src && <img src={visual.src} alt="" />}</div>
+        <div style={{ minWidth: 0 }}>
+          <StatusPill status={statusFor(selectedHall.name, hallStatusMap)} />
+          <h1>{selectedHall.name}</h1>
+          <p className="menu-hallhead__facts">
+            <span>
+              <IconMapPin size={14} color="var(--se-text-faint)" />
+              {selectedHall.location}
             </span>
-          </button>
+            <span>
+              <span className="se-mono">{selectedHall.dishes.length}</span> dishes
+            </span>
+            <span>
+              <span className="se-mono">{stationCount(selectedHall)}</span> stations
+            </span>
+          </p>
         </div>
+        <button
+          type="button"
+          className="menu-btn"
+          onClick={() => setShowHallPicker((open) => !open)}
+          aria-expanded={showHallPicker}
+        >
+          Change hall
+          <span className="menu-btn__chev">
+            <ChevronRight />
+          </span>
+        </button>
+      </section>
 
-        {showHallPicker && (
-          <div
-            style={{
-              ...panelStyle,
-              padding: 18,
-              marginBottom: 22,
-              background: "rgba(255, 255, 255, 0.82)",
-              backdropFilter: "blur(16px)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                marginBottom: 14,
-              }}
+      {showHallPicker && (
+        <section className="menu-picker">
+          <div className="menu-picker__head">
+            <span className="se-eyebrow">Switch hall · filters are kept</span>
+            <button
+              type="button"
+              className="menu-search__clear"
+              style={{ position: "static", transform: "none" }}
+              onClick={() => setShowHallPicker(false)}
+              aria-label="Close hall chooser"
             >
-              <div>
-                <p
-                  style={{
-                    margin: "0 0 2px",
-                    fontSize: 11,
-                    fontWeight: 800,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "var(--se-text-faint)",
-                  }}
+              <IconClose size={14} color="var(--se-text-muted)" />
+            </button>
+          </div>
+          <div className="menu-hallgrid menu-hallgrid--compact">
+            {sortedHalls.map((hall) => (
+              <HallSelectionCard
+                key={hall.Dining_Hall_ID}
+                hall={hall}
+                hallStatus={statusFor(hall.name, hallStatusMap)}
+                selected={hall.Dining_Hall_ID === selectedHall.Dining_Hall_ID}
+                compact
+                onClick={() => selectHall(hall)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="menu-toolbar" aria-label="Search and filters">
+        {mealPeriods.length > 2 && (
+          <div className="menu-toolbar__row">
+            <div className="menu-seg se-no-scrollbar" role="group" aria-label="Meal period">
+              {mealPeriods.map((period) => (
+                <button
+                  key={period}
+                  type="button"
+                  aria-pressed={activeMealPeriod === period}
+                  onClick={() => setActiveMealPeriod(period)}
                 >
-                  Switch hall
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "var(--se-text-sm)",
-                    color: "var(--se-text-secondary)",
-                  }}
-                >
-                  Keep the same filters, but jump between live dining halls.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowHallPicker(false)}
-                aria-label="Close hall chooser"
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  border: "1px solid var(--se-border)",
-                  background: "var(--se-bg-surface)",
-                  color: "var(--se-text-muted)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                }}
-              >
-                <IconClose size={14} color="currentColor" />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {halls.map((hall) => (
-                <HallSelectionCard
-                  key={hall.Dining_Hall_ID}
-                  hall={hall}
-                  hallStatus={(() => {
-                    const name = hall.name.toLowerCase();
-                    const optionId =
-                      name.includes("ikenberry") ? "1"
-                        : name.includes("pennsylvania") || name.includes("par") ? "2"
-                          : name.includes("illinois street") || name.includes("isr") ? "3"
-                            : name.includes("lincoln") || name.includes("allen") ? "5"
-                              : name.includes("field of greens") ? "12"
-                                : name.includes("kosher") ? "23"
-                                  : null;
-                    return optionId ? hallStatusMap[optionId] : undefined;
-                  })()}
-                  selected={hall.Dining_Hall_ID === selectedHall.Dining_Hall_ID}
-                  compact
-                  onClick={() => selectHall(hall)}
-                />
+                  {period === "All" ? "All day" : period}
+                </button>
               ))}
             </div>
           </div>
         )}
 
-      </section>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
-            <section
-              style={{
-                ...panelStyle,
-                padding: 22,
-                display: "flex",
-                flexDirection: "column",
-                gap: 18,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 10,
-                  padding: 6,
-                  borderRadius: "var(--se-radius-full)",
-                  background: "var(--se-bg-elevated)",
-                  border: "1px solid var(--se-border)",
-                  width: "fit-content",
-                  maxWidth: "100%",
+        <div className="menu-toolbar__row menu-toolbar__row--search">
+          <div className="menu-seg menu-seg--ink" role="group" aria-label="Search mode">
+            {(["filter", "ai"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={searchMode === mode}
+                title={mode === "ai" ? "Plain-English search ranked by an embedding model" : "Match dish names"}
+                onClick={() => {
+                  setSearchMode(mode);
+                  setSearch("");
+                  setAiResults(null);
+                  setAiLoading(false);
+                  setAiError(null);
                 }}
               >
-                {mealPeriods.map((period) => {
-                  const active = activeMealPeriod === period;
+                {mode === "ai" ? "Semantic" : "Keyword"}
+              </button>
+            ))}
+          </div>
 
-                  return (
-                    <button
-                      key={period}
-                      type="button"
-                      onClick={() => setActiveMealPeriod(period)}
-                      style={{
-                        height: 40,
-                        padding: "0 18px",
-                        borderRadius: "var(--se-radius-full)",
-                        border: "none",
-                        background: active
-                          ? "var(--se-bg-surface)"
-                          : "transparent",
-                        color: active
-                          ? "var(--se-primary)"
-                          : "var(--se-text-muted)",
-                        fontSize: "var(--se-text-sm)",
-                        fontWeight: "var(--se-weight-bold)",
-                        boxShadow: active ? "var(--se-shadow-sm)" : "none",
-                        cursor: "pointer",
-                        transition: "all 140ms ease",
-                      }}
-                    >
-                      {period}
-                    </button>
-                  );
-                })}
-              </div>
+          <div className={`menu-search${isSemantic ? " is-semantic" : ""}`}>
+            <span className="menu-search__icon">
+              {isSemantic && aiLoading ? <span className="menu-spinner" /> : <IconSearch size={16} color="currentColor" />}
+            </span>
+            <input
+              type="text"
+              aria-label={isSemantic ? "AI semantic search" : "Search dishes"}
+              placeholder={isSemantic ? "e.g. high-protein breakfast without eggs" : "Search dishes by name"}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                className="menu-search__clear"
+                onClick={() => {
+                  setSearch("");
+                  setAiResults(null);
+                  setAiLoading(false);
+                  setAiError(null);
+                }}
+                aria-label="Clear search"
+              >
+                <IconClose size={13} color="var(--se-text-muted)" />
+              </button>
+            )}
+          </div>
 
-              <div className="flex flex-col lg:flex-row gap-4">
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flex: "1 1 340px",
-                    minWidth: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      padding: 4,
-                      borderRadius: "var(--se-radius-full)",
-                      background: "rgba(255,255,255,0.82)",
-                      border: "1px solid var(--se-border)",
-                      boxShadow: "var(--se-shadow-sm)",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {(["filter", "ai"] as const).map((mode) => {
-                      const active = searchMode === mode;
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => {
-                            setSearchMode(mode);
-                            setSearch("");
-                            setAiResults(null);
-                            setAiLoading(false);
-                            setAiError(null);
-                          }}
-                          style={{
-                            height: 38,
-                            padding: "0 14px",
-                            borderRadius: "var(--se-radius-full)",
-                            border: "none",
-                            background: active ? "var(--se-primary)" : "transparent",
-                            color: active
-                              ? "var(--se-text-inverted)"
-                              : "var(--se-text-muted)",
-                            fontSize: "var(--se-text-sm)",
-                            fontWeight: "var(--se-weight-bold)",
-                            cursor: "pointer",
-                            transition: "all 140ms ease",
-                          }}
-                        >
-                          {mode === "ai" ? "✦ AI" : "Filter"}
-                        </button>
-                      );
-                    })}
-                  </div>
+          <button
+            type="button"
+            className="menu-btn menu-filterbtn"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((o) => !o)}
+          >
+            <span className="menu-filterbtn__long">Diet &amp; allergens</span>
+            <span className="menu-filterbtn__short">Filters</span>
+            {filterCount > 0 && <span className="menu-filterbtn__count se-mono">{filterCount}</span>}
+          </button>
+        </div>
 
-                  <div style={{ position: "relative", flex: "1 1 260px", minWidth: 0 }}>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 14,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        pointerEvents: "none",
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      {searchMode === "ai" && aiLoading ? (
-                        <span style={{ fontSize: 13, color: "var(--se-primary)" }}>
-                          ⏳
-                        </span>
-                      ) : (
-                        <IconSearch size={16} color="var(--se-text-faint)" />
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      aria-label={
-                        searchMode === "ai" ? "AI semantic search" : "Search dishes"
-                      }
-                      placeholder={
-                        searchMode === "ai"
-                          ? "Try: high protein breakfast, light vegetarian..."
-                          : "Search dishes"
-                      }
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      style={{
-                        width: "100%",
-                        height: 46,
-                        borderRadius: "var(--se-radius-full)",
-                        border:
-                          searchMode === "ai"
-                            ? "1.5px solid rgba(var(--se-primary-rgb), 0.35)"
-                            : "1px solid var(--se-border)",
-                        background: "rgba(255,255,255,0.82)",
-                        paddingLeft: 40,
-                        paddingRight: search ? 42 : 16,
-                        fontSize: "var(--se-text-sm)",
-                        color: "var(--se-text-main)",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                    {search && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSearch("");
-                          setAiResults(null);
-                          setAiLoading(false);
-                          setAiError(null);
-                        }}
-                        aria-label="Clear search"
-                        style={{
-                          position: "absolute",
-                          right: 8,
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          width: 30,
-                          height: 30,
-                          borderRadius: "50%",
-                          border: "none",
-                          background: "var(--se-bg-subtle)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <IconClose size={14} color="var(--se-text-muted)" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexWrap: "wrap",
-                    color: "var(--se-text-muted)",
-                    fontSize: "var(--se-text-xs)",
-                    fontWeight: "var(--se-weight-semibold)",
-                  }}
-                >
-                  <span
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: "var(--se-radius-full)",
-                      background: "rgba(255,255,255,0.78)",
-                      border: "1px solid var(--se-border)",
-                    }}
-                  >
-                    {searchMode === "ai"
-                      ? aiLoading
-                        ? "Searching with AI"
-                        : hasActiveFilters
-                          ? "AI + filters active"
-                          : "AI search ready"
-                      : hasActiveFilters
-                        ? "Filters active"
-                        : "Browsing all dishes"}
-                  </span>
-                  {searchMode === "ai" && !aiLoading && aiResults && !aiError && (
-                    <span>{aiResults.length} AI matches</span>
-                  )}
-                  <span>{stationGroups.length} station groups</span>
-                </div>
-              </div>
-
-              {searchMode === "ai" && aiError && (
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "var(--se-text-sm)",
-                    fontWeight: "var(--se-weight-semibold)",
-                    color: "var(--se-error)",
-                  }}
-                >
-                  {aiError}
-                </p>
-              )}
-
-              {searchMode === "ai" && !aiError && aiResults && aiResults.length > 0 && (
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "var(--se-text-xs)",
-                    fontWeight: "var(--se-weight-semibold)",
-                    color: "var(--se-text-faint)",
-                  }}
-                >
-                  ✦ AI results for "{search}"
-                </p>
-              )}
-
+        <div className={`menu-filters${filtersOpen ? " is-open" : ""}`}>
+          <div className="menu-filters__inner">
+            <div className="menu-filters__groups">
               <div>
-                <button
-                  type="button"
-                  onClick={() => setFiltersOpen((o) => !o)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 14px",
-                    borderRadius: "var(--se-radius-full)",
-                    border: "1px solid var(--se-border)",
-                    background: "var(--se-bg-surface)",
-                    color: "var(--se-text-secondary)",
-                    fontSize: "var(--se-text-sm)",
-                    fontWeight: "var(--se-weight-semibold)",
-                    cursor: "pointer",
-                    transition: "all 140ms ease",
-                  }}
-                >
-                  Dietary &amp; Allergens
-                  <span style={{
-                    display: "inline-flex",
-                    transition: "transform 200ms ease",
-                    transform: filtersOpen ? "rotate(180deg)" : "rotate(0deg)",
-                  }}>
-                    &#9662;
-                  </span>
-                  {(activeDietary.size + excludedAllergens.size) > 0 && (
-                    <span
-                      style={{
-                        minWidth: 20,
-                        height: 20,
-                        borderRadius: "50%",
-                        background: "var(--se-primary)",
-                        color: "var(--se-text-inverted)",
-                        fontSize: 11,
-                        fontWeight: 800,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {activeDietary.size + excludedAllergens.size}
-                    </span>
-                  )}
-                </button>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateRows: filtersOpen ? "1fr" : "0fr",
-                    transition: "grid-template-rows 200ms ease",
-                  }}
-                >
-                  <div style={{ overflow: "hidden" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 14 }}>
-                      <div>
-                        <p
-                          style={{
-                            margin: "0 0 6px",
-                            fontSize: 11,
-                            fontWeight: 800,
-                            letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                            color: "var(--se-text-faint)",
-                          }}
-                        >
-                          Dietary
-                        </p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          {DIETARY_FILTERS.map((flag) => (
-                            <FilterChip
-                              key={flag}
-                              label={flag}
-                              active={activeDietary.has(flag)}
-                              onClick={() => toggleDietary(flag)}
-                              tint="success"
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p
-                          style={{
-                            margin: "0 0 6px",
-                            fontSize: 11,
-                            fontWeight: 800,
-                            letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                            color: "var(--se-text-faint)",
-                          }}
-                        >
-                          Exclude Allergens
-                        </p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          {ALLERGEN_FILTERS.map((allergen) => (
-                            <FilterChip
-                              key={allergen}
-                              label={allergen}
-                              active={excludedAllergens.has(allergen)}
-                              onClick={() => toggleAllergen(allergen)}
-                              tint="error"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {stationSections.length > 0 && (
-              <div style={{ position: "sticky", top: 76, zIndex: 20 }}>
-                <div
-                  style={{
-                    ...panelStyle,
-                    padding: 8,
-                    display: "flex",
-                    gap: 8,
-                    overflowX: "auto",
-                    background: "rgba(255,255,255,0.92)",
-                    backdropFilter: "blur(16px)",
-                  }}
-                >
-                  {stationSections.map(({ station, anchor }) => (
-                    <StationJumpLink
-                      key={`${station}-${anchor}`}
-                      station={station}
-                      href={`#${anchor}`}
+                <span className="se-eyebrow">Dietary</span>
+                <div className="menu-filters__chips">
+                  {DIETARY_FILTERS.map((flag) => (
+                    <FilterChip
+                      key={flag}
+                      label={flag}
+                      active={activeDietary.has(flag)}
+                      onClick={() => toggleDietary(flag)}
+                      tint="success"
                     />
                   ))}
                 </div>
               </div>
-            )}
-
-            {stationGroups.length === 0 ? (
-              <section style={{ ...panelStyle, padding: 32 }}>
-                <EmptyState
-                  message={hasActiveFilters ? "No dishes match" : "No dishes found"}
-                  sub={
-                    hasActiveFilters
-                      ? "Try adjusting the search term or filters."
-                      : "This dining hall has no dishes in the database yet."
-                  }
-                />
-              </section>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-                {stationSections.map(({ station, dishes, anchor }) => (
-                  <section
-                    key={station}
-                    id={anchor}
-                    className="scroll-mt-44"
-                    style={{ display: "flex", flexDirection: "column", gap: 14 }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 16,
-                        paddingLeft: 14,
-                        borderLeft: "4px solid var(--se-primary)",
-                      }}
-                    >
-                      <h2
-                        style={{
-                          margin: 0,
-                          fontSize: "var(--se-text-base)",
-                          fontWeight: "var(--se-weight-extrabold)",
-                          color: "var(--se-text-main)",
-                          letterSpacing: "-0.02em",
-                        }}
-                      >
-                        {station}
-                      </h2>
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          borderRadius: "var(--se-radius-full)",
-                          background: "var(--se-bg-subtle)",
-                          color: "var(--se-text-muted)",
-                          fontSize: "var(--se-text-xs)",
-                          fontWeight: "var(--se-weight-semibold)",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {dishes.length} items
-                      </span>
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      {dishes.map((dish, i) => (
-                        <DishRow
-                          key={dish.dish_id}
-                          dish={dish}
-                          station={station}
-                          index={i}
-                          trayQuantity={getItemQuantity(dish.dish_id)}
-                          onClick={() => navigate(`/dishes/${dish.dish_id}`)}
-                          onAddToTray={() => handleAddDishToTray(dish)}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ))}
+              <div>
+                <span className="se-eyebrow">Exclude allergens</span>
+                <div className="menu-filters__chips">
+                  {ALLERGEN_FILTERS.map((allergen) => (
+                    <FilterChip
+                      key={allergen}
+                      label={allergen}
+                      active={excludedAllergens.has(allergen)}
+                      onClick={() => toggleAllergen(allergen)}
+                      tint="error"
+                    />
+                  ))}
+                </div>
               </div>
-            )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="menu-summary" aria-live="polite">
+        <span>
+          {isSemantic && aiError ? (
+            <span className="menu-summary__error">{aiError}</span>
+          ) : isSemantic && aiLoading ? (
+            "Searching…"
+          ) : (
+            <>
+              Showing <strong className="se-mono">{filteredDishes.length}</strong>
+              {filteredDishes.length !== selectedHall.dishes.length && (
+                <> of <span className="se-mono">{selectedHall.dishes.length}</span></>
+              )}{" "}
+              dishes across <strong className="se-mono">{stationGroups.length}</strong> stations
+              {isSemantic && aiResults && search ? <> · best semantic matches for &ldquo;{search}&rdquo;</> : null}
+            </>
+          )}
+        </span>
+        {hasActiveFilters && (
+          <button type="button" className="menu-summary__reset" onClick={resetFilters}>
+            Clear search &amp; filters
+          </button>
+        )}
       </div>
+
+      {stationGroups.length === 0 ? (
+        <section className="menu-empty">
+          <EmptyState
+            message={hasActiveFilters ? "No dishes match" : "No dishes found"}
+            sub={
+              hasActiveFilters
+                ? "Try adjusting the search term or filters."
+                : "This dining hall has no dishes in the database yet."
+            }
+          />
+        </section>
+      ) : (
+        <div className="menu-layout">
+          <nav className="menu-rail se-no-scrollbar" aria-label="Stations">
+            <span className="menu-rail__title se-eyebrow">Stations</span>
+            {stationSections.map(({ station, dishes, anchor }) => (
+              <a
+                key={anchor}
+                href={`#${anchor}`}
+                aria-label={station}
+                className={activeAnchor === anchor ? "is-active" : undefined}
+              >
+                <span>{station}</span>
+                <span className="menu-rail__count se-mono" aria-hidden="true">
+                  {dishes.length}
+                </span>
+              </a>
+            ))}
+          </nav>
+
+          <div className="menu-sections">
+            {stationSections.map(({ station, dishes, anchor }) => (
+              <section key={anchor} id={anchor} className="menu-station">
+                <header className="menu-station__head">
+                  <h2>{station}</h2>
+                  <span className="menu-station__count se-mono">
+                    {dishes.length} {dishes.length === 1 ? "dish" : "dishes"}
+                  </span>
+                </header>
+                <div className="menu-table">
+                  <div className="menu-colhead" aria-hidden="true">
+                    <span />
+                    <span>Dish</span>
+                    <span>kcal</span>
+                    <span>Prot</span>
+                    <span>Carb</span>
+                    <span>Fat</span>
+                    <span className="menu-colhead__flag" />
+                    <span />
+                  </div>
+                  {dishes.map((dish) => (
+                    <DishRow
+                      key={dish.dish_id}
+                      dish={dish}
+                      trayQuantity={getItemQuantity(dish.dish_id)}
+                      onClick={() => navigate(`/dishes/${dish.dish_id}`)}
+                      onAddToTray={() => handleAddDishToTray(dish)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/** Scroll-spy: the station section currently nearest the top of the viewport. */
+function useActiveAnchor(anchors: string[]): string | null {
+  const [active, setActive] = useState<string | null>(null);
+  const key = anchors.join("|");
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined" || !anchors.length) return;
+    const visible = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) visible.set(entry.target.id, entry.boundingClientRect.top);
+          else visible.delete(entry.target.id);
+        }
+        const first = anchors.find((a) => visible.has(a));
+        if (first) setActive(first);
+      },
+      { rootMargin: "-90px 0px -55% 0px" },
+    );
+    for (const anchor of anchors) {
+      const el = document.getElementById(anchor);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return active ?? anchors[0] ?? null;
 }

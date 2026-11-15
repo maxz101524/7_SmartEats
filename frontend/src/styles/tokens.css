@@ -66,6 +66,14 @@
   /* Font Stack */
   --se-font-sans:
     "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --se-font-display: "Fraunces", ui-serif, Georgia, serif; /* v2.1: titles, hero, station names */
+  --se-font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace; /* v2.1: nutrition numbers, labels */
+
+  /* Ink surfaces (v2.1) — dark editorial bands */
+  --se-bg-ink: var(--se-text-main);
+  --se-text-on-ink: rgba(255, 255, 255, 0.92);
+  --se-text-on-ink-muted: rgba(255, 255, 255, 0.62);
+  --se-border-on-ink: rgba(255, 255, 255, 0.14);
 
   /* Size Scale */
   --se-text-display: 2.5rem; /* 40px — Hero numbers, big stats */

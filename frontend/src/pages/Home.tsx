@@ -1,614 +1,432 @@
-import { useState, useEffect } from "react";
-import type { ComponentType } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
-import Skeleton from "../components/Skeleton";
-import { IconUtensils, IconSparkle, IconChartPie } from "../components/Icons";
-import { API_BASE } from "../config";
-import { FoodIcon } from "../components/FoodIcon";
-import type { FoodCategory } from "../components/FoodIcon";
-import { FLAG_COLORS, FLAG_FALLBACK } from "../utils/flagColors";
+import { API_BASE, DATA_MODE } from "../config";
+import MenuDateBadge from "../components/MenuDateBadge";
+import NutritionLabel from "../components/NutritionLabel";
+import { IconSparkle } from "../components/Icons";
+import { useToast } from "../components/useToast";
+import { hallVisual, statusFor, statusLabel, type HallStatusMap } from "../utils/halls";
+import "../styles/home.css";
 
-interface DishStats {
-  total_dishes?: number;
-  total_halls?: number;
+interface HomeDish {
+  dish_id: number;
+  dish_name: string;
+  calories: number;
+  protein: number;
+  carbohydrates: number;
+  fat: number;
+  fiber?: number | null;
+  sodium?: number | null;
+  serving_size?: string;
+  serving_unit?: string;
+  meal_period?: string;
+  dietary_flags?: string[];
+  nutrition_source?: string;
 }
 
-function AnimatedCounter({ target, duration = 1500 }: { target: number; duration?: number }) {
-  const [count, setCount] = useState(0);
-  const [ref, setRef] = useState<HTMLSpanElement | null>(null);
-  const [started, setStarted] = useState(false);
+interface HomeHall {
+  Dining_Hall_ID: number;
+  name: string;
+  location: string;
+  dishes: HomeDish[];
+}
 
-  useEffect(() => {
-    if (!ref) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !started) {
-          setStarted(true);
-        }
-      },
-      { threshold: 0.5 },
-    );
-    observer.observe(ref);
-    return () => observer.disconnect();
-  }, [ref, started]);
+type HallDish = HomeDish & { hall: string; hallId: number };
 
-  useEffect(() => {
-    if (!started || target <= 0) return;
-    const start = performance.now();
-    let raf: number;
+const PIPELINE = [
+  { step: "01", title: "UIUC Dining", body: "A scheduled GitHub Action pulls the menu for every hall from UIUC Dining." },
+  { step: "02", title: "Gemini", body: "New dishes get nutrition estimates: calories, macros, fiber, sodium, serving size." },
+  { step: "03", title: "MiniLM", body: "Each dish is embedded into a 384-dim vector for plain-English search." },
+  { step: "04", title: "Static JSON", body: "Results are committed as data files and deployed to the edge on Vercel." },
+  { step: "05", title: "Your browser", body: "Search, tracking and planning run client-side, plus one serverless call for AI chat." },
+];
 
-    const tick = (now: number) => {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.round(eased * target));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [started, target, duration]);
-
-  return <span ref={setRef}>{started ? count.toLocaleString() : "0"}</span>;
+function MacroMeter({ label, value, goal, color }: { label: string; value: number; goal: number; color: string }) {
+  return (
+    <div className="home-meter">
+      <div className="home-meter__head">
+        <span>{label}</span>
+        <span className="se-mono">
+          {value}
+          <span className="home-meter__goal">/{goal}</span>
+        </span>
+      </div>
+      <div className="home-meter__track">
+        <span style={{ width: `${Math.min(100, (value / goal) * 100)}%`, background: color }} />
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
   const navigate = useNavigate();
+  const toast = useToast();
   const isLoggedIn = Boolean(localStorage.getItem("authToken"));
-  const [stats, setStats] = useState<DishStats | null>(null);
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
-  const [tickerDishes, setTickerDishes] = useState<{ dish_id: number; dish_name: string; calories: number; dietary_flags?: string[]; category?: string }[]>([]);
-
-  const fetchStats = () => {
-    if (!isLoggedIn) return;
-    setStatsError(null);
-    const token = localStorage.getItem("authToken");
-    axios
-      .get(`${API_BASE}/dish-stats/`, {
-        headers: { Authorization: `Token ${token}` },
-      })
-      .then((res) => {
-        setStats(res.data);
-      })
-      .catch(() => {
-        setStatsError("Could not load stats");
-      });
-  };
-
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    const token = localStorage.getItem("authToken");
-    axios
-      .get(`${API_BASE}/dish-stats/`, {
-        headers: { Authorization: `Token ${token}` },
-      })
-      .then((res) => {
-        setStats(res.data);
-        setStatsError(null);
-      })
-      .catch(() => {
-        setStatsError("Could not load stats");
-      });
-  }, [isLoggedIn]);
+  const [halls, setHalls] = useState<HomeHall[]>([]);
+  const [statusMap, setStatusMap] = useState<HallStatusMap>({});
+  const [catalogSize, setCatalogSize] = useState<number | null>(null);
 
   useEffect(() => {
     axios
-      .get(`${API_BASE}/dishes/`, { params: { limit: 16 } })
-      .then((res) => {
-        const data = Array.isArray(res.data) ? res.data : (res.data.results ?? []);
-        setTickerDishes(data.slice(0, 16));
-      })
-      .catch(() => {
-        // Ticker is decorative — silent fail is fine
-      });
+      .get<HomeHall[]>(`${API_BASE}/halls/`)
+      .then((res) => setHalls(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setHalls([]));
+    axios
+      .get<HallStatusMap>(`${API_BASE}/hall-status/`)
+      .then((res) => setStatusMap(res.data ?? {}))
+      .catch(() => setStatusMap({}));
+    axios
+      .get<{ total_dishes?: number }>(`${API_BASE}/dish-stats/`)
+      .then((res) => setCatalogSize(res.data.total_dishes ?? null))
+      .catch(() => setCatalogSize(null));
   }, []);
 
-  const featureCards: {
-    icon: ComponentType<{ size?: number; color?: string }>;
-    title: string;
-    desc: string;
-    route: string;
-  }[] = [
-    {
-      icon: IconUtensils,
-      title: "Browse Menu",
-      desc: "Search dishes across all UIUC dining halls by category, calories, and nutrition.",
-      route: "/menu",
-    },
-    {
-      icon: IconSparkle,
-      title: "AI Meal Planner",
-      desc: "Generate personalized meal plans based on your dietary goals and nutrition targets.",
-      route: "/aimeals",
-    },
-    {
-      icon: IconChartPie,
-      title: "My Profile",
-      desc: "Track your meals, view nutrition charts, and export your dining history.",
-      route: "/profile",
-    },
-  ];
+  const servingHalls = useMemo(
+    () =>
+      halls
+        .filter((h) => h.dishes.length > 0)
+        .map((h) => ({ ...h, status: statusFor(h.name, statusMap) }))
+        .sort(
+          (a, b) =>
+            Number(b.status?.is_open ?? false) - Number(a.status?.is_open ?? false) ||
+            b.dishes.length - a.dishes.length,
+        ),
+    [halls, statusMap],
+  );
+
+  const todaysDishes: HallDish[] = useMemo(
+    () => servingHalls.flatMap((h) => h.dishes.map((d) => ({ ...d, hall: h.name, hallId: h.Dining_Hall_ID }))),
+    [servingHalls],
+  );
+
+  const openCount = servingHalls.filter((h) => h.status?.is_open).length;
+
+  const featured = useMemo(() => {
+    const candidates = todaysDishes.filter((d) => d.calories > 0 && d.protein >= 20 && d.nutrition_source);
+    return [...candidates].sort((a, b) => b.protein / b.calories - a.protein / a.calories)[0] ?? null;
+  }, [todaysDishes]);
+
+  const picks = useMemo(() => {
+    const pool = todaysDishes.filter((d) => d.calories > 0 && d.nutrition_source);
+    const used = new Set<number>(featured ? [featured.dish_id] : []);
+    const usedHalls = new Set<string>();
+    // Highest score, preferring a hall that hasn't been featured yet so picks span campus.
+    const best = (items: HallDish[], score: (d: HallDish) => number) => {
+      const ranked = [...items].filter((d) => !used.has(d.dish_id)).sort((a, b) => score(b) - score(a));
+      const top = ranked.slice(0, 8);
+      const winner = top.find((d) => !usedHalls.has(d.hall)) ?? ranked[0];
+      if (winner) {
+        used.add(winner.dish_id);
+        usedHalls.add(winner.hall);
+      }
+      return winner;
+    };
+    type Metric = "kcal" | "protein" | "fiber";
+    const candidates: [string, Metric, HallDish | undefined][] = [
+      ["Most protein", "protein", best(pool, (d) => d.protein)],
+      ["Lean, under 350 kcal", "kcal", best(pool.filter((d) => d.calories <= 350), (d) => d.protein / d.calories)],
+      ["Best vegan option", "protein", best(pool.filter((d) => d.dietary_flags?.includes("Vegan")), (d) => d.protein)],
+      ["Most fiber", "fiber", best(pool, (d) => Number(d.fiber ?? 0))],
+    ];
+    return candidates
+      .filter((c): c is [string, Metric, HallDish] => Boolean(c[2]))
+      .map(([label, metric, dish]) => ({ label, metric, dish }));
+  }, [todaysDishes, featured]);
+
+  const previewRows = useMemo(
+    () => [...todaysDishes].filter((d) => d.calories > 0).sort((a, b) => b.protein - a.protein).slice(0, 3),
+    [todaysDishes],
+  );
+
+  const startDemo = async () => {
+    try {
+      const { data } = await axios.post(`${API_BASE}/demo-login/`);
+      localStorage.setItem("authToken", data.token);
+      localStorage.setItem("userFirstName", data.first_name);
+      navigate("/dashboard");
+    } catch {
+      toast.error("Couldn't open the demo account. Please try again.");
+    }
+  };
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px", position: "relative" }}>
-      {/* Aurora gradient background — spans full page width, fades out */}
-      <div
-        style={{
-          position: "absolute",
-          top: -76,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: "100vw",
-          height: "520px",
-          background: "linear-gradient(135deg, #fde8e2 0%, #f5f3f0 25%, #e8e0f0 50%, #fef9c3 75%, #fde8e2 100%)",
-          backgroundSize: "400% 400%",
-          animation: "auroraShift 15s ease infinite",
-          opacity: 0.7,
-          maskImage: "linear-gradient(to bottom, black 50%, transparent 100%)",
-          WebkitMaskImage: "linear-gradient(to bottom, black 50%, transparent 100%)",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-      />
-
-      {/* ── Section 1: Hero ── */}
-      <div
-        style={{
-          margin: "0 -24px",
-          padding: "0 24px",
-          position: "relative",
-          zIndex: 1,
-        }}
-      >
-        <section
-          className="hero-stagger"
-          style={{ padding: "48px 24px 40px", textAlign: "center" }}
-        >
-          {/* Animated badge pill */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              background: "var(--se-primary-dim)",
-              borderRadius: "var(--se-radius-full)",
-              padding: "6px 14px",
-              marginBottom: 16,
-              animation: "fadeIn 300ms ease-out both",
-              animationDelay: "0ms",
-            }}
-          >
-            <span
-              style={{ position: "relative", display: "inline-flex", width: 8, height: 8 }}
-            >
-              <span
-                className="animate-ping"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  borderRadius: "50%",
-                  background: "var(--se-primary)",
-                  opacity: 0.6,
-                }}
-              />
-              <span
-                style={{
-                  position: "relative",
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "var(--se-primary)",
-                  display: "block",
-                }}
-              />
-            </span>
-            <span
-              style={{
-                fontSize: "var(--se-text-xs)",
-                fontWeight: "var(--se-weight-semibold)",
-                color: "var(--se-primary)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-              }}
-            >
-              Built by students, for students.
-            </span>
+    <div className="home">
+      {/* ── Hero ── */}
+      <section className="home-hero">
+        <div className="home-hero__copy">
+          <div className="reveal" style={{ ["--d" as string]: "0ms" }}>
+            <MenuDateBadge />
           </div>
-
-          <h1
-            style={{
-              fontSize: "3rem",
-              fontWeight: "var(--se-weight-extrabold)",
-              color: "var(--se-text-main)",
-              lineHeight: 1.1,
-              letterSpacing: "-0.02em",
-              margin: 0,
-              animation: "fadeIn 300ms ease-out both",
-              animationDelay: "80ms",
-            }}
-          >
-            Eat Smarter at <span className="text-gradient-vivid">UIUC</span>
+          <h1 className="home-hero__title reveal" style={{ ["--d" as string]: "60ms" }}>
+            Eat smarter at <em>Illinois</em>.
           </h1>
-
-          <p
-            style={{
-              fontSize: "var(--se-text-base)",
-              color: "var(--se-text-secondary)",
-              textAlign: "center",
-              maxWidth: 480,
-              margin: "12px auto 24px",
-              animation: "fadeIn 300ms ease-out both",
-              animationDelay: "160ms",
-            }}
-          >
-            Explore dining hall menus, log meals, and plan your nutrition with AI.
+          <p className="home-hero__lede reveal" style={{ ["--d" as string]: "120ms" }}>
+            Every UIUC dining hall menu with nutrition for every dish, an AI meal planner that only
+            recommends what&apos;s actually being served, and a tracker for what you eat.
           </p>
+          <div className="home-hero__actions reveal" style={{ ["--d" as string]: "180ms" }}>
+            <Link to="/menu" className="home-btn home-btn--primary">
+              Browse today&apos;s menus <span aria-hidden="true">→</span>
+            </Link>
+            <Link to="/aimeals" className="home-btn home-btn--ghost">
+              <IconSparkle size={15} /> Plan a meal with AI
+            </Link>
+          </div>
+          <dl className="home-hero__stats reveal" style={{ ["--d" as string]: "240ms" }}>
+            <div>
+              <dt className="se-eyebrow">Open now</dt>
+              <dd className="se-mono">
+                {servingHalls.length ? `${openCount}/${servingHalls.length}` : "—"}
+                <span> halls</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="se-eyebrow">On the menu</dt>
+              <dd className="se-mono">
+                {todaysDishes.length || "—"}
+                <span> dishes</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="se-eyebrow">Catalogued</dt>
+              <dd className="se-mono">
+                {catalogSize ?? "—"}
+                <span> total</span>
+              </dd>
+            </div>
+          </dl>
+        </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 12,
-              flexWrap: "wrap",
-              animation: "fadeIn 300ms ease-out both",
-              animationDelay: "240ms",
-            }}
-          >
-            <span
-              style={{
-                boxShadow: "0 4px 14px rgba(232, 74, 39, 0.25)",
-                borderRadius: 12,
-                display: "inline-block",
-              }}
-            >
-              <Button variant="primary" size="lg" onClick={() => navigate("/menu")}>
-                Browse Menu →
-              </Button>
-            </span>
-            {isLoggedIn ? (
-              <Button variant="ghost" size="lg" onClick={() => navigate("/profile")}>
-                My Profile
-              </Button>
-            ) : (
-              <Button variant="ghost" size="lg" onClick={() => navigate("/aimeals")}>
-                Try AI Meals
-              </Button>
-            )}
+        <div className="home-hero__stage reveal" style={{ ["--d" as string]: "160ms" }} aria-hidden={!featured}>
+          {featured ? (
+            <>
+              <div className="home-stage__chip">
+                <span className="home-dot" />
+                Top protein pick today
+              </div>
+              <Link to={`/dishes/${featured.dish_id}`} className="home-stage__label" aria-label={`View ${featured.dish_name}`}>
+                <NutritionLabel
+                  dish={featured}
+                  footnote={`${featured.hall}${featured.serving_unit ? ` · ${featured.serving_unit}` : ""}${featured.meal_period ? ` · ${featured.meal_period}` : ""}`}
+                />
+              </Link>
+              <div className="home-stage__chat">
+                <div className="home-bubble home-bubble--user">High protein, under 600 kcal?</div>
+                <div className="home-bubble home-bubble--ai">
+                  <IconSparkle size={13} color="var(--se-primary)" />
+                  <span>
+                    Try the <strong>{featured.dish_name}</strong> at {featured.hall.replace(/ Dining (Center|Hall)$/, "")}:{" "}
+                    <span className="se-mono">{featured.protein}g</span> protein for{" "}
+                    <span className="se-mono">{featured.calories}</span> kcal.
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="home-stage__placeholder" />
+          )}
+        </div>
+      </section>
+
+      {/* ── Picks from today's menu ── */}
+      {picks.length > 0 && (
+        <section className="home-section home-section--tight">
+          <header className="home-section__head">
+            <div>
+              <p className="se-eyebrow">From today&apos;s menu</p>
+              <h2>A few good places to start</h2>
+            </div>
+          </header>
+          <div className="home-picks">
+            {picks.map(({ label, metric, dish }) => (
+              <Link key={label} to={`/dishes/${dish.dish_id}`} className="home-pick">
+                <span className="home-pick__label se-eyebrow">{label}</span>
+                <h3 className="home-pick__name">{dish.dish_name}</h3>
+                <p className="home-pick__where">
+                  {dish.hall}
+                  {dish.meal_period ? ` · ${dish.meal_period}` : ""}
+                </p>
+                <dl className="home-pick__macros">
+                  {(
+                    [
+                      ["kcal", dish.calories],
+                      ["protein", `${dish.protein}g`],
+                      metric === "fiber" ? ["fiber", `${Math.round(Number(dish.fiber ?? 0))}g`] : ["carbs", `${dish.carbohydrates}g`],
+                      ["fat", `${dish.fat}g`],
+                    ] as const
+                  ).map(([k, v]) => (
+                    <div key={k} className={k === metric ? "is-key" : undefined}>
+                      <dd className="se-mono">{v}</dd>
+                      <dt>{k}</dt>
+                    </div>
+                  ))}
+                </dl>
+              </Link>
+            ))}
           </div>
         </section>
-      </div>
+      )}
 
-      {/* ── Section 2: Quick stats (logged-in only) ── */}
-      {isLoggedIn && statsError && (
-        <section style={{ marginBottom: 32 }}>
-          <Card padding="md">
-            <div style={{ textAlign: "center", padding: "var(--se-space-6)" }}>
-              <p
-                style={{
-                  color: "var(--se-error)",
-                  fontWeight: 600,
-                  fontSize: "var(--se-text-base)",
-                  margin: 0,
-                }}
-              >
-                Something went wrong
+      {/* ── Halls ── */}
+      {servingHalls.length > 0 && (
+        <section className="home-section">
+          <header className="home-section__head">
+            <div>
+              <p className="se-eyebrow">Dining halls</p>
+              <h2>Where to eat right now</h2>
+            </div>
+            <Link to="/menu" className="home-link">
+              All menus →
+            </Link>
+          </header>
+          <div className="home-halls">
+            {servingHalls.map((hall) => {
+              const visual = hallVisual(hall.name, hall.location);
+              const open = hall.status?.is_open;
+              const stations = new Set(hall.dishes.map((d) => d.serving_unit || "Other")).size;
+              return (
+                <Link key={hall.Dining_Hall_ID} to={`/menu/${hall.Dining_Hall_ID}`} className="home-hall">
+                  <div className="home-hall__photo">
+                    {visual.src && <img src={visual.src} alt="" loading="lazy" />}
+                  </div>
+                  <div className="home-hall__body">
+                    <span className={`home-hall__status${open ? " is-open" : ""}`}>
+                      <span className="home-hall__dot" />
+                      {statusLabel(hall.status)}
+                    </span>
+                    <h3 className="home-hall__name">{hall.name}</h3>
+                    <p className="home-hall__meta se-mono">
+                      {hall.dishes.length} dishes · {stations} stations
+                    </p>
+                  </div>
+                  <span className="home-hall__arrow" aria-hidden="true">→</span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── How it works ── */}
+      <section className="home-section">
+        <header className="home-section__head">
+          <div>
+            <p className="se-eyebrow">How it works</p>
+            <h2>What you can do</h2>
+          </div>
+        </header>
+        <div className="home-features">
+          <Link to="/menu" className="home-feature">
+            <div className="home-feature__preview">
+              {previewRows.map((d) => {
+                const total = d.protein * 4 + d.carbohydrates * 4 + d.fat * 9 || 1;
+                return (
+                  <div key={d.dish_id} className="home-mini-row">
+                    <div className="home-mini-row__name">{d.dish_name}</div>
+                    <div className="home-mini-row__bar">
+                      <span style={{ width: `${(d.protein * 400) / total}%`, background: "var(--se-macro-protein)" }} />
+                      <span style={{ width: `${(d.carbohydrates * 400) / total}%`, background: "var(--se-macro-carbs)" }} />
+                      <span style={{ width: `${(d.fat * 900) / total}%`, background: "var(--se-macro-fat)" }} />
+                    </div>
+                    <div className="se-mono home-mini-row__kcal">{d.calories}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="home-feature__body">
+              <span className="se-mono home-feature__num">01</span>
+              <h3>Browse every station</h3>
+              <p>
+                Live menus for each hall, grouped by station, with calories and macros on every dish. Search in plain
+                English: &ldquo;vegan dinner under 500 calories&rdquo;.
               </p>
-              <p
-                style={{
-                  color: "var(--se-text-muted)",
-                  fontSize: "var(--se-text-sm)",
-                  margin: "4px 0 0",
-                }}
-              >
-                {statsError}
-              </p>
-              <div style={{ marginTop: "var(--se-space-4)" }}>
-                <Button variant="secondary" size="sm" onClick={fetchStats}>
-                  Try Again
-                </Button>
+            </div>
+          </Link>
+
+          <Link to="/aimeals" className="home-feature">
+            <div className="home-feature__preview home-feature__preview--chat">
+              <div className="home-bubble home-bubble--user">Help me hit my protein goal</div>
+              <div className="home-bubble home-bubble--ai">
+                <IconSparkle size={13} color="var(--se-primary)" />
+                <span>Here&apos;s a plan from today&apos;s menu: 2 lean entrées, 106g protein, 560 kcal.</span>
               </div>
             </div>
-          </Card>
-        </section>
-      )}
-      {isLoggedIn && !statsError && !stats && (
-        <div
-          className="grid grid-cols-1 md:grid-cols-3 gap-5"
-          style={{ marginTop: "var(--se-space-6)" }}
-        >
-          {[1, 2, 3].map((i) => (
-            <Card key={i} padding="md">
-              <Skeleton variant="rect" height={24} width="40%" />
-              <div style={{ marginTop: 8 }}>
-                <Skeleton variant="text" lines={1} />
-              </div>
-            </Card>
-          ))}
+            <div className="home-feature__body">
+              <span className="se-mono home-feature__num">02</span>
+              <h3>Ask the planner</h3>
+              <p>
+                Ask for a meal in plain language. Suggestions come only from today&apos;s menu, with nutrition copied
+                from the dish records and checked against your daily targets.
+              </p>
+            </div>
+          </Link>
+
+          <Link to={isLoggedIn ? "/dashboard" : "/login"} className="home-feature">
+            <div className="home-feature__preview">
+              <MacroMeter label="Calories" value={1840} goal={2600} color="var(--se-macro-cal)" />
+              <MacroMeter label="Protein" value={118} goal={150} color="var(--se-macro-protein)" />
+              <MacroMeter label="Carbs" value={204} goal={320} color="var(--se-macro-carbs)" />
+            </div>
+            <div className="home-feature__body">
+              <span className="se-mono home-feature__num">03</span>
+              <h3>Track your tray</h3>
+              <p>Add dishes to a tray, log it as a meal, and watch daily progress against your own targets.</p>
+            </div>
+          </Link>
         </div>
-      )}
-      {isLoggedIn && stats && (
-        <section style={{ marginBottom: 32 }}>
-          <div className="grid grid-cols-3 gap-4">
-            <Card padding="md">
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-display)",
-                    fontWeight: "var(--se-weight-extrabold)",
-                    color: "var(--se-text-main)",
-                  }}
-                >
-                  {stats.total_dishes ? <AnimatedCounter target={stats.total_dishes} /> : "—"}
-                </div>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-xs)",
-                    color: "var(--se-text-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  dishes in database
-                </div>
-              </div>
-            </Card>
-            <Card padding="md">
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-display)",
-                    fontWeight: "var(--se-weight-extrabold)",
-                    color: "var(--se-text-main)",
-                  }}
-                >
-                  {stats.total_halls ? <AnimatedCounter target={stats.total_halls} duration={800} /> : "—"}
-                </div>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-xs)",
-                    color: "var(--se-text-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  dining halls
-                </div>
-              </div>
-            </Card>
-            <Card padding="md">
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-display)",
-                    fontWeight: "var(--se-weight-extrabold)",
-                    color: "var(--se-text-main)",
-                  }}
-                >
-                  ✦
-                </div>
-                <div
-                  style={{
-                    fontSize: "var(--se-text-xs)",
-                    color: "var(--se-text-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  AI meal planner available
-                </div>
-              </div>
-            </Card>
-          </div>
-        </section>
-      )}
+      </section>
 
-      {/* ── Serving Right Now ticker ── */}
-      {tickerDishes.length > 0 && (
-        <section style={{ marginBottom: 32, overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <span style={{ position: "relative", display: "inline-flex", width: 8, height: 8 }}>
-              <span
-                className="animate-ping"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  borderRadius: "50%",
-                  background: "var(--se-success)",
-                  opacity: 0.6,
-                }}
-              />
-              <span
-                style={{
-                  position: "relative",
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "var(--se-success)",
-                  display: "block",
-                }}
-              />
-            </span>
-            <span
-              style={{
-                fontSize: "var(--se-text-xs)",
-                fontWeight: "var(--se-weight-bold)",
-                color: "var(--se-text-secondary)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-              }}
-            >
-              Serving right now
-            </span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              width: "max-content",
-              animation: "tickerScroll 30s linear infinite",
-              gap: 12,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.animationPlayState = "paused"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.animationPlayState = "running"; }}
-          >
-            {[...tickerDishes, ...tickerDishes].map((dish, i) => (
-              <button
-                key={`${dish.dish_id}-${i}`}
-                type="button"
-                onClick={() => navigate(`/dishes/${dish.dish_id}`)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 16px",
-                  borderRadius: "var(--se-radius-full)",
-                  background: "var(--se-bg-surface)",
-                  border: "1px solid var(--se-border)",
-                  boxShadow: "var(--se-shadow-sm)",
-                  whiteSpace: "nowrap",
-                  cursor: "pointer",
-                  transition: "box-shadow 120ms ease, border-color 120ms ease",
-                  fontSize: "var(--se-text-sm)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--se-primary)";
-                  e.currentTarget.style.boxShadow = "var(--se-shadow-md)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--se-border)";
-                  e.currentTarget.style.boxShadow = "var(--se-shadow-sm)";
-                }}
-              >
-                <FoodIcon dishName={dish.dish_name} category={dish.category as FoodCategory} size="sm" />
-                <span style={{ fontWeight: "var(--se-weight-semibold)", color: "var(--se-text-main)" }}>
-                  {dish.dish_name}
-                </span>
-                <span style={{ color: "var(--se-text-muted)", fontSize: 12 }}>
-                  {dish.calories} kcal
-                </span>
-                {dish.dietary_flags?.[0] && (
-                  <span
-                    style={{
-                      padding: "2px 6px",
-                      borderRadius: "var(--se-radius-full)",
-                      background: (FLAG_COLORS[dish.dietary_flags[0]] || FLAG_FALLBACK).bg,
-                      color: (FLAG_COLORS[dish.dietary_flags[0]] || FLAG_FALLBACK).text,
-                      fontSize: 9,
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {dish.dietary_flags[0]}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── Section 3: Feature cards with elevated panel ── */}
-      <div
-        style={{
-          padding: "32px 0 36px",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 720,
-            margin: "0 auto",
-            padding: "32px 24px",
-            borderRadius: "var(--se-radius-xl)",
-            background: "var(--se-bg-surface)",
-            border: "1px solid var(--se-border-muted)",
-            boxShadow: "var(--se-shadow-md)",
-          }}
-        >
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <h2
-              style={{
-                fontSize: "var(--se-text-h2)",
-                fontWeight: "var(--se-weight-extrabold)",
-                color: "var(--se-text-main)",
-                margin: "0 0 8px",
-              }}
-            >
-              Built for your campus lifestyle
-            </h2>
-            <p
-              style={{
-                fontSize: "var(--se-text-sm)",
-                color: "var(--se-text-muted)",
-                margin: 0,
-              }}
-            >
-              Everything you need to navigate dining halls and stay on top of your goals.
+      {/* ── Pipeline (ink band) ── */}
+      <section className="home-pipeline se-bleed">
+        <div className="home-pipeline__inner">
+          <header className="home-pipeline__head">
+            <p className="se-eyebrow">Under the hood</p>
+            <h2>How the menu data stays current</h2>
+            <p>
+              Menus are re-scraped twice a day and published as static files. There is no always-on server: the
+              site is static hosting plus one serverless function for the AI chat.
             </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
-            {featureCards.map((card) => (
-              <div
-                key={card.route}
-                onMouseEnter={() => setHoveredCard(card.route)}
-                onMouseLeave={() => setHoveredCard(null)}
-                className="h-full"
-              >
-                <Card
-                  hover
-                  padding="md"
-                  onClick={() => navigate(card.route)}
-                  className="h-full flex flex-col"
-                >
-                  <div
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: "50%",
-                      background:
-                        hoveredCard === card.route
-                          ? "var(--se-primary)"
-                          : "var(--se-primary-dim)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transition: "background 200ms ease",
-                    }}
-                  >
-                    <card.icon
-                      size={24}
-                      color={
-                        hoveredCard === card.route ? "#ffffff" : "var(--se-primary)"
-                      }
-                    />
-                  </div>
-                  <h3
-                    style={{
-                      fontWeight: "var(--se-weight-bold)",
-                      color: "var(--se-text-main)",
-                      marginTop: 12,
-                      marginBottom: 4,
-                      fontSize: "var(--se-text-base)",
-                    }}
-                  >
-                    {card.title}
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: "var(--se-text-sm)",
-                      color: "var(--se-text-muted)",
-                      margin: 0,
-                    }}
-                  >
-                    {card.desc}
-                  </p>
-                </Card>
-              </div>
+          </header>
+          <ol className="home-pipeline__steps">
+            {PIPELINE.map((item) => (
+              <li key={item.step}>
+                <span className="se-mono home-pipeline__step">{item.step}</span>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
-      </div>
+      </section>
 
+      {/* ── CTA ── */}
+      <section className="home-cta">
+        <h2>Start with today&apos;s menu</h2>
+        <p>
+          {isLoggedIn
+            ? "Pick a hall, add dishes to your tray, and log the meal to your dashboard."
+            : "Or open the demo account to see the dashboard and meal log filled in with two weeks of sample meals."}
+        </p>
+        <div className="home-hero__actions home-cta__actions">
+          <Link to="/menu" className="home-btn home-btn--primary">
+            Open today&apos;s menus <span aria-hidden="true">→</span>
+          </Link>
+          {isLoggedIn ? (
+            <Link to="/dashboard" className="home-btn home-btn--ghost">
+              Go to your dashboard
+            </Link>
+          ) : DATA_MODE === "static" ? (
+            <button type="button" className="home-btn home-btn--ghost" onClick={startDemo}>
+              Try the demo account
+            </button>
+          ) : (
+            <Link to="/register" className="home-btn home-btn--ghost">
+              Create an account
+            </Link>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

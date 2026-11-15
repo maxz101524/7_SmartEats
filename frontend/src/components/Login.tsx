@@ -5,7 +5,7 @@ import GGLogin from "./GGLogin";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { useToast } from "./useToast";
-import { API_BASE } from "../config";
+import { API_BASE, DATA_MODE } from "../config";
 
 interface AuthErrorResponse {
   error?: string;
@@ -59,6 +59,18 @@ const Login = () => {
       } else {
         toast.error("Network error. Is the server running?");
       }
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    try {
+      const response = await axios.post(`${API_BASE}/demo-login/`);
+      localStorage.setItem("authToken", response.data.token);
+      localStorage.setItem("userFirstName", response.data.first_name);
+      toast.success("Signed in to the demo account.");
+      navigate("/dashboard");
+    } catch {
+      toast.error("Couldn't open the demo account. Please try again.");
     }
   };
 
@@ -137,6 +149,40 @@ const Login = () => {
             <div style={{ marginBottom: 16 }}>
               <GGLogin />
             </div>
+
+            {DATA_MODE === "static" && (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: 14,
+                  borderRadius: "var(--se-radius-md)",
+                  background: "var(--se-bg-subtle)",
+                  border: "1px solid var(--se-border-muted)",
+                }}
+              >
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  className="w-full"
+                  onClick={handleDemoLogin}
+                >
+                  Try the demo account
+                </Button>
+                <p
+                  style={{
+                    marginTop: 8,
+                    fontSize: "var(--se-text-xs)",
+                    color: "var(--se-text-muted)",
+                    textAlign: "center",
+                    lineHeight: "var(--se-leading-caption)",
+                  }}
+                >
+                  Pre-filled with two weeks of logged meals. Accounts and meal
+                  logs are saved only in this browser.
+                </p>
+              </div>
+            )}
 
             <p
               style={{

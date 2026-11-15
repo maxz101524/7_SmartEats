@@ -1,6 +1,9 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import FloatingMealTray from "./components/FloatingMealTray";
+import "./styles/shell.css";
+
+const REPO_URL = "https://github.com/maxz101524/7_SmartEats";
 
 function Base() {
   const location = useLocation();
@@ -9,91 +12,53 @@ function Base() {
 
   return (
     <div
-      className="min-h-screen flex flex-col w-full"
+      className="se-app min-h-screen flex flex-col w-full"
       style={{ background: "var(--se-bg-base)", fontFamily: "var(--se-font-sans)" }}
     >
       <Navbar />
       {showTray && <FloatingMealTray />}
 
-      <main className="flex-grow w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6" style={{ paddingTop: "76px" }}>
+      <main className="se-main">
         <div key={location.pathname} className="page-enter" style={{ animation: "fadeIn 200ms ease-out" }}>
           <Outlet />
         </div>
       </main>
 
-      <footer
-        style={{
-          background: "var(--se-bg-surface)",
-          borderTop: "1px solid var(--se-border)",
-          padding: "32px 0 24px",
-          marginTop: "auto",
-        }}
-      >
-        <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 24 }}>
-            {/* Left: Logo + tagline */}
-            <div style={{ flex: "1 1 0" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <span style={{ color: "var(--se-primary)", fontWeight: 900, fontSize: "1.1rem" }}>Smart</span>
-                <span style={{ color: "var(--se-text-main)", fontWeight: 900, fontSize: "1.1rem" }}>Eats</span>
-              </div>
-              <p style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-muted)", margin: "4px 0 0" }}>
-                Smart dining at UIUC
-              </p>
+      <footer className="se-footer">
+        <div className="se-footer__inner">
+          <div>
+            <div className="se-footer__brand">
+              <em>Smart</em>Eats
             </div>
-
-            {/* Center: Quick links */}
-            <div
-              style={{
-                display: "flex",
-                gap: "clamp(10px, 2.2vw, 18px)",
-                justifyContent: "center",
-                flex: "1 1 0",
-                minWidth: 0,
-                flexWrap: "nowrap",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {[
-                { to: "/menu", label: "Menu" },
-                { to: "/dashboard", label: "Dashboard" },
-                { to: "/aimeals", label: "AI Meals" },
-                { to: "/profile", label: "Profile" },
-              ].map((link) => (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  style={{
-                    fontSize: "clamp(12px, 1.7vw, 14px)",
-                    color: "var(--se-text-muted)",
-                    textDecoration: "none",
-                    fontWeight: 500,
-                    flexShrink: 1,
-                  }}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </div>
-
-            {/* Right spacer (balances centered links on wide screens) */}
-            <div style={{ flex: "1 1 0" }} />
-
-          </div>
-
-          {/* Bottom divider + copyright */}
-          <div
-            style={{
-              borderTop: "1px solid var(--se-border-muted)",
-              marginTop: 20,
-              paddingTop: 16,
-              textAlign: "center",
-            }}
-          >
-            <p style={{ fontSize: "var(--se-text-xs)", color: "var(--se-text-faint)", margin: 0 }}>
-              &copy; {new Date().getFullYear()} SmartEats &mdash; UIUC INFO 490
+            <p className="se-footer__tagline">
+              Daily menus for UIUC dining halls with nutrition estimates for each dish, a meal planner
+              that works from those menus, and a meal log.
             </p>
           </div>
+
+          <div>
+            <p className="se-eyebrow se-footer__heading">Explore</p>
+            <ul className="se-footer__links">
+              <li><Link to="/menu">Today&apos;s menus</Link></li>
+              <li><Link to="/aimeals">AI meal planner</Link></li>
+              <li><Link to="/dashboard">Dashboard</Link></li>
+              <li><Link to="/profile">Profile &amp; meal log</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="se-eyebrow se-footer__heading">Project</p>
+            <ul className="se-footer__links">
+              <li><a href={REPO_URL} target="_blank" rel="noreferrer">Source on GitHub</a></li>
+              <li><Link to="/analytics">AI analytics</Link></li>
+              <li><a href="https://web.housing.illinois.edu/diningmenus" target="_blank" rel="noreferrer">UIUC Dining menus</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="se-footer__base">
+          <span>&copy; {new Date().getFullYear()} SmartEats &middot; Built at UIUC</span>
+          <span>Independent student project. Not affiliated with University Housing. Nutrition values are estimates.</span>
         </div>
       </footer>
     </div>

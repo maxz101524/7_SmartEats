@@ -390,7 +390,7 @@ export function NutritionEstimator() {
 
           {/* Model info */}
           <p style={{ fontSize: 11, color: "var(--se-text-faint)", textAlign: "center", margin: "12px 0 0" }}>
-            Powered by {result.model}
+            Calculated with {result.model}
             {result.used_fallback && " (Mifflin-St Jeor fallback)"}
           </p>
         </div>

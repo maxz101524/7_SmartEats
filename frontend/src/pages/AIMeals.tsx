@@ -8,7 +8,7 @@ import { FormattedMessageText } from "./aimeals/FormattedMessageText";
 import { DishRecommendationCard } from "./aimeals/DishRecommendationCard";
 import { MealPlanCard } from "./aimeals/MealPlanCard";
 import { ThinkingIndicator } from "./aimeals/ThinkingIndicator";
-import { BackgroundOrb } from "./aimeals/BackgroundOrb";
+import AssistantMark from "../components/AssistantMark";
 import { EmptyHero } from "./aimeals/EmptyHero";
 import { ComposerBar } from "./aimeals/ComposerBar";
 import { SlashMenu, type SlashCommand } from "./aimeals/SlashMenu";
@@ -726,7 +726,6 @@ export default function AIMeals() {
           overflow: "hidden",
         }}
       >
-        <BackgroundOrb mode={isEmpty ? "centered" : "docked"} />
         <div
           style={{
             position: "relative",
@@ -795,23 +794,7 @@ export default function AIMeals() {
                       }}
                     >
                       {msg.role === "ai" && (
-                        <div
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: "50%",
-                            background: "var(--se-primary-dim)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 13,
-                            flexShrink: 0,
-                            color: "var(--se-primary)",
-                            fontWeight: 900,
-                          }}
-                        >
-                          ✦
-                        </div>
+                        <AssistantMark size={28} />
                       )}
 
                       <div

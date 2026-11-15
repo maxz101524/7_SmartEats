@@ -24,6 +24,57 @@ body {
   min-height: 100vh;
 }
 
+/* ── Typography voices (v2.1) ─────────────────────────────────── */
+h1,
+h2 {
+  font-family: var(--se-font-display);
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 50;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.se-display {
+  font-family: var(--se-font-display);
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 50;
+}
+
+.se-display em,
+h1 em,
+h2 em {
+  font-style: italic;
+  color: var(--se-primary);
+}
+
+.se-mono {
+  font-family: var(--se-font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.se-eyebrow {
+  font-family: var(--se-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--se-text-muted);
+}
+
+.se-no-scrollbar {
+  scrollbar-width: none;
+}
+.se-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Full-bleed band inside the centered page column */
+.se-bleed {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+}
+
 /* ── Focus ring (accessibility) ──────────────────────────────── */
 :focus-visible {
   outline: 2px solid var(--se-primary);
@@ -61,7 +112,7 @@ select:focus-visible {
 
 /* ── Animated gradient text ──────────────────────────────────── */
 .text-gradient-vivid {
-  background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 35%, #f97316 65%, #8b5cf6 100%);
+  background: linear-gradient(120deg, var(--se-primary) 0%, var(--se-macro-fat) 40%, var(--se-macro-carbs) 70%, var(--se-primary) 100%);
   background-size: 300% 300%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
