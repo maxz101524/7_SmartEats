@@ -1,4 +1,4 @@
-{"generated_at": "2026-11-18T18:32:58.268643+00:00", "timezone": "America/Chicago", "rows": [
+{"generated_at": "2026-11-18T23:20:53.033676+00:00", "timezone": "America/Chicago", "rows": [
 {"option_id":1,"date":"2026-11-18","period":"Lunch","start_24":"10:30","end_24":"13:30","start":"10:30 AM","end":"1:30 PM"},
 {"option_id":1,"date":"2026-11-18","period":"Light Lunch","start_24":"13:30","end_24":"15:00","start":"1:30 PM","end":"3:00 PM"},
 {"option_id":1,"date":"2026-11-18","period":"Dinner","start_24":"16:30","end_24":"20:00","start":"4:30 PM","end":"8:00 PM"},
@@ -22,7 +22,7 @@
 {"option_id":18,"date":"2026-11-18","period":"Retail Offerings","start_24":"22:00","end_24":"0:00","start":"10:00 PM","end":"12:00 AM"},
 {"option_id":18,"date":"2026-11-18","period":"Daily Menu","start_24":"7:00","end_24":"22:00","start":"7:00 AM","end":"10:00 PM"},
 {"option_id":30,"date":"2026-11-18","period":"Daily Menu","start_24":"7:00","end_24":"22:00","start":"7:00 AM","end":"10:00 PM"},
-{"option_id":32,"date":"2026-11-18","period":"Daily Menu","start_24":"11:00","end_24":"14:00","start":"11:00 AM","end":"2:00 PM"},
+{"option_id":31,"date":"2026-11-18","period":"Daily Menu","start_24":"11:00","end_24":"14:00","start":"11:00 AM","end":"2:00 PM"},
 {"option_id":35,"date":"2026-11-18","period":"Daily Menu","start_24":"10:30","end_24":"20:00","start":"10:30 AM","end":"8:00 PM"},
 {"option_id":36,"date":"2026-11-18","period":"Daily Menu","start_24":"10:30","end_24":"20:00","start":"10:30 AM","end":"8:00 PM"},
 {"option_id":1,"date":"2026-11-19","period":"Lunch","start_24":"10:30","end_24":"13:30","start":"10:30 AM","end":"1:30 PM"},
