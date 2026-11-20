@@ -1,4 +1,4 @@
-{"generated_at": "2026-11-20T18:12:36.009723+00:00", "timezone": "America/Chicago", "rows": [
+{"generated_at": "2026-11-20T23:01:38.670848+00:00", "timezone": "America/Chicago", "rows": [
 {"option_id":1,"date":"2026-11-20","period":"Lunch","start_24":"10:30","end_24":"13:30","start":"10:30 AM","end":"1:30 PM"},
 {"option_id":1,"date":"2026-11-20","period":"Light Lunch","start_24":"13:30","end_24":"15:00","start":"1:30 PM","end":"3:00 PM"},
 {"option_id":1,"date":"2026-11-20","period":"Dinner","start_24":"16:30","end_24":"20:00","start":"4:30 PM","end":"8:00 PM"},
